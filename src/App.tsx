@@ -1381,56 +1381,31 @@ export default function App() {
   };
 
   useEffect(() => {
-    // 載入 LINE 通知自訂設定
-    const savedLineSettings = localStorage.getItem('muji_line_notify_settings');
-    if (savedLineSettings) {
+    // 載入 Telegram 通知自訂設定
+    const savedTelegramSettings = localStorage.getItem('banban_telegram_notify_settings');
+    if (savedTelegramSettings) {
       try {
-        const parsed = JSON.parse(savedLineSettings);
-        setLineNotifySettings(prev => ({ ...prev, ...parsed }));
+        const parsed = JSON.parse(savedTelegramSettings);
+        setTelegramNotifySettings(prev => ({ ...prev, ...parsed }));
       } catch (e) {}
-    }
-
-    // 獨立 sandbox 或 local 環境載入快取
-    const savedLineToken = localStorage.getItem('muji_line_notify_token_sandbox');
-    if (savedLineToken) {
-      setLineNotifyToken('');
-      const masked = savedLineToken.substring(0, 4) + "********************" + savedLineToken.substring(savedLineToken.length - 4);
-      setMaskedLineToken(masked);
-      setHasLineToken(true);
     }
 
     if (typeof (window as any).google !== 'undefined' && (window as any).google.script && (window as any).google.script.run) {
       try {
         (window as any).google.script.run
           .withSuccessHandler((res: any) => {
-            if (res && res.success && res.token) {
-              setMaskedLineToken(res.token);
-              setLineNotifyToken('');
-              setHasLineToken(true);
-            }
-          })
-          .getLineNotifyToken();
-
-        (window as any).google.script.run
-          .withSuccessHandler((res: any) => {
             if (res && res.success && res.settings) {
-              setLineNotifySettings(prev => ({ ...prev, ...res.settings }));
+              setTelegramNotifySettings(prev => ({ ...prev, ...res.settings }));
             }
           })
           .getLineNotifySettings();
       } catch (e) {
-        console.warn("Failed to get LINE Notify config from GAS:", e);
+        console.warn("Failed to get Telegram Notify config from GAS:", e);
       }
     } else if (gasWebUrl) {
       callGasApi('getLineNotifySettings').then(res => {
         if (res && res.success && res.settings) {
-          setLineNotifySettings(prev => ({ ...prev, ...res.settings }));
-        }
-      });
-      callGasApi('getLineNotifyToken').then(res => {
-        if (res && res.success && res.token) {
-          setMaskedLineToken(res.token);
-          setHasLineToken(true);
+          setTelegramNotifySettings(prev => ({ ...prev, ...res.settings }));
         }
       });
     }
@@ -2415,40 +2390,6 @@ export default function App() {
                   transition={{ duration: 0.25 }}
                   className="space-y-4 sm:space-y-6"
                 >
-                {/* 💬 官方 LINE 帳號提醒 Banner */}
-                {!hasJoinedLine && (
-                  <div className="bg-gradient-to-r from-emerald-50 via-teal-50/80 to-emerald-50 rounded-2xl p-3.5 sm:p-4 border border-emerald-200/80 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                    <div className="flex items-start sm:items-center gap-2.5 sm:gap-3">
-                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#06C755] text-white flex items-center justify-center text-base sm:text-lg font-bold shrink-0 shadow-xs mt-0.5 sm:mt-0">
-                        💬
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-[#20402C]">
-                          加入官方 LINE 帳號
-                        </h4>
-                        <p className="text-[11px] text-[#4A6B56] mt-0.5">
-                          接收代墊與對帳即時推播通知
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-1 sm:pt-0 border-t sm:border-0 border-emerald-100">
-                      <a 
-                        href="https://lin.ee/tHfDgoL" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex-1 sm:flex-none text-center px-3.5 py-1.5 rounded-xl bg-[#06C755] hover:bg-[#05AB49] text-white text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1"
-                      >
-                        加入
-                      </a>
-                      <button 
-                        onClick={handleMarkJoinedLine}
-                        className="px-3.5 py-1.5 rounded-xl bg-[#8C8475] hover:bg-[#726A5C] text-white text-xs font-semibold transition-all cursor-pointer shadow-xs shrink-0"
-                      >
-                        已加入
-                      </button>
-                    </div>
-                  </div>
-                )}
                 {/* 🎯 當月銷帳之前預計所剩餘額 核心重點看板 */}
                 {(() => {
                   const quota = overallStats.estimatedQuota;
@@ -3433,13 +3374,13 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* LINE 快捷提示貼心說明 */}
+                  {/* Telegram 快捷提示貼心說明 */}
                   <div className="mt-4 sm:mt-5 pt-3.5 sm:pt-4 border-t border-amber-700/50 grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-xs text-amber-100/90">
                     <div className="flex items-start gap-2 bg-amber-950/30 p-2.5 rounded-xl border border-amber-700/30">
                       <span className="text-sm shrink-0">💬</span>
                       <div>
-                        <strong className="text-white font-semibold block mb-0.5">LINE 快速新增指令：</strong>
-                        <span className="text-[11px] sm:text-xs">傳送 「買 全聯 鮮奶」 或 「想要 PS5」 即可智慧判斷自動入單！</span>
+                        <strong className="text-white font-semibold block mb-0.5">Telegram 快速新增指令：</strong>
+                        <span className="text-[11px] sm:text-xs">在群組傳送 「買 全聯 鮮奶」 或 「想要 PS5」 即可智慧判斷自動入單！</span>
                       </div>
                     </div>
                     <div className="flex items-start gap-2 bg-amber-950/30 p-2.5 rounded-xl border border-amber-700/30">
@@ -3564,7 +3505,7 @@ export default function App() {
                       </div>
                       <h3 className="text-sm font-semibold text-[#3E3A36]">目前沒有符合條件的採購項目</h3>
                       <p className="text-xs text-[#8C8475] mt-1 max-w-xs mx-auto">
-                        您可以點擊畫面下方「＋」按鈕新增，或在 LINE 傳送訊息快速新增！
+                        您可以點擊畫面下方「＋」按鈕新增，或在 Telegram 群組傳送訊息快速新增！
                       </p>
                       <button
                         onClick={() => {
