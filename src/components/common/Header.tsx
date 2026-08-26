@@ -34,12 +34,11 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="w-full max-w-4xl mx-auto px-3 sm:px-4 mt-4 sm:mt-6 md:mt-8 mb-4 sm:mb-6 font-sans">
       <div className="bg-white/70 backdrop-blur-md border border-white/50 rounded-2xl p-3.5 sm:px-6 sm:py-5 flex flex-col sm:flex-row items-center justify-between shadow-2xs border-[#E9E6E0] gap-3 sm:gap-4">
         <div className="flex items-center space-x-3 w-full sm:w-auto">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 select-none drop-shadow-2xs">
-            <rect width="44" height="44" rx="12" fill="#E26D6C" />
-            <path d="M 22,33 C 22,33 11,25 11,17 C 11,13 14,10 18,10 C 20.5,10 21.5,11.5 22,13.5 C 22.5,11.5 23.5,10 26,10 C 30,10 33,13 33,17 C 33,25 22,33 22,33 Z" fill="#FFFDF8" opacity="0.95" />
-            <circle cx="22" cy="20" r="4.5" fill="#E26D6C" />
-            <rect x="20.2" y="18.2" width="3.6" height="3.6" rx="0.8" fill="#FFFDF8" />
-          </svg>
+          <img 
+            src="/icon.svg" 
+            alt="伴伴記" 
+            className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 select-none drop-shadow-2xs rounded-2xl object-cover" 
+          />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#3E3A36] flex items-center gap-1">
