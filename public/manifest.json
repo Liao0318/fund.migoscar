@@ -2,8 +2,8 @@
   "name": "伴伴記❤️ 情侶公積金與代墊對帳",
   "short_name": "伴伴記❤️",
   "description": "雙人/情侶伴伴記帳，公積金管理、日常代墊借還、旅遊外幣分帳與即時對帳結算系統",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#FAF9F5",
   "theme_color": "#8C8475",
@@ -11,19 +11,19 @@
   "categories": ["finance", "lifestyle", "productivity"],
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "icon.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
+      "src": "icon.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
+      "src": "icon.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "maskable"
@@ -34,15 +34,15 @@
       "name": "公積金記帳",
       "short_name": "公積金",
       "description": "快速登記一筆日常公積金消費",
-      "url": "/#/?action=add_fund",
-      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+      "url": "./#/?action=add_fund",
+      "icons": [{ "src": "icon.svg", "sizes": "192x192" }]
     },
     {
       "name": "代墊借還記帳",
       "short_name": "代墊借還",
       "description": "快速登記一筆雙人代墊借還款項",
-      "url": "/#/split?action=add_split",
-      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+      "url": "./#/split?action=add_split",
+      "icons": [{ "src": "icon.svg", "sizes": "192x192" }]
     }
   ]
 }

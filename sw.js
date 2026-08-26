@@ -2,10 +2,10 @@
 
 const CACHE_NAME = 'banban-copool-v2';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icon.svg'
+  './',
+  './index.html',
+  './manifest.json',
+  './icon.svg'
 ];
 
 // Install: Pre-cache core shell

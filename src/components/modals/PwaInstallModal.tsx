@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Download, Smartphone, Share2, Check, Sparkles, X, PlusSquare, ArrowUpRight } from 'lucide-react';
+import { BrandLogo } from '../common/BrandLogo.tsx';
 
 interface PwaInstallModalProps {
   isOpen: boolean;
@@ -88,11 +89,7 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
             <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto font-sans text-xs text-[#5C564E]">
               {/* 應用預覽卡片 */}
               <div className="bg-white rounded-2xl p-4 border border-[#ECE7DC] shadow-2xs flex items-center gap-3.5">
-                <img
-                  src="/icon.svg"
-                  alt="伴伴記"
-                  className="w-14 h-14 rounded-2xl drop-shadow-xs border border-[#EAE4D7] shrink-0"
-                />
+                <BrandLogo className="w-14 h-14 rounded-2xl drop-shadow-xs border border-[#EAE4D7] shrink-0" />
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="font-black text-sm text-[#3E3A36]">伴伴記❤️</span>

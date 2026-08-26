@@ -1,5 +1,6 @@
 import React from 'react';
 import { BellRing, Database, RefreshCw, Smartphone } from 'lucide-react';
+import { BrandLogo } from './BrandLogo.tsx';
 
 interface HeaderProps {
   isOnline: boolean;
@@ -34,11 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="w-full max-w-4xl mx-auto px-3 sm:px-4 mt-4 sm:mt-6 md:mt-8 mb-4 sm:mb-6 font-sans">
       <div className="bg-white/70 backdrop-blur-md border border-white/50 rounded-2xl p-3.5 sm:px-6 sm:py-5 flex flex-col sm:flex-row items-center justify-between shadow-2xs border-[#E9E6E0] gap-3 sm:gap-4">
         <div className="flex items-center space-x-3 w-full sm:w-auto">
-          <img 
-            src="/icon.svg" 
-            alt="伴伴記" 
-            className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 select-none drop-shadow-2xs rounded-2xl object-cover" 
-          />
+          <BrandLogo className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 select-none drop-shadow-2xs rounded-2xl" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#3E3A36] flex items-center gap-1">
