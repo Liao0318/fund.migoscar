@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X } from 'lucide-react';
+import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Send } from 'lucide-react';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 
 interface GasDeployModalProps {
@@ -8,11 +8,13 @@ interface GasDeployModalProps {
   onClose: () => void;
   deploySheetUrl: string;
   setDeploySheetUrl: (v: string) => void;
-  deployLineToken: string;
-  setDeployLineToken: (v: string) => void;
+  deployTelegramToken: string;
+  setDeployTelegramToken: (v: string) => void;
+  deployTelegramChatId: string;
+  setDeployTelegramChatId: (v: string) => void;
   gasWebUrl: string;
   setGasWebUrl: (v: string) => void;
-  onOpenLineSettings: () => void;
+  onOpenTelegramSettings: () => void;
   saveDeployConfig: () => void;
   activeDeployCodeTab: 'codeGs' | 'indexHtml' | 'splitHtml';
   setActiveDeployCodeTab: (tab: 'codeGs' | 'indexHtml' | 'splitHtml') => void;
@@ -26,11 +28,13 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
   onClose,
   deploySheetUrl,
   setDeploySheetUrl,
-  deployLineToken,
-  setDeployLineToken,
+  deployTelegramToken,
+  setDeployTelegramToken,
+  deployTelegramChatId,
+  setDeployTelegramChatId,
   gasWebUrl,
   setGasWebUrl,
-  onOpenLineSettings,
+  onOpenTelegramSettings,
   saveDeployConfig,
   activeDeployCodeTab,
   setActiveDeployCodeTab,
@@ -62,7 +66,7 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                     </span>
                   </h3>
                   <p className="text-[11px] text-[#8C8475] font-medium">
-                    輸入連線網址與 Token 後將自動注入代碼，點擊一鍵複製即可快速完成 Google Apps Script 部署
+                    輸入連線網址與 Telegram Token 後將自動注入代碼，點擊一鍵複製即可快速完成 Google Apps Script 部署
                   </p>
                 </div>
               </div>
@@ -102,22 +106,36 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                     </p>
                   </div>
 
-                  {/* LINE Messaging API Token */}
-                  <div>
-                    <label className="block text-xs font-bold text-[#3E3A36] mb-1">
-                      LINE Messaging API Channel Access Token
-                    </label>
-                    <input
-                      type="text"
-                      value={deployLineToken}
-                      onChange={(e) => setDeployLineToken(e.target.value)}
-                      placeholder="貼上您的 Channel Access Token"
-                      className="w-full px-3.5 py-2.5 text-xs bg-[#FAF9F5] border border-[#E5E0D2] rounded-xl focus:outline-none focus:border-amber-800 focus:bg-white transition-all font-mono"
-                    />
-                    <p className="text-[10px] text-[#8C8475] mt-1">
-                      用於發送記帳動態訊息廣播至您的 LINE 聊天室，輸入後將會寫入 Code.gs 的預設 Token。
-                    </p>
+                  {/* Telegram Bot Token */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-[#3E3A36] mb-1">
+                        Telegram Bot Token
+                      </label>
+                      <input
+                        type="text"
+                        value={deployTelegramToken}
+                        onChange={(e) => setDeployTelegramToken(e.target.value)}
+                        placeholder="例如：8940545345:AAGTJSX-..."
+                        className="w-full px-3.5 py-2.5 text-xs bg-[#FAF9F5] border border-[#E5E0D2] rounded-xl focus:outline-none focus:border-sky-600 focus:bg-white transition-all font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#3E3A36] mb-1">
+                        Telegram Chat ID
+                      </label>
+                      <input
+                        type="text"
+                        value={deployTelegramChatId}
+                        onChange={(e) => setDeployTelegramChatId(e.target.value)}
+                        placeholder="例如：-5312205991"
+                        className="w-full px-3.5 py-2.5 text-xs bg-[#FAF9F5] border border-[#E5E0D2] rounded-xl focus:outline-none focus:border-sky-600 focus:bg-white transition-all font-mono"
+                      />
+                    </div>
                   </div>
+                  <p className="text-[10px] text-[#8C8475] -mt-1">
+                    用於發送記帳動態即時訊息廣播至您的 Telegram 群組，永久 100% 免費無額度上限！
+                  </p>
 
                   {/* Google Apps Script Web App API URL */}
                   <div>
@@ -147,21 +165,21 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                     </p>
                   </div>
 
-                  {/* LINE 通知開關快速入口 */}
-                  <div className="bg-[#FAF8F3] rounded-2xl p-3.5 border border-emerald-200/80 flex items-center justify-between gap-3">
+                  {/* Telegram 通知開關快速入口 */}
+                  <div className="bg-[#FAF8F3] rounded-2xl p-3.5 border border-sky-200/80 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
-                        <BellRing className="w-4 h-4" />
+                      <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-800 flex items-center justify-center font-bold shrink-0">
+                        <Send className="w-4 h-4 text-sky-600" />
                       </div>
                       <div>
-                        <h5 className="text-xs font-bold text-[#3E3A36]">LINE 推播項目自訂開關 (共 9 項)</h5>
+                        <h5 className="text-xs font-bold text-[#3E3A36]">Telegram 推播項目自訂開關 (共 9 項)</h5>
                         <p className="text-[10px] text-[#8C8475]">可個別開啟或關閉支出代墊、充值、採購清單、月度結算等通知</p>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={onOpenLineSettings}
-                      className="px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
+                      onClick={onOpenTelegramSettings}
+                      className="px-3 py-1.5 bg-white hover:bg-sky-50 text-sky-800 border border-sky-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                     >
                       前往自訂開關
                     </button>
@@ -251,12 +269,13 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
 
                 {/* 提示訊息 */}
                 {activeDeployCodeTab === 'codeGs' && (
-                  <div className="bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/80 text-[11px] text-amber-900 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-700 shrink-0" />
+                  <div className="bg-sky-50/80 p-2.5 rounded-xl border border-sky-200/80 text-[11px] text-sky-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-sky-700 shrink-0" />
                     <span>
                       代碼已為您自動注入：
                       {deploySheetUrl ? ' ✅ 試算表 ID' : ' ⚠️ 未設定試算表'} ｜ 
-                      {deployLineToken ? ' ✅ LINE Token' : ' ⚠️ 未設定 LINE Token'}
+                      {deployTelegramToken ? ' ✅ Telegram Token' : ' ⚠️ 未設定 Telegram Token'} ｜
+                      {deployTelegramChatId ? ' ✅ Chat ID' : ' ⚠️ 未設定 Chat ID'}
                     </span>
                   </div>
                 )}

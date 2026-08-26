@@ -941,7 +941,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     ];
 
     navigator.clipboard.writeText(lines.join('\n'));
-    showToast('📋 已複製完整旅行對帳單！可直接貼至 LINE 旅遊群組', 'success');
+    showToast('📋 已複製完整旅行對帳單！可直接貼至 Telegram / 通訊群組', 'success');
   };
 
   // 一鍵將旅費分帳轉入日常代墊借還
@@ -1459,7 +1459,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                 type="button"
                 onClick={handleCopyBillSummary}
                 className={`text-[11px] ${currentTheme.textAccent} hover:underline flex items-center gap-0.5 font-bold cursor-pointer`}
-                title="複製旅費清單至 LINE"
+                title="複製旅費清單至 Telegram"
               >
                 <Copy className="w-3.5 h-3.5" />
                 <span>複製帳單</span>

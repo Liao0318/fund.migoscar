@@ -8,7 +8,7 @@ interface HeaderProps {
   appMode: 'fund' | 'split';
   setAppMode: (mode: 'fund' | 'split') => void;
   unsettledSplitCount: number;
-  onOpenLineSettings: () => void;
+  onOpenTelegramSettings: () => void;
   onOpenTravelCalculator: () => void;
   pendingQueueCount?: number;
   onOpenDataBackup?: () => void;
@@ -23,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   appMode,
   setAppMode,
   unsettledSplitCount,
-  onOpenLineSettings,
+  onOpenTelegramSettings,
   onOpenTravelCalculator,
   pendingQueueCount = 0,
   onOpenDataBackup,
@@ -104,15 +104,15 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* 快捷圖示按鈕組：在小手機維持同一列緊湊佈局 */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* 💬 LINE 通知開關 Quick Action (圖示版) */}
+            {/* 💬 Telegram 通知開關 Quick Action (圖示版) */}
             <button
               type="button"
-              onClick={onOpenLineSettings}
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200/90 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
-              title="自訂各項 LINE 即時通知推播開關"
-              aria-label="LINE 通知設定"
+              onClick={onOpenTelegramSettings}
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200/90 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+              title="自訂各項 Telegram 即時推播開關"
+              aria-label="Telegram 通知設定"
             >
-              <BellRing className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-700" />
+              <BellRing className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-600" />
             </button>
 
             {/* ✈️ 即時匯率 / 出國換算 Quick Action (圖示版) */}

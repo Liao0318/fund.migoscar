@@ -57,7 +57,7 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
               代墊對帳中心
             </h2>
             <p className="text-[#C5BFB5] text-xs sm:text-sm mt-1 max-w-lg leading-relaxed font-light">
-              雙方代墊自動互抵結算，確認結清後可自動推播 LINE 通知。
+              雙方代墊自動互抵結算，確認結清後可自動推播 Telegram 伴伴記群組通知。
             </p>
           </div>
 

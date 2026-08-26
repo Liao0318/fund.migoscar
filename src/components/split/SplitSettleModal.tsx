@@ -90,7 +90,7 @@ export const SplitSettleModal: React.FC<SplitSettleModalProps> = ({
                   type="text"
                   value={settleNote}
                   onChange={(e) => setSettleNote(e.target.value)}
-                  placeholder="例：已透過 LINE Pay / 網銀轉帳結清"
+                  placeholder="例：已透過網銀轉帳 / 電子支付結清"
                   className="w-full px-3 py-2 bg-white border border-[#DDD8CD] rounded-xl text-xs text-[#3E3A36] focus:outline-none focus:border-emerald-500"
                 />
               </div>

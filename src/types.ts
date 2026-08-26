@@ -149,7 +149,7 @@ export const DEFAULT_RATES_MAP: Record<string, number> = CURRENCIES.reduce((acc,
   return acc;
 }, {} as Record<string, number>);
 
-export interface LineNotifySettings {
+export interface TelegramNotifySettings {
   notifyOnAdd: boolean;
   notifyOnIncome: boolean;
   notifyOnEdit: boolean;
@@ -160,6 +160,8 @@ export interface LineNotifySettings {
   notifyOnShoppingComplete: boolean;
   notifyOnShoppingDelete: boolean;
 }
+
+export type LineNotifySettings = TelegramNotifySettings;
 
 export interface CustomConfirmState {
   isOpen: boolean;

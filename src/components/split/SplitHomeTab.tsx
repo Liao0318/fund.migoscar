@@ -322,25 +322,25 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
         )}
       </div>
 
-      {/* LINE 智能記帳指令提示 */}
-      <div className="bg-[#FAF8F3] rounded-2xl p-4 sm:p-5 border border-[#E6E1D3] space-y-2">
+      {/* Telegram 智能記帳指令提示 */}
+      <div className="bg-[#F0F8FF] rounded-2xl p-4 sm:p-5 border border-[#D0E6F9] space-y-2">
         <div className="flex items-center gap-2">
-          <span className="text-base">💬</span>
-          <h4 className="text-xs sm:text-sm font-bold text-[#3E3A36]">
-            LINE 官方帳號智能代墊指令
+          <span className="text-base">✈️</span>
+          <h4 className="text-xs sm:text-sm font-bold text-[#1E3A5F]">
+            Telegram「伴伴記❤️」智能記帳指令
           </h4>
         </div>
-        <p className="text-xs text-[#736D62] leading-relaxed">
-          不用打開網頁，在 LINE 群組或官方帳號直接傳送文字即可快速記帳與查帳：
+        <p className="text-xs text-[#4A6482] leading-relaxed">
+          不用打開網頁，在 Telegram 情侶群組（@fund_migoscar_bot）直接傳送文字即可自動記帳與即時查帳：
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px]">
-          <div className="bg-white p-2.5 rounded-xl border border-[#E2DDD0] font-mono text-[#5C564C]">
-            <span className="font-bold text-rose-700">代墊記帳：</span> <code>代墊 晚餐 1200</code><br />
-            <span className="text-[10px] text-[#8C8475]">（自動一人一半 AA 平分各 $600）</span>
+          <div className="bg-white p-2.5 rounded-xl border border-[#D0E6F9] font-mono text-[#334E68]">
+            <span className="font-bold text-rose-700">代墊記帳：</span> <code>廖 1200 晚餐</code> 或 <code>代墊 晚餐 1200</code><br />
+            <span className="text-[10px] text-[#627D98]">（自動一人一半 AA 平分各 $600）</span>
           </div>
-          <div className="bg-white p-2.5 rounded-xl border border-[#E2DDD0] font-mono text-[#5C564C]">
-            <span className="font-bold text-emerald-700">即時查帳：</span> <code>查代墊</code> 或 <code>誰欠誰</code><br />
-            <span className="text-[10px] text-[#8C8475]">（LINE 機器人即時回覆結算淨額卡片）</span>
+          <div className="bg-white p-2.5 rounded-xl border border-[#D0E6F9] font-mono text-[#334E68]">
+            <span className="font-bold text-sky-700">即時查帳：</span> <code>查</code> 或 <code>查代墊</code> 或 <code>誰欠誰</code><br />
+            <span className="text-[10px] text-[#627D98]">（Telegram 機器人即時回傳對帳與公積金結餘）</span>
           </div>
         </div>
       </div>

@@ -1,3 +1,5 @@
+var HARDCODED_TELEGRAM_TOKEN = "8940545345:AAGTJSX-EgRpbCGPfufxGhxEJTzAOvMw5I4";
+var HARDCODED_TELEGRAM_CHAT_ID = "-5312205991";
 /**
  * 伴伴記❤️ - Google Apps Script 後端處理 (Code.gs)
  * 精通全端與 GAS 開發的資深工程師精心撰寫，包含完整防呆與即時結算邏輯。
@@ -589,7 +591,7 @@ function setMonthReconciled(month, isReconciled) {
           badgeText: boolReconciled ? "已結清" : "待對帳",
           badgeBg: boolReconciled ? "#3A6D8C" : "#E58B23",
           details: details,
-          targetUrl: "https://liao0318.github.io/migoscar.fund/"
+          targetUrl: "https://liao0318.github.io/fund.migoscar/"
         });
       }
     } catch(lineErr) {}
@@ -668,7 +670,7 @@ function addRecord(data) {
           badgeText: badgeText,
           badgeBg: badgeBg,
           details: details,
-          targetUrl: "https://liao0318.github.io/migoscar.fund/"
+          targetUrl: "https://liao0318.github.io/fund.migoscar/"
         });
       }
     } catch(lineErr) {
@@ -750,7 +752,7 @@ function updateRecordByRow(data) {
           badgeText: badgeText,
           badgeBg: badgeBg,
           details: details,
-          targetUrl: "https://liao0318.github.io/migoscar.fund/"
+          targetUrl: "https://liao0318.github.io/fund.migoscar/"
         });
       }
     } catch(lineErr) {}
@@ -971,7 +973,7 @@ function deleteRecordByRow(rowId) {
             badgeText: "撤銷紀錄",
             badgeBg: "#706B62",
             details: details,
-            targetUrl: "https://liao0318.github.io/migoscar.fund/"
+            targetUrl: "https://liao0318.github.io/fund.migoscar/"
           });
         }
       } catch(lineErr) {}
@@ -998,7 +1000,7 @@ function sendLineNotify(payload) {
     var messages = [];
 
     if (typeof payload === 'object' && payload !== null && payload.altText) {
-      var targetUrl = payload.targetUrl || "https://liao0318.github.io/migoscar.fund/";
+      var targetUrl = payload.targetUrl || "https://liao0318.github.io/fund.migoscar/";
       var altText = payload.altText || "【伴伴記通知】";
       var titleText = payload.titleText || "【帳目異動】";
       var badgeText = payload.badgeText || "伴伴記";
@@ -1258,7 +1260,7 @@ function testLineNotify(token) {
       badgeText: "連線成功",
       badgeBg: "#06C755",
       details: testDetails,
-      targetUrl: "https://liao0318.github.io/migoscar.fund/"
+      targetUrl: "https://liao0318.github.io/fund.migoscar/"
     });
     
     if (sendRes && sendRes.success) {
@@ -1433,7 +1435,7 @@ function addShoppingItem(data, triggerBroadcast) {
             badgeText: category,
             badgeBg: badgeBg,
             details: details,
-            targetUrl: "https://liao0318.github.io/migoscar.fund/"
+            targetUrl: "https://liao0318.github.io/fund.migoscar/"
           });
         }
       } catch(lineErr) {}
@@ -1540,7 +1542,7 @@ function toggleShoppingItemStatus(id, newStatus) {
             badgeText: "已完成",
             badgeBg: "#428564",
             details: details,
-            targetUrl: "https://liao0318.github.io/migoscar.fund/"
+            targetUrl: "https://liao0318.github.io/fund.migoscar/"
           });
         }
       } catch(lineErr) {}
@@ -1593,7 +1595,7 @@ function deleteShoppingItem(id) {
               { label: "品項名稱", value: itemName },
               { label: "移除時間", value: timeStr }
             ],
-            targetUrl: "https://liao0318.github.io/migoscar.fund/"
+            targetUrl: "https://liao0318.github.io/fund.migoscar/"
           });
         }
       } catch(lineErr) {}
@@ -1640,7 +1642,7 @@ function clearDoneShoppingItems() {
               { label: "清空數量", value: deletedCount + " 項品項" },
               { label: "完成時間", value: timeStr }
             ],
-            targetUrl: "https://liao0318.github.io/migoscar.fund/"
+            targetUrl: "https://liao0318.github.io/fund.migoscar/"
           });
         }
       } catch(lineErr) {}
@@ -1873,7 +1875,7 @@ function addSplitRecord(data, shouldNotify) {
             { label: "分帳結果", value: otherDisplayName + " 需返還 NT$ " + debtorAmount.toLocaleString(), color: "#2B825B", bold: true },
             { label: "記錄時間", value: timeStr }
           ],
-          targetUrl: "https://liao0318.github.io/migoscar.fund/split/"
+          targetUrl: "https://liao0318.github.io/fund.migoscar/split/"
         });
       } catch(lineErr) {}
     }
@@ -1936,7 +1938,7 @@ function settleAllSplitRecords() {
             { label: "目前債務", value: "雙方已結清歸零 💖", color: "#2B825B", bold: true },
             { label: "結清時間", value: nowStr }
           ],
-          targetUrl: "https://liao0318.github.io/migoscar.fund/split/"
+          targetUrl: "https://liao0318.github.io/fund.migoscar/split/"
         });
       } catch(lineErr) {}
     }
@@ -2025,7 +2027,7 @@ function sendLineReply(replyToken, payload) {
     var messages = [];
 
     if (typeof payload === 'object' && payload !== null && payload.altText) {
-      var targetUrl = payload.targetUrl || "https://liao0318.github.io/migoscar.fund/";
+      var targetUrl = payload.targetUrl || "https://liao0318.github.io/fund.migoscar/";
       var altText = payload.altText || "【伴伴記通知】";
       var titleText = payload.titleText || "【購物紀錄】";
       var badgeText = payload.badgeText || "伴伴記";
@@ -2293,7 +2295,7 @@ function handleLineTextMessage(text, replyToken, source) {
       "  範例：1. 高麗菜-菜市場 8/13前\n" +
       "• 2. 品項-地點 期限 (想要買)\n" +
       "  範例：2. 雞塊-全聯 8/15前\n\n" +
-      "🔗 點此開啟網頁版全螢幕：\nhttps://liao0318.github.io/migoscar.fund/";
+      "🔗 點此開啟網頁版全螢幕：\nhttps://liao0318.github.io/fund.migoscar/";
     sendLineReply(replyToken, helpMsg);
     return;
   }
@@ -2331,7 +2333,7 @@ function handleLineTextMessage(text, replyToken, source) {
           { label: "周沛緹 代墊", value: "NT$ " + totalChou.toLocaleString() },
           { label: "結算狀態", value: statusText, bold: true }
         ],
-        targetUrl: "https://liao0318.github.io/migoscar.fund/"
+        targetUrl: "https://liao0318.github.io/fund.migoscar/"
       });
       return;
     } catch(e) {
@@ -2373,7 +2375,7 @@ function handleLineTextMessage(text, replyToken, source) {
       outLines.push(wants.join("\n"));
       outLines.push("");
     }
-    outLines.push("🔗 點此開啟網頁版全螢幕管理：\nhttps://liao0318.github.io/migoscar.fund/");
+    outLines.push("🔗 點此開啟網頁版全螢幕管理：\nhttps://liao0318.github.io/fund.migoscar/");
     
     sendLineReply(replyToken, outLines.join("\n"));
     return;
@@ -2437,7 +2439,7 @@ function handleLineTextMessage(text, replyToken, source) {
             { label: "記帳日期", value: recordDate, color: "#2B825B" },
             { label: "記錄時間", value: formatAmPmTime(new Date()) }
           ],
-          targetUrl: "https://liao0318.github.io/migoscar.fund/"
+          targetUrl: "https://liao0318.github.io/fund.migoscar/"
         });
       } else {
         sendLineReply(replyToken, "⚠️ 存入公積金失敗：" + (addIncRes ? addIncRes.message : "連線異常"));
@@ -2509,7 +2511,7 @@ function handleLineTextMessage(text, replyToken, source) {
             { label: "記帳日期", value: recordDate, color: "#2B825B" },
             { label: "記錄時間", value: formatAmPmTime(new Date()) }
           ],
-          targetUrl: "https://liao0318.github.io/migoscar.fund/"
+          targetUrl: "https://liao0318.github.io/fund.migoscar/"
         });
       } else {
         sendLineReply(replyToken, "⚠️ 記帳寫入失敗：" + (addRecRes ? addRecRes.message : "連線異常"));
@@ -2595,7 +2597,7 @@ function handleLineTextMessage(text, replyToken, source) {
           { label: "預計期限", value: deadlineStr, color: "#2B825B" },
           { label: "資料庫", value: "已成功寫入 Google 試算表" }
         ],
-        targetUrl: "https://liao0318.github.io/migoscar.fund/"
+        targetUrl: "https://liao0318.github.io/fund.migoscar/"
       });
     } else {
       sendLineReply(replyToken, "⚠️ 寫入購物清單失敗：" + (addRes ? addRes.message : "連線錯誤"));

@@ -1,3 +1,6 @@
+var HARDCODED_TELEGRAM_TOKEN = "8940545345:AAGTJSX-EgRpbCGPfufxGhxEJTzAOvMw5I4";
+var HARDCODED_TELEGRAM_CHAT_ID = "-5312205991";
+var HARDCODED_SPREADSHEET_ID = "";
 /**
  * 伴伴記❤️ - Google Apps Script 後端處理 (Code.gs)
  * 精通全端與 GAS 開發的資深工程師精心撰寫，包含完整防呆與即時結算邏輯。
@@ -5,23 +8,35 @@
 
 // 💡 Google 試算表 ID / 網址（選填）
 // 如果您使用的是「獨立腳本」（非從試算表內『擴充功能 > Apps Script』建立），可直接貼上試算表完整網址或 ID 於此；留空則自動感應綁定的試算表
-var HARDCODED_SPREADSHEET_ID = "";
-
 // 💡 LINE Messaging API / Notify Channel Access Token
 // 如果您想直接寫死權杖，請貼在下方雙引號中（最優先採用）；若留空則會自動從 PropertiesService 讀取
-var HARDCODED_LINE_TOKEN = "";
-
 // 1. 網頁部署：渲染 Index.html，強力支援行動端 PWA 獨立無網址列全螢幕與自訂網頁標題與分頁 Favicon
-function doGet() {
-  var output = HtmlService.createHtmlOutputFromFile('Index');
-  output.addMetaTag('viewport', 'width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no, viewport-fit=cover');
-  output.setTitle('伴伴記❤️');
-  
-  // 設定精美網頁分頁 Tab 專屬 Icon (使用簡約日系櫻花風 Favicon)
-  output.setFaviconUrl("https://img.icons8.com/color/180/cherry-blossom.png");
-  
-  output.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  return output;
+function doGet(e) {
+  // 1. 如果前端以 GET 請求 API action
+  if (e && e.parameter && e.parameter.action) {
+    var action = e.parameter.action;
+    if (action === "getTravelData") return ContentService.createTextOutput(JSON.stringify(getTravelData())).setMimeType(ContentService.MimeType.JSON);
+    if (action === "getSplitData") return ContentService.createTextOutput(JSON.stringify(getSplitData())).setMimeType(ContentService.MimeType.JSON);
+    if (action === "getDashboardData") return ContentService.createTextOutput(JSON.stringify(getDashboardData())).setMimeType(ContentService.MimeType.JSON);
+    if (action === "getShoppingData") return ContentService.createTextOutput(JSON.stringify(getShoppingData())).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ success: true, message: "伴伴記後端 API 連線正常！" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // 2. 嘗試載入 Index.html（若有在 Apps Script 建立 Index 檔案）
+  try {
+    var output = HtmlService.createHtmlOutputFromFile('Index');
+    output.addMetaTag('viewport', 'width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no, viewport-fit=cover');
+    output.setTitle('伴伴記❤️');
+    output.setFaviconUrl("https://img.icons8.com/color/180/cherry-blossom.png");
+    output.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    return output;
+  } catch (err) {
+    // 3. 若未在 Apps Script 建立 Index.html，返回 API 正常運作狀態頁面（不報錯）
+    var fallbackHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>伴伴記後端 API</title><style>body{font-family:sans-serif;text-align:center;padding:40px;background:#fdfaf7;color:#333;}h2{color:#2b825b;}.card{background:#fff;border-radius:12px;padding:24px;max-width:500px;margin:20px auto;box-shadow:0 4px 12px rgba(0,0,0,0.05);line-height:1.6;}</style></head><body><h2>✨ 伴伴記 Google Apps Script 後端 API 運作中</h2><div class="card"><p>✅ 試算表資料庫與 LINE 機器人 Webhook 已就緒！</p><p>🚀 前端網頁可由 GitHub Pages 託管，或在 Apps Script 左側建立 <b>Index</b> (HTML) 檔案。</p></div></body></html>';
+    return HtmlService.createHtmlOutput(fallbackHtml)
+      .setTitle('伴伴記 後端 API 服務')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
 }
 
 // 輔助函式：鎖定為「yyyy-MM-dd 上午/下午 hh:mm」格式，不含時區或 ISO 字串
@@ -970,293 +985,197 @@ function deleteRecordByRow(rowId) {
 /**
  * 💡 LINE Messaging API 外掛通知核心機制 (支援國泰風格卡片式 Flex Message 廣播推播)
  */
-function sendLineNotify(payload) {
+/**
+ * 💡 Telegram Bot外掛通知核心機制 (100% 永久免費無上限)
+ */
+function sendTelegramMessage(payload, customChatId) {
   try {
-    var token = (typeof HARDCODED_LINE_TOKEN !== 'undefined' && HARDCODED_LINE_TOKEN && HARDCODED_LINE_TOKEN.trim())
-      ? HARDCODED_LINE_TOKEN.trim()
-      : PropertiesService.getScriptProperties().getProperty("LINE_NOTIFY_TOKEN");
+    var token = (typeof HARDCODED_TELEGRAM_TOKEN !== 'undefined' && HARDCODED_TELEGRAM_TOKEN && HARDCODED_TELEGRAM_TOKEN.trim())
+      ? HARDCODED_TELEGRAM_TOKEN.trim()
+      : PropertiesService.getScriptProperties().getProperty("TELEGRAM_BOT_TOKEN");
       
-    if (!token) return { success: false, errorText: "未設定 Token" };
+    var chatId = customChatId || (typeof HARDCODED_TELEGRAM_CHAT_ID !== 'undefined' && HARDCODED_TELEGRAM_CHAT_ID && HARDCODED_TELEGRAM_CHAT_ID.trim())
+      ? (customChatId || HARDCODED_TELEGRAM_CHAT_ID.trim())
+      : PropertiesService.getScriptProperties().getProperty("TELEGRAM_CHAT_ID");
+      
+    if (!token) return { success: false, message: "未設定 Telegram Bot Token" };
+    if (!chatId) return { success: false, message: "未設定 Telegram Chat ID" };
     
-    var messagingUrl = "https://api.line.me/v2/bot/message/broadcast";
-    var messages = [];
-
-    if (typeof payload === 'object' && payload !== null && payload.altText) {
-      var targetUrl = payload.targetUrl || "https://liao0318.github.io/fund.migoscar/";
-      var altText = payload.altText || "【伴伴記通知】";
-      var titleText = payload.titleText || "【帳目異動】";
-      var badgeText = payload.badgeText || "伴伴記";
-      var badgeBg = payload.badgeBg || "#8C8475";
-
-      var detailRows = [];
+    var textMessage = "";
+    var webAppUrl = (typeof payload === 'object' && payload !== null && payload.targetUrl) ? payload.targetUrl : "https://liao0318.github.io/fund.migoscar/";
+    
+    if (typeof payload === 'object' && payload !== null) {
+      var lines = [];
+      var header = payload.titleText || payload.altText || "🔔【伴伴記通知】";
+      lines.push("<b>" + escapeHtml(header) + "</b>");
+      
+      if (payload.badgeText) {
+        lines.push("🏷️ <i>" + escapeHtml(payload.badgeText) + "</i>");
+      }
+      lines.push("━━━━━━━━━━━━━━━━━━");
+      
       if (payload.details && payload.details.length > 0) {
         for (var i = 0; i < payload.details.length; i++) {
           var item = payload.details[i];
-          detailRows.push({
-            "type": "box",
-            "layout": "horizontal",
-            "spacing": "xs",
-            "contents": [
-              {
-                "type": "text",
-                "text": "◆ " + item.label + "：",
-                "size": "xs",
-                "color": "#E58B23",
-                "flex": 0
-              },
-              {
-                "type": "text",
-                "text": String(item.value || ""),
-                "size": "xs",
-                "color": item.color || "#5C564E",
-                "weight": item.bold ? "bold" : "regular",
-                "wrap": true
-              }
-            ]
-          });
-        }
-      }
-
-      var flexMessageObj = {
-        "type": "flex",
-        "altText": altText,
-        "contents": {
-          "type": "bubble",
-          "size": "mega",
-          "header": {
-            "type": "box",
-            "layout": "vertical",
-            "backgroundColor": "#FAF9F5",
-            "paddingAll": "16px",
-            "contents": [
-              {
-                "type": "box",
-                "layout": "horizontal",
-                "contents": [
-                  {
-                    "type": "text",
-                    "text": "伴伴記 ❤️",
-                    "size": "xs",
-                    "color": "#8C8475",
-                    "weight": "bold",
-                    "gravity": "center"
-                  },
-                  {
-                    "type": "box",
-                    "layout": "vertical",
-                    "backgroundColor": badgeBg,
-                    "cornerRadius": "12px",
-                    "paddingStart": "8px",
-                    "paddingEnd": "8px",
-                    "paddingTop": "3px",
-                    "paddingBottom": "3px",
-                    "flex": 0,
-                    "contents": [
-                      {
-                        "type": "text",
-                        "text": badgeText,
-                        "size": "xxs",
-                        "color": "#ffffff",
-                        "align": "center",
-                        "weight": "bold"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          "body": {
-            "type": "box",
-            "layout": "vertical",
-            "paddingAll": "18px",
-            "contents": [
-              {
-                "type": "text",
-                "text": titleText,
-                "weight": "bold",
-                "size": "md",
-                "color": "#3E3A36"
-              },
-              {
-                "type": "separator",
-                "margin": "md",
-                "color": "#EEEDE4"
-              },
-              {
-                "type": "box",
-                "layout": "vertical",
-                "margin": "md",
-                "spacing": "sm",
-                "contents": detailRows
-              }
-            ]
-          },
-          "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "paddingAll": "12px",
-            "backgroundColor": "#FAF9F5",
-            "contents": [
-              {
-                "type": "button",
-                "style": "primary",
-                "height": "sm",
-                "color": "#4D4942",
-                "action": {
-                  "type": "uri",
-                  "label": "🔍 查詢明細",
-                  "uri": targetUrl
-                }
-              }
-            ]
+          var lbl = item.label || "";
+          var val = String(item.value || "");
+          if (item.bold) {
+            lines.push("◆ <b>" + escapeHtml(lbl) + "</b>：<b>" + escapeHtml(val) + "</b>");
+          } else {
+            lines.push("◆ <b>" + escapeHtml(lbl) + "</b>：" + escapeHtml(val));
           }
         }
-      };
-
-      messages.push(flexMessageObj);
+      }
+      
+      lines.push("━━━━━━━━━━━━━━━━━━");
+      lines.push("🔗 <a href=\"" + webAppUrl + "\">點我開啟伴伴記全螢幕網頁</a>");
+      textMessage = lines.join("\n");
     } else {
-      messages.push({
-        "type": "text",
-        "text": String(payload)
-      });
+      textMessage = String(payload);
     }
-
+    
+    var telegramApiUrl = "https://api.telegram.org/bot" + token.trim() + "/sendMessage";
+    
+    var requestBody = {
+      "chat_id": chatId.trim(),
+      "text": textMessage,
+      "parse_mode": "HTML",
+      "disable_web_page_preview": false
+    };
+    
     var options = {
       "method": "post",
-      "headers": {
-        "Authorization": "Bearer " + token.trim(),
-        "Content-Type": "application/json"
-      },
-      "payload": JSON.stringify({
-        "messages": messages
-      }),
+      "contentType": "application/json",
+      "payload": JSON.stringify(requestBody),
       "muteHttpExceptions": true
     };
     
-    var response = UrlFetchApp.fetch(messagingUrl, options);
-    var code = response.getResponseCode();
-    if (code === 200) {
-      return { success: true, code: 200 };
-    }
-
-    var errText = response.getContentText();
-    console.error("Flex message failed HTTP " + code + ": " + errText);
-
-    // 💡 Fallback to plain text message if Flex message is rejected
-    if (typeof payload === 'object' && payload !== null) {
-      var lines = [payload.titleText || payload.altText || "【伴伴記通知】"];
-      if (payload.details && payload.details.length) {
-        for (var j = 0; j < payload.details.length; j++) {
-          lines.push("• " + payload.details[j].label + "：" + payload.details[j].value);
-        }
-      }
-      var textPayload = lines.join(String.fromCharCode(10));
-      var textOptions = {
-        "method": "post",
-        "headers": {
-          "Authorization": "Bearer " + token.trim(),
-          "Content-Type": "application/json"
-        },
-        "payload": JSON.stringify({
-          "messages": [{ "type": "text", "text": textPayload }]
-        }),
-        "muteHttpExceptions": true
-      };
-      var fallbackRes = UrlFetchApp.fetch(messagingUrl, textOptions);
-      if (fallbackRes.getResponseCode() === 200) {
-        return { success: true, code: 200, fallback: true };
-      }
-    }
-
-    return { success: false, code: code, errorText: errText };
-  } catch (e) {
-    console.error("LINE Messaging engine failed:", e.toString());
-    return { success: false, errorText: e.toString() };
-  }
-}
-
-// 儲存 LINE Messaging API 權杖 API (管理者由前端設定)
-function saveLineNotifyToken(token) {
-  try {
-    if (typeof token === 'object' && token !== null) {
-      token = token.token;
-    }
-    if (!token) {
-      PropertiesService.getScriptProperties().deleteProperty("LINE_NOTIFY_TOKEN");
-      return { success: true, message: "已成功清除 LINE 權杖設定！" };
-    }
-    PropertiesService.getScriptProperties().setProperty("LINE_NOTIFY_TOKEN", token.trim());
-    return { success: true, message: "LINE Channel Access Token 已成功儲存！只要加入您的 LINE 官方帳號好友即可接收即時記帳叮咚！" };
-  } catch (e) {
-    return { success: false, message: "儲存權杖失敗：" + e.toString() };
-  }
-}
-
-// 讀取已經遮罩的 LINE 權杖，傳回前端顯示用
-function getLineNotifyToken() {
-  try {
-    var token = (typeof HARDCODED_LINE_TOKEN !== 'undefined' && HARDCODED_LINE_TOKEN && HARDCODED_LINE_TOKEN.trim())
-      ? HARDCODED_LINE_TOKEN.trim()
-      : PropertiesService.getScriptProperties().getProperty("LINE_NOTIFY_TOKEN");
-      
-    if (!token) return { success: true, token: "" };
-    var masked = token.length > 8 
-      ? token.substring(0, 4) + "********************" + token.substring(token.length - 4)
-      : "********";
-    return { success: true, token: masked, hasToken: true };
-  } catch (e) {
-    return { success: false, token: "" };
-  }
-}
-
-// 測試發送 LINE Messaging API 通知
-function testLineNotify(token) {
-  try {
-    if (token && token.trim()) {
-      PropertiesService.getScriptProperties().setProperty("LINE_NOTIFY_TOKEN", token.trim());
+    var response = UrlFetchApp.fetch(telegramApiUrl, options);
+    var respCode = response.getResponseCode();
+    var respText = response.getContentText();
+    
+    if (respCode >= 200 && respCode < 300) {
+      return { success: true, message: "Telegram 訊息推播成功！" };
     } else {
-      token = (typeof HARDCODED_LINE_TOKEN !== 'undefined' && HARDCODED_LINE_TOKEN && HARDCODED_LINE_TOKEN.trim())
-        ? HARDCODED_LINE_TOKEN.trim()
-        : PropertiesService.getScriptProperties().getProperty("LINE_NOTIFY_TOKEN");
+      console.warn("Telegram API error: " + respCode + ", " + respText);
+      return { success: false, message: "Telegram 發送失敗 (" + respCode + ")：" + respText };
     }
-    if (!token) {
-      return { success: false, message: "尚未設定 LINE Messaging API 權杖！" };
+  } catch(err) {
+    console.error("sendTelegramMessage Exception: " + err.toString());
+    return { success: false, message: "Telegram 發送異常：" + err.toString() };
+  }
+}
+
+// 輔助函式：逸出 Telegram HTML 標籤
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function sendLineNotify(payload) {
+  return sendTelegramMessage(payload);
+}
+
+
+// 儲存 Telegram Bot Token 與 Chat ID
+function saveTelegramCredentials(data) {
+  try {
+    var token = "";
+    var chatId = "";
+    if (typeof data === 'object' && data !== null) {
+      token = data.token || "";
+      chatId = data.chatId || "";
+    } else if (typeof data === 'string') {
+      token = data;
     }
     
+    if (token) {
+      PropertiesService.getScriptProperties().setProperty("TELEGRAM_BOT_TOKEN", token.trim());
+    } else {
+      PropertiesService.getScriptProperties().deleteProperty("TELEGRAM_BOT_TOKEN");
+    }
+    if (chatId) {
+      PropertiesService.getScriptProperties().setProperty("TELEGRAM_CHAT_ID", chatId.trim());
+    }
+    
+    return { success: true, message: "Telegram Bot Token 與 Chat ID 已成功儲存！" };
+  } catch (e) {
+    return { success: false, message: "儲存 Telegram 設定失敗：" + e.toString() };
+  }
+}
+
+function saveLineNotifyToken(token) {
+  return saveTelegramCredentials(token);
+}
+
+// 讀取已經遮罩的 Telegram 設定
+function getTelegramCredentials() {
+  try {
+    var token = (typeof HARDCODED_TELEGRAM_TOKEN !== 'undefined' && HARDCODED_TELEGRAM_TOKEN && HARDCODED_TELEGRAM_TOKEN.trim())
+      ? HARDCODED_TELEGRAM_TOKEN.trim()
+      : PropertiesService.getScriptProperties().getProperty("TELEGRAM_BOT_TOKEN");
+      
+    var chatId = (typeof HARDCODED_TELEGRAM_CHAT_ID !== 'undefined' && HARDCODED_TELEGRAM_CHAT_ID && HARDCODED_TELEGRAM_CHAT_ID.trim())
+      ? HARDCODED_TELEGRAM_CHAT_ID.trim()
+      : PropertiesService.getScriptProperties().getProperty("TELEGRAM_CHAT_ID");
+      
+    var maskedToken = "";
+    if (token) {
+      maskedToken = token.length > 8
+        ? token.substring(0, 4) + "********************" + token.substring(token.length - 4)
+        : "********";
+    }
+    return { success: true, token: maskedToken, chatId: chatId || "", hasToken: !!token };
+  } catch (e) {
+    return { success: false, token: "", chatId: "" };
+  }
+}
+
+function getLineNotifyToken() {
+  return getTelegramCredentials();
+}
+
+// 測試發送 Telegram 訊息
+function testTelegramNotify(customToken, customChatId) {
+  try {
     var estimatedQuota = calculateEstimatedQuota();
     var now = new Date();
     var dateStr = Utilities.formatDate(now, "GMT+8", "yyyy-MM-dd");
     var timeStr = formatAmPmTime(now);
 
     var testDetails = [
-      { label: "連線測試", value: "廣播通知連線成功！🎉" },
+      { label: "連線測試", value: "Telegram 群組推播連線成功！🎉" },
       { label: "測試日期", value: dateStr },
-      { label: "銷帳後預計剩餘", value: "$" + estimatedQuota.toLocaleString() + " 元", bold: true, color: estimatedQuota >= 0 ? "#428564" : "#C55757" },
+      { label: "銷帳後預計剩餘", value: "NT$ " + estimatedQuota.toLocaleString() + " 元", bold: true },
       { label: "時間", value: timeStr }
     ];
 
-    var sendRes = sendLineNotify({
-      altText: "🔔伴伴記 LINE 通知測試成功～",
-      titleText: "【LINE 通知測試】連線成功 🎉",
-      badgeText: "連線成功",
-      badgeBg: "#06C755",
+    var sendRes = sendTelegramMessage({
+      altText: "🔔伴伴記 Telegram 群組推播測試成功～",
+      titleText: "【Telegram 推播測試】連線成功 🎉",
+      badgeText: "連線正常",
+      badgeBg: "#38BDF8",
       details: testDetails,
       targetUrl: "https://liao0318.github.io/fund.migoscar/"
-    });
-    
+    }, customChatId);
+
     if (sendRes && sendRes.success) {
-      return { success: true, message: "LINE Messaging API 廣播推播成功！請檢查您的 LINE 官方帳號聊天室是否收到叮咚卡片訊息！" };
+      return { success: true, message: "🎉 Telegram 測試訊息已發送至群組！請查看 Telegram。" };
+    } else {
+      return { success: false, message: sendRes ? sendRes.message : "發送失敗，請確認 Token 與 Chat ID" };
     }
-    
-    var detailMsg = (sendRes && sendRes.errorText) ? " (" + sendRes.errorText + ")" : "";
-    return { success: false, message: "發送失敗" + detailMsg + "。請確認 Channel Access Token 是否正確。" };
-  } catch (e) {
-    return { success: false, message: "發送錯誤：" + e.toString() };
+  } catch(e) {
+    return { success: false, message: "測試異常：" + e.toString() };
   }
 }
 
-// ------------------- 購物清單與常用商店 GAS API -------------------
+function testLineNotify(token) {
+  return testTelegramNotify(token);
+}
+
 
 function getShoppingSheet() {
   var ss = getDbSpreadsheet();
@@ -1931,7 +1850,7 @@ function settleAllSplitRecords() {
   }
 }
 
-// ------------------- LINE WEBHOOK & HTTP API (doPost) 處理 -------------------
+// ------------------- TELEGRAM WEBHOOK & HTTP API (doPost) 處理 -------------------
 
 function doPost(e) {
   try {
@@ -1963,242 +1882,40 @@ function doPost(e) {
       else if (data.action === "saveStoresList") result = saveStoresList(data.stores || data);
       else if (data.action === "saveSpreadsheetId") result = saveSpreadsheetId(data.spreadsheetId || data.url || data);
       else if (data.action === "getSpreadsheetConfig") result = getSpreadsheetConfig();
-      else if (data.action === "getLineNotifySettings") result = getLineNotifySettings();
-      else if (data.action === "saveLineNotifySettings") result = saveLineNotifySettings(data.settings || data);
-      else if (data.action === "getLineNotifyToken") result = getLineNotifyToken();
-      else if (data.action === "saveLineNotifyToken") result = saveLineNotifyToken(data.token || data);
-      else if (data.action === "testLineNotify") result = testLineNotify(data.token);
+      else if (data.action === "getLineNotifySettings" || data.action === "getTelegramNotifySettings") result = getLineNotifySettings();
+      else if (data.action === "saveLineNotifySettings" || data.action === "saveTelegramNotifySettings") result = saveLineNotifySettings(data.settings || data);
+      else if (data.action === "getLineNotifyToken" || data.action === "getTelegramCredentials") result = getTelegramCredentials();
+      else if (data.action === "saveLineNotifyToken" || data.action === "saveTelegramCredentials") result = saveTelegramCredentials(data);
+      else if (data.action === "testLineNotify" || data.action === "testTelegramNotify") result = testTelegramNotify(data.token, data.chatId);
       else if (data.action === "getSplitData") result = getSplitData();
       else if (data.action === "addSplitRecord") result = addSplitRecord(data);
       else if (data.action === "deleteSplitRecord") result = deleteSplitRecord(data.id || data.splitId);
       else if (data.action === "settleAllSplitRecords") result = settleAllSplitRecords();
+      else if (data.action === "getTravelData") result = getTravelData();
+      else if (data.action === "addTravelPlan") result = addTravelPlan(data);
+      else if (data.action === "updateTravelPlan") result = updateTravelPlan(data);
+      else if (data.action === "deleteTravelPlan") result = deleteTravelPlan(data.id);
 
       return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
     }
     
-    // 2. LINE Webhook 訊息處理 (包含 Verify 驗證請求)
-    if (!data.events || data.events.length === 0) {
+    // 2. Telegram Webhook 訊息處理 (支援群組或私訊發送指令記帳)
+    if (data.message && data.message.text) {
+      var userText = data.message.text.trim();
+      var incomingChatId = String(data.message.chat.id);
+      handleTelegramBotMessage(userText, incomingChatId);
       return ContentService.createTextOutput(JSON.stringify({ status: "ok" })).setMimeType(ContentService.MimeType.JSON);
     }
     
-    for (var i = 0; i < data.events.length; i++) {
-      var event = data.events[i];
-      if (event.type === "message" && event.message && event.message.type === "text") {
-        var userText = event.message.text.trim();
-        var replyToken = event.replyToken;
-        handleLineTextMessage(userText, replyToken, event.source);
-      }
-    }
-    
-    return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ status: "ok" })).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
     console.error("doPost error: " + err.toString());
     return ContentService.createTextOutput(JSON.stringify({ status: "ok", error: err.toString() })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
-function sendLineReply(replyToken, payload) {
-  try {
-    var token = (typeof HARDCODED_LINE_TOKEN !== 'undefined' && HARDCODED_LINE_TOKEN && HARDCODED_LINE_TOKEN.trim())
-      ? HARDCODED_LINE_TOKEN.trim()
-      : PropertiesService.getScriptProperties().getProperty("LINE_NOTIFY_TOKEN");
-      
-    if (!token || !replyToken) return false;
-    
-    var replyUrl = "https://api.line.me/v2/bot/message/reply";
-    var messages = [];
-
-    if (typeof payload === 'object' && payload !== null && payload.altText) {
-      var targetUrl = payload.targetUrl || "https://liao0318.github.io/fund.migoscar/";
-      var altText = payload.altText || "【伴伴記通知】";
-      var titleText = payload.titleText || "【購物紀錄】";
-      var badgeText = payload.badgeText || "伴伴記";
-      var badgeBg = payload.badgeBg || "#8C8475";
-
-      var detailRows = [];
-      if (payload.details && payload.details.length > 0) {
-        for (var i = 0; i < payload.details.length; i++) {
-          var item = payload.details[i];
-          detailRows.push({
-            "type": "box",
-            "layout": "horizontal",
-            "spacing": "xs",
-            "contents": [
-              {
-                "type": "text",
-                "text": "◆ " + item.label + "：",
-                "size": "xs",
-                "color": "#E58B23",
-                "flex": 0
-              },
-              {
-                "type": "text",
-                "text": String(item.value || ""),
-                "size": "xs",
-                "color": item.color || "#5C564E",
-                "weight": item.bold ? "bold" : "regular",
-                "wrap": true
-              }
-            ]
-          });
-        }
-      }
-
-      var flexMessageObj = {
-        "type": "flex",
-        "altText": altText,
-        "contents": {
-          "type": "bubble",
-          "size": "mega",
-          "header": {
-            "type": "box",
-            "layout": "vertical",
-            "backgroundColor": "#FAF9F5",
-            "paddingAll": "16px",
-            "contents": [
-              {
-                "type": "box",
-                "layout": "horizontal",
-                "contents": [
-                  {
-                    "type": "text",
-                    "text": "伴伴記 ❤️ 購物記事",
-                    "size": "xs",
-                    "color": "#8C8475",
-                    "weight": "bold",
-                    "gravity": "center"
-                  },
-                  {
-                    "type": "box",
-                    "layout": "vertical",
-                    "backgroundColor": badgeBg,
-                    "cornerRadius": "12px",
-                    "paddingStart": "8px",
-                    "paddingEnd": "8px",
-                    "paddingTop": "3px",
-                    "paddingBottom": "3px",
-                    "flex": 0,
-                    "contents": [
-                      {
-                        "type": "text",
-                        "text": badgeText,
-                        "size": "xxs",
-                        "color": "#ffffff",
-                        "align": "center",
-                        "weight": "bold"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          },
-          "body": {
-            "type": "box",
-            "layout": "vertical",
-            "paddingAll": "18px",
-            "contents": [
-              {
-                "type": "text",
-                "text": titleText,
-                "weight": "bold",
-                "size": "md",
-                "color": "#3E3A36"
-              },
-              {
-                "type": "separator",
-                "margin": "md",
-                "color": "#EEEDE4"
-              },
-              {
-                "type": "box",
-                "layout": "vertical",
-                "margin": "md",
-                "spacing": "sm",
-                "contents": detailRows
-              }
-            ]
-          },
-          "footer": {
-            "type": "box",
-            "layout": "vertical",
-            "paddingAll": "12px",
-            "backgroundColor": "#FAF9F5",
-            "contents": [
-              {
-                "type": "button",
-                "style": "primary",
-                "height": "sm",
-                "color": "#4D4942",
-                "action": {
-                  "type": "uri",
-                  "label": "🛒 點我檢視完整清單",
-                  "uri": targetUrl
-                }
-              }
-            ]
-          }
-        }
-      };
-
-      messages.push(flexMessageObj);
-    } else {
-      messages.push({
-        "type": "text",
-        "text": String(payload)
-      });
-    }
-
-    var options = {
-      "method": "post",
-      "headers": {
-        "Authorization": "Bearer " + token.trim(),
-        "Content-Type": "application/json"
-      },
-      "payload": JSON.stringify({
-        "replyToken": replyToken,
-        "messages": messages
-      }),
-      "muteHttpExceptions": true
-    };
-    
-    var response = UrlFetchApp.fetch(replyUrl, options);
-    if (response.getResponseCode() === 200) {
-      return true;
-    }
-    
-    // Fallback to text if flex fails
-    if (typeof payload === 'object' && payload !== null) {
-      var fallbackLines = [payload.titleText || payload.altText || "【伴伴記通知】"];
-      if (payload.details && payload.details.length) {
-        for (var j = 0; j < payload.details.length; j++) {
-          fallbackLines.push("• " + payload.details[j].label + "：" + payload.details[j].value);
-        }
-      }
-      var textPayload = fallbackLines.join(String.fromCharCode(10));
-      var textOptions = {
-        "method": "post",
-        "headers": {
-          "Authorization": "Bearer " + token.trim(),
-          "Content-Type": "application/json"
-        },
-        "payload": JSON.stringify({
-          "replyToken": replyToken,
-          "messages": [{ "type": "text", "text": textPayload }]
-        }),
-        "muteHttpExceptions": true
-      };
-      UrlFetchApp.fetch(replyUrl, textOptions);
-    }
-    return true;
-  } catch(e) {
-    console.error("sendLineReply error: " + e.toString());
-    return false;
-  }
-}
-
-// 輔助函式：解析 LINE 輸入的彈性日期格式 (如 8/12, 8-12, 8月12日, 2026-08-12, 昨天, 今天)
-function parseLineCommandDate(dateStr) {
+// 輔助函式：解析 Telegram 輸入的彈性日期格式 (如 8/12, 8-12, 8月12日, 2026-08-12, 昨天, 今天)
+function parseTelegramCommandDate(dateStr) {
   var now = new Date();
   var timezone = "GMT+8";
   var curYear = parseInt(Utilities.formatDate(now, timezone, "yyyy"), 10);
@@ -2248,42 +1965,40 @@ function parseLineCommandDate(dateStr) {
   return Utilities.formatDate(now, timezone, "yyyy-MM-dd");
 }
 
-function handleLineTextMessage(text, replyToken, source) {
-  if (!text || !replyToken) return;
+function handleTelegramBotMessage(text, chatId) {
+  if (!text || !chatId) return;
   var cleanText = text.trim();
   
   // 1. 指令說明 / 幫助懶人包
-  if (/^(說明|指令|幫助|功能|選單|help|\?|？)$/i.test(cleanText)) {
-    var helpMsg = "🤖【伴伴記・LINE 指令懶人包】\n\n" +
-      "📌【查詢功能】\n" +
-      "• 輸入「查帳」或「公積金」：查看本月收支與公積金餘額\n" +
-      "• 輸入「購物清單」或「買什麼」：查看目前待採購清單\n\n" +
-      "💰【支出記帳 / 代墊】\n" +
+  if (/^(說明|指令|幫助|功能|選單|help|\?|？|\/start|\/help)$/i.test(cleanText)) {
+    var helpMsg = "🤖<b>【伴伴記・Telegram 智能指令】</b>\n\n" +
+      "📌<b>【查詢功能】</b>\n" +
+      "• 輸入「<code>查帳</code>」或「<code>公積金</code>」：查看本月收支與餘額\n" +
+      "• 輸入「<code>購物清單</code>」或「<code>買什麼</code>」：查看待採購項目\n\n" +
+      "💰<b>【支出記帳 / 代墊】</b>\n" +
       "• 格式：[出資人] [金額] [品項] (選填日期)\n" +
       "  範例：\n" +
-      "  廖 20 便當 （廖尹丞代墊，今天）\n" +
-      "  廖 20 糖果 8/12 （廖尹丞代墊，8/12 支出）\n" +
-      "  周 150 飲料 （周沛緹代墊，今天）\n" +
-      "  周 150 飲料 8/12 （周沛緹代墊，8/12 支出）\n" +
-      "  公積金 500 衛生紙 （公積金直接支出）\n\n" +
-      "📥【收入 / 公積金存入】\n" +
+      "  <code>廖 20 便當</code> （廖尹丞代墊，今天）\n" +
+      "  <code>廖 20 糖果 8/12</code> （廖尹丞代墊，8/12）\n" +
+      "  <code>周 150 飲料</code> （周沛緹代墊，今天）\n" +
+      "  <code>公積金 500 衛生紙</code> （公積金支出）\n\n" +
+      "📥<b>【收入 / 存入公積金】</b>\n" +
       "• 格式：存入 [金額] 公積金 (選填日期)\n" +
       "  範例：\n" +
-      "  存入 20000 公積金 （今天存入）\n" +
-      "  存入 20000 公積金 8/12 （8/12 存入）\n" +
-      "  廖 存入 10000 公積金 （由廖尹丞存入）\n\n" +
-      "🛒【快速新增採購清單】\n" +
+      "  <code>存入 20000 公積金</code> （今天存入）\n" +
+      "  <code>廖 存入 10000 公積金</code> （由廖尹丞存入）\n\n" +
+      "🛒<b>【快速新增採購清單】</b>\n" +
       "• 1. 品項-地點 期限 (需要買)\n" +
-      "  範例：1. 高麗菜-菜市場 8/13前\n" +
+      "  範例：<code>1. 高麗菜-菜市場 8/13前</code>\n" +
       "• 2. 品項-地點 期限 (想要買)\n" +
-      "  範例：2. 雞塊-全聯 8/15前\n\n" +
-      "🔗 點此開啟網頁版全螢幕：\nhttps://liao0318.github.io/fund.migoscar/";
-    sendLineReply(replyToken, helpMsg);
+      "  範例：<code>2. 雞塊-全聯 8/15前</code>\n\n" +
+      "🔗 <a href=\"https://liao0318.github.io/fund.migoscar/\">點我開啟伴伴記全螢幕網頁</a>";
+    sendTelegramMessage(helpMsg, chatId);
     return;
   }
 
   // 2. 查詢公積金與帳本餘額
-  if (cleanText === "查帳" || cleanText === "公積金" || cleanText === "餘額" || cleanText === "帳本" || cleanText === "對帳" || cleanText === "本月") {
+  if (cleanText === "查帳" || cleanText === "公積金" || cleanText === "餘額" || cleanText === "帳本" || cleanText === "對帳" || cleanText === "本月" || cleanText === "/status") {
     try {
       var dashRes = getDashboardData();
       var summary = dashRes.summary || {};
@@ -2304,33 +2019,33 @@ function handleLineTextMessage(text, replyToken, source) {
         statusText = "🎉 目前雙方收支已完全平帳！";
       }
 
-      sendLineReply(replyToken, {
+      sendTelegramMessage({
         altText: "📊【伴伴記・本月帳務總覽】",
         titleText: "【帳本總覽・" + curMonth + "】📊",
         badgeText: "即時結算",
         badgeBg: "#4A7C59",
         details: [
-          { label: "公積金餘額", value: "NT$ " + fundBalance.toLocaleString(), bold: true, color: fundBalance < 0 ? "#C55757" : "#2B825B" },
+          { label: "公積金餘額", value: "NT$ " + fundBalance.toLocaleString(), bold: true },
           { label: "廖尹丞 代墊", value: "NT$ " + totalLiao.toLocaleString() },
           { label: "周沛緹 代墊", value: "NT$ " + totalChou.toLocaleString() },
           { label: "結算狀態", value: statusText, bold: true }
         ],
         targetUrl: "https://liao0318.github.io/fund.migoscar/"
-      });
+      }, chatId);
       return;
     } catch(e) {
-      sendLineReply(replyToken, "⚠️ 查詢帳務失敗：" + e.toString());
+      sendTelegramMessage("⚠️ 查詢帳務失敗：" + e.toString(), chatId);
       return;
     }
   }
 
   // 3. 查詢待買清單
-  if (cleanText === "購物清單" || cleanText === "清單" || cleanText === "買什麼" || cleanText === "購物" || cleanText === "待買") {
+  if (cleanText === "購物清單" || cleanText === "清單" || cleanText === "買什麼" || cleanText === "購物" || cleanText === "待買" || cleanText === "/shopping") {
     var dataRes = getShoppingData();
     var pending = (dataRes && dataRes.items) ? dataRes.items.filter(function(x) { return x.status === "待購買"; }) : [];
     
     if (pending.length === 0) {
-      sendLineReply(replyToken, "🛒【伴伴記・購物清單】\n尚無待採購項目！🎉\n\n💡 輸入範例新增：\n1. 高麗菜-菜市場 8/13前 (需要買)\n2. 雞塊-日日加 8/15前 (想要買)");
+      sendTelegramMessage("🛒<b>【伴伴記・購物清單】</b>\n尚無待採購項目！🎉\n\n💡 輸入範例新增：\n<code>1. 高麗菜-菜市場 8/13前</code> (需要買)\n<code>2. 雞塊-全聯 8/15前</code> (想要買)", chatId);
       return;
     }
     
@@ -2338,7 +2053,7 @@ function handleLineTextMessage(text, replyToken, source) {
     var wants = [];
     for (var i = 0; i < pending.length; i++) {
       var item = pending[i];
-      var str = "• " + item.item + " (📍" + (item.store || "隨意") + " / ⏰" + (item.deadline || "無期限") + ")";
+      var str = "• <b>" + escapeHtml(item.item) + "</b> (📍" + escapeHtml(item.store || "隨意") + " / ⏰" + escapeHtml(item.deadline || "無期限") + ")";
       if (item.category === "需要買") {
         needs.push(str);
       } else {
@@ -2346,25 +2061,25 @@ function handleLineTextMessage(text, replyToken, source) {
       }
     }
     
-    var outLines = ["🛒【伴伴記・待採購清單】\n"];
+    var outLines = ["🛒<b>【伴伴記・待採購清單】</b>\n"];
     if (needs.length > 0) {
-      outLines.push("🔴【需要買】：");
+      outLines.push("🔴<b>【需要買】：</b>");
       outLines.push(needs.join("\n"));
       outLines.push("");
     }
     if (wants.length > 0) {
-      outLines.push("🟡【想要買 (觀望)】：");
+      outLines.push("🟡<b>【想要買 (觀望)】：</b>");
       outLines.push(wants.join("\n"));
       outLines.push("");
     }
-    outLines.push("🔗 點此開啟網頁版全螢幕管理：\nhttps://liao0318.github.io/fund.migoscar/");
+    outLines.push("━━━━━━━━━━━━━━━━━━");
+    outLines.push("🔗 <a href=\"https://liao0318.github.io/fund.migoscar/\">點我開啟網頁版全螢幕管理</a>");
     
-    sendLineReply(replyToken, outLines.join("\n"));
+    sendTelegramMessage(outLines.join("\n"), chatId);
     return;
   }
   
   // 4. 收入 / 存入公積金 指令解析：
-  // 範例：存入 20000 公積金 / 存入 20000 公積金 8/12 / 廖 存入 10000 公積金 8/12 / 公積金存入 20000
   var incomeMatch = cleanText.match(/^(?:(廖|尹丞|周|沛緹|公積金|公費)\s+)?(?:存入|存|入帳|收入|公積金存入|公費存入)\s*([0-9\.]+)\s*(?:元|NT|NTD)?\s*(.*)$/i)
     || cleanText.match(/^(?:存入|存|入帳|收入|公積金存入|公費存入)\s*([0-9\.]+)\s*(?:元|NT|NTD)?\s*(.*)$/i);
     
@@ -2397,7 +2112,7 @@ function handleLineTextMessage(text, replyToken, source) {
       }
     }
     
-    var recordDate = parseLineCommandDate(dateStr);
+    var recordDate = parseTelegramCommandDate(dateStr);
     
     if (amt > 0) {
       var addIncRes = addRecord({
@@ -2409,29 +2124,28 @@ function handleLineTextMessage(text, replyToken, source) {
       });
       
       if (addIncRes && addIncRes.success) {
-        sendLineReply(replyToken, {
+        sendTelegramMessage({
           altText: "💰 已為您存入公積金 NT$ " + amt.toLocaleString() + "（" + recordDate + "）",
           titleText: "【公積金存入成功】📥",
           badgeText: "公積金存入",
           badgeBg: "#3A6D8C",
           details: [
             { label: "項目名稱", value: itemTitle, bold: true },
-            { label: "存入金額", value: "NT$ " + amt.toLocaleString(), bold: true, color: "#2B825B" },
+            { label: "存入金額", value: "NT$ " + amt.toLocaleString(), bold: true },
             { label: "存入對象/來源", value: payerName },
-            { label: "記帳日期", value: recordDate, color: "#2B825B" },
+            { label: "記帳日期", value: recordDate },
             { label: "記錄時間", value: formatAmPmTime(new Date()) }
           ],
           targetUrl: "https://liao0318.github.io/fund.migoscar/"
-        });
+        }, chatId);
       } else {
-        sendLineReply(replyToken, "⚠️ 存入公積金失敗：" + (addIncRes ? addIncRes.message : "連線異常"));
+        sendTelegramMessage("⚠️ 存入公積金失敗：" + (addIncRes ? addIncRes.message : "連線異常"), chatId);
       }
       return;
     }
   }
 
   // 5. 支出代墊指令解析：
-  // 範例：廖 20 便當 / 廖 20 糖果 8/12 / 周 150 飲料 8/12 / 公積金 500 衛生紙
   var expenseMatch = cleanText.match(/^(廖|尹丞|周|沛緹|公積金|公費|記帳|支出)\s+([0-9\.]+)\s*(?:元|NT|NTD)?\s*(.*)$/i);
   if (expenseMatch) {
     var payerKey = expenseMatch[1];
@@ -2469,7 +2183,7 @@ function handleLineTextMessage(text, replyToken, source) {
       }
     }
     
-    var recordDate = parseLineCommandDate(dateStr);
+    var recordDate = parseTelegramCommandDate(dateStr);
     
     if (amt > 0) {
       var addRecRes = addRecord({
@@ -2481,30 +2195,28 @@ function handleLineTextMessage(text, replyToken, source) {
       });
       
       if (addRecRes && addRecRes.success) {
-        sendLineReply(replyToken, {
+        sendTelegramMessage({
           altText: "💰 已為您同步記帳 NT$ " + amt.toLocaleString() + "（" + itemTitle + "）",
-          titleText: "【LINE 快速記帳成功】💰",
+          titleText: "【Telegram 記帳成功】💰",
           badgeText: payerName + " 代墊",
           badgeBg: payerName === "廖尹丞" ? "#2B825B" : (payerName === "周沛緹" ? "#8A5A36" : "#4A7C59"),
           details: [
             { label: "品項名稱", value: itemTitle, bold: true },
-            { label: "支出金額", value: "NT$ " + amt.toLocaleString(), bold: true, color: "#C55757" },
+            { label: "支出金額", value: "NT$ " + amt.toLocaleString(), bold: true },
             { label: "出資代墊", value: payerName },
-            { label: "記帳日期", value: recordDate, color: "#2B825B" },
+            { label: "記帳日期", value: recordDate },
             { label: "記錄時間", value: formatAmPmTime(new Date()) }
           ],
           targetUrl: "https://liao0318.github.io/fund.migoscar/"
-        });
+        }, chatId);
       } else {
-        sendLineReply(replyToken, "⚠️ 記帳寫入失敗：" + (addRecRes ? addRecRes.message : "連線異常"));
+        sendTelegramMessage("⚠️ 記帳寫入失敗：" + (addRecRes ? addRecRes.message : "連線異常"), chatId);
       }
       return;
     }
   }
 
   // 6. 購物清單指令解析新增：
-  // 1. 高麗菜-菜市場 8/13前  ->  需要買
-  // 2. 雞塊-日日加 8/15前    ->  想要買
   var category = "";
   var content = cleanText;
   
@@ -2531,7 +2243,6 @@ function handleLineTextMessage(text, replyToken, source) {
         if (restTokens.length > 1) {
           deadlineStr = restTokens.slice(1).join(" ").trim();
         }
-        // 如果第二個欄位看起來像日期或期限關鍵字
         if (/^\d{1,2}[\/-]\d{1,2}/.test(storeName) || storeName.indexOf("前") !== -1 || storeName.indexOf("月") !== -1 || storeName.indexOf("日") !== -1) {
           deadlineStr = restTokens.join(" ").trim();
           storeName = "隨意";
@@ -2562,27 +2273,26 @@ function handleLineTextMessage(text, replyToken, source) {
       item: itemName,
       store: storeName,
       deadline: deadlineStr,
-      creator: "LINE 訊息寫入"
+      creator: "Telegram 訊息寫入"
     }, false);
     
     if (addRes && addRes.success) {
-      var badgeBg = category === "需要買" ? "#C55757" : "#E58B23";
-      sendLineReply(replyToken, {
+      sendTelegramMessage({
         altText: "🛒 已為您同步至【伴伴記購物清單】！",
         titleText: "【購物清單同步成功】🛒",
         badgeText: category,
-        badgeBg: badgeBg,
+        badgeBg: category === "需要買" ? "#C55757" : "#E58B23",
         details: [
           { label: "類型", value: category },
           { label: "品項名稱", value: itemName, bold: true },
           { label: "購買地點", value: storeName },
-          { label: "預計期限", value: deadlineStr, color: "#2B825B" },
+          { label: "預計期限", value: deadlineStr },
           { label: "資料庫", value: "已成功寫入 Google 試算表" }
         ],
         targetUrl: "https://liao0318.github.io/fund.migoscar/"
-      });
+      }, chatId);
     } else {
-      sendLineReply(replyToken, "⚠️ 寫入購物清單失敗：" + (addRes ? addRes.message : "連線錯誤"));
+      sendTelegramMessage("⚠️ 寫入購物清單失敗：" + (addRes ? addRes.message : "連線錯誤"), chatId);
     }
   }
 }

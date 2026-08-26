@@ -67,14 +67,13 @@ import { FloatingDock } from './components/common/FloatingDock';
 import { CustomConfirmModal } from './components/common/CustomConfirmModal';
 import { SmartAlertModal } from './components/modals/SmartAlertModal';
 import { SyncAlertModal } from './components/modals/SyncAlertModal';
-import { LinePromptModal } from './components/modals/LinePromptModal';
 import { AddRecordModal } from './components/modals/AddRecordModal';
 import { AddShoppingModal } from './components/modals/AddShoppingModal';
 import { ManageStoresModal } from './components/modals/ManageStoresModal';
 import { ClearDoneConfirmModal } from './components/modals/ClearDoneConfirmModal';
 import { ShoppingDetailModal } from './components/modals/ShoppingDetailModal';
 import { CurrencyCalculatorModal } from './components/modals/CurrencyCalculatorModal';
-import { LineSettingsModal } from './components/modals/LineSettingsModal';
+import { TelegramSettingsModal } from './components/modals/TelegramSettingsModal';
 import { GasDeployModal } from './components/modals/GasDeployModal';
 import { DataBackupModal } from './components/modals/DataBackupModal';
 import { PwaInstallModal } from './components/modals/PwaInstallModal';
@@ -916,24 +915,27 @@ export default function App() {
 
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
   const [deploySheetUrl, setDeploySheetUrl] = useState(() => localStorage.getItem('muji_sheet_url') || '');
-  const [deployLineToken, setDeployLineToken] = useState(() => localStorage.getItem('muji_line_token') || '');
+  const [deployTelegramToken, setDeployTelegramToken] = useState(() => localStorage.getItem('banban_telegram_token') || '8940545345:AAGTJSX-EgRpbCGPfufxGhxEJTzAOvMw5I4');
+  const [deployTelegramChatId, setDeployTelegramChatId] = useState(() => localStorage.getItem('banban_telegram_chat_id') || '-5312205991');
   const [activeDeployCodeTab, setActiveDeployCodeTab] = useState<'codeGs' | 'indexHtml' | 'splitHtml'>('codeGs');
   const [copiedCodeType, setCopiedCodeType] = useState<'codeGs' | 'indexHtml' | 'splitHtml' | null>(null);
 
   const saveDeployConfig = () => {
     const cleanSheet = deploySheetUrl.trim();
-    const cleanToken = deployLineToken.trim();
+    const cleanToken = deployTelegramToken.trim();
+    const cleanChatId = deployTelegramChatId.trim();
     const cleanGas = gasWebUrl.trim();
 
     localStorage.setItem('muji_sheet_url', cleanSheet);
-    localStorage.setItem('muji_line_token', cleanToken);
+    localStorage.setItem('banban_telegram_token', cleanToken);
+    localStorage.setItem('banban_telegram_chat_id', cleanChatId);
     localStorage.setItem('muji_gas_web_url', cleanGas);
 
     if (cleanSheet) {
       callGasApi('saveSpreadsheetId', { spreadsheetId: cleanSheet, url: cleanSheet });
     }
-    if (cleanToken) {
-      callGasApi('saveLineNotifyToken', { token: cleanToken });
+    if (cleanToken || cleanChatId) {
+      callGasApi('saveTelegramCredentials', { token: cleanToken, chatId: cleanChatId });
     }
 
     showToast('連線設定與 Web App API URL 已儲存！正嘗試即時連線...', 'success');
@@ -952,10 +954,17 @@ export default function App() {
       if (match && match[1]) sheetId = match[1];
     }
 
-    if (deployLineToken.trim()) {
+    if (deployTelegramToken.trim()) {
       code = code.replace(
-        'var HARDCODED_LINE_TOKEN = "";',
-        `var HARDCODED_LINE_TOKEN = "${deployLineToken.trim()}";`
+        'var HARDCODED_TELEGRAM_TOKEN = "8940545345:AAGTJSX-EgRpbCGPfufxGhxEJTzAOvMw5I4";',
+        `var HARDCODED_TELEGRAM_TOKEN = "${deployTelegramToken.trim()}";`
+      );
+    }
+
+    if (deployTelegramChatId.trim()) {
+      code = code.replace(
+        'var HARDCODED_TELEGRAM_CHAT_ID = "-5312205991";',
+        `var HARDCODED_TELEGRAM_CHAT_ID = "${deployTelegramChatId.trim()}";`
       );
     }
 
@@ -1174,18 +1183,10 @@ export default function App() {
     };
   }, []);
 
-  // ------------------- 官方 LINE 帳號 狀態與提示 -------------------
-  const [hasJoinedLine, setHasJoinedLine] = useState(false);
-  const [showLinePromptModal, setShowLinePromptModal] = useState(false);
-
-  // ------------------- LINE Notify 狀態與函式 -------------------
-  const [isLineSettingsModalOpen, setIsLineSettingsModalOpen] = useState(false);
-  const [lineNotifyToken, setLineNotifyToken] = useState('');
-  const [maskedLineToken, setMaskedLineToken] = useState('');
-  const [hasLineToken, setHasLineToken] = useState(false);
-  const [isSavingLineToken, setIsSavingLineToken] = useState(false);
-  const [isTestingLine, setIsTestingLine] = useState(false);
-  const [lineNotifySettings, setLineNotifySettings] = useState({
+  // ------------------- Telegram 通知狀態與設定 -------------------
+  const [isTelegramSettingsModalOpen, setIsTelegramSettingsModalOpen] = useState(false);
+  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+  const [telegramNotifySettings, setTelegramNotifySettings] = useState({
     notifyOnAdd: true,
     notifyOnIncome: true,
     notifyOnEdit: true,
@@ -1437,39 +1438,34 @@ export default function App() {
     fetchShoppingData();
   }, [gasWebUrl]);
 
-  const saveLineNotifySettings = (newSettings: typeof lineNotifySettings) => {
-    setLineNotifySettings(newSettings);
-    localStorage.setItem('muji_line_notify_settings', JSON.stringify(newSettings));
+  const saveTelegramNotifySettings = (newSettings: typeof telegramNotifySettings) => {
+    setTelegramNotifySettings(newSettings);
+    try {
+      localStorage.setItem('banban_telegram_notify_settings', JSON.stringify(newSettings));
+    } catch (e) {}
 
-    // 同步到 GAS Web App 後端
     if (gasWebUrl) {
-      callGasApi('saveLineNotifySettings', { settings: newSettings });
+      callGasApi('saveTelegramNotifySettings', { settings: newSettings });
+      return;
     }
 
     if (typeof (window as any).google !== 'undefined' && (window as any).google.script && (window as any).google.script.run) {
-      try {
-        (window as any).google.script.run
-          .withSuccessHandler((res: any) => {
-            if (res && res.success) {
-              showToast('LINE 通知偏好設定已同步至雲端！', 'success');
-            }
-          })
-          .saveLineNotifySettings(newSettings);
-      } catch (e) {}
-    } else {
-      showToast('已即時更新 LINE 各項通知開關！', 'success');
+      (window as any).google.script.run
+        .withSuccessHandler(() => {})
+        .withFailureHandler(() => {})
+        .saveLineNotifySettings(newSettings);
     }
   };
 
-  const toggleLineNotifySetting = (key: keyof typeof lineNotifySettings) => {
+  const toggleTelegramNotifySetting = (key: keyof typeof telegramNotifySettings) => {
     const updated = {
-      ...lineNotifySettings,
-      [key]: !lineNotifySettings[key]
+      ...telegramNotifySettings,
+      [key]: !telegramNotifySettings[key]
     };
-    saveLineNotifySettings(updated);
+    saveTelegramNotifySettings(updated);
   };
 
-  const setAllLineNotifySettings = (enableAll: boolean) => {
+  const setAllTelegramNotifySettings = (enableAll: boolean) => {
     const updated = {
       notifyOnAdd: enableAll,
       notifyOnIncome: enableAll,
@@ -1481,119 +1477,28 @@ export default function App() {
       notifyOnShoppingComplete: enableAll,
       notifyOnShoppingDelete: enableAll
     };
-    saveLineNotifySettings(updated);
-    showToast(enableAll ? '已一鍵開啟所有 LINE 即時推播項目！' : '已一鍵關閉所有 LINE 即時推播項目！', 'info');
+    saveTelegramNotifySettings(updated);
+    showToast(enableAll ? '已一鍵開啟所有 Telegram 即時推播項目！' : '已一鍵關閉所有 Telegram 即時推播項目！', 'info');
   };
 
-  const handleSaveLineNotifyToken = () => {
-    if (!lineNotifyToken.trim() && hasLineToken) {
-      // 這是點擊「清除 / 重新設定」
-      if (gasWebUrl) {
-        setIsSavingLineToken(true);
-        callGasApi('saveLineNotifyToken', { token: '' }).then((res: any) => {
-          setIsSavingLineToken(false);
-          setMaskedLineToken('');
-          setHasLineToken(false);
-          showToast('已清除 LINE 權杖設定！', 'success');
-        });
-        return;
-      }
-      if (typeof (window as any).google !== 'undefined' && (window as any).google.script && (window as any).google.script.run) {
-        setIsSavingLineToken(true);
-        (window as any).google.script.run
-          .withSuccessHandler((res: any) => {
-            setIsSavingLineToken(false);
-            if (res && res.success) {
-              setMaskedLineToken('');
-              setHasLineToken(false);
-              showToast(res.message, 'success');
-            } else {
-              showToast(res ? res.message : '清除失敗', 'error');
-            }
-          })
-          .withFailureHandler((err: any) => {
-            setIsSavingLineToken(false);
-            showToast('連線失敗：' + err.toString(), 'error');
-          })
-          .saveLineNotifyToken('');
-      } else {
-        localStorage.removeItem('muji_line_notify_token_sandbox');
-        setLineNotifyToken('');
-        setMaskedLineToken('');
-        setHasLineToken(false);
-        showToast('已清除本機沙盒模擬 LINE 權杖！', 'success');
-      }
-      return;
-    }
-
-    if (!lineNotifyToken.trim()) {
-      showToast('請輸入有效的 LINE Channel Access Token 權杖！', 'error');
-      return;
-    }
-
-    const tokenToSave = lineNotifyToken.trim();
-    if (gasWebUrl) {
-      setIsSavingLineToken(true);
-      callGasApi('saveLineNotifyToken', { token: tokenToSave }).then((res: any) => {
-        setIsSavingLineToken(false);
-        if (res && res.success) {
-          const masked = tokenToSave.substring(0, 4) + "********************" + tokenToSave.substring(tokenToSave.length - 4);
-          setMaskedLineToken(masked);
-          setLineNotifyToken('');
-          setHasLineToken(true);
-          showToast(res.message || 'LINE Token 儲存成功！', 'success');
-        } else {
-          showToast(res ? res.message : '儲存失敗', 'error');
-        }
-      });
-      return;
-    }
-
-    if (typeof (window as any).google !== 'undefined' && (window as any).google.script && (window as any).google.script.run) {
-      setIsSavingLineToken(true);
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => {
-          setIsSavingLineToken(false);
-          if (res && res.success) {
-            setMaskedLineToken(tokenToSave.substring(0, 4) + "********************" + tokenToSave.substring(tokenToSave.length - 4));
-            setLineNotifyToken('');
-            setHasLineToken(true);
-            showToast(res.message, 'success');
-          } else {
-            showToast(res ? res.message : '儲存失敗', 'error');
-          }
-        })
-        .withFailureHandler((err: any) => {
-          setIsSavingLineToken(false);
-          showToast('儲存失敗：' + err.toString(), 'error');
-        })
-        .saveLineNotifyToken(tokenToSave);
-    } else {
-      // Sandbox
-      localStorage.setItem('muji_line_notify_token_sandbox', tokenToSave);
-      setMaskedLineToken(tokenToSave.substring(0, 4) + "********************" + tokenToSave.substring(tokenToSave.length - 4));
-      setLineNotifyToken('');
-      setHasLineToken(true);
-      showToast('本機沙盒測試：LINE 權杖儲存成功！', 'success');
-    }
-  };
-
-  const handleTestLineNotify = async () => {
-    setIsTestingLine(true);
-    const tokenToUse = lineNotifyToken.trim() || deployLineToken.trim();
+  const handleTestTelegramNotify = async () => {
+    setIsTestingTelegram(true);
 
     if (gasWebUrl) {
       try {
-        const res = await callGasApi('testLineNotify', { token: tokenToUse });
-        setIsTestingLine(false);
+        const res = await callGasApi('testTelegramNotify', { 
+          token: deployTelegramToken.trim(), 
+          chatId: deployTelegramChatId.trim() 
+        });
+        setIsTestingTelegram(false);
         if (res && res.success) {
-          showToast(res.message || '🎉 LINE 測試卡片訊息發送成功！請檢查聊天室。', 'success');
+          showToast(res.message || '🎉 Telegram 測試卡片訊息發送成功！請檢查群組。', 'success');
         } else {
-          showToast(res ? res.message : '測試發送失敗，請確認 Token 是否有效', 'error');
+          showToast(res ? res.message : '測試發送失敗，請確認 Token 與 Chat ID 是否有效', 'error');
         }
         return;
       } catch (err: any) {
-        setIsTestingLine(false);
+        setIsTestingTelegram(false);
         showToast('測試失敗：' + err.toString(), 'error');
         return;
       }
@@ -1602,7 +1507,7 @@ export default function App() {
     if (typeof (window as any).google !== 'undefined' && (window as any).google.script && (window as any).google.script.run) {
       (window as any).google.script.run
         .withSuccessHandler((res: any) => {
-          setIsTestingLine(false);
+          setIsTestingTelegram(false);
           if (res && res.success) {
             showToast(res.message, 'success');
           } else {
@@ -1610,27 +1515,19 @@ export default function App() {
           }
         })
         .withFailureHandler((err: any) => {
-          setIsTestingLine(false);
+          setIsTestingTelegram(false);
           showToast('測試失敗：' + err.toString(), 'error');
         })
-        .testLineNotify(tokenToUse);
+        .testTelegramNotify(deployTelegramToken.trim(), deployTelegramChatId.trim());
     } else {
       // Sandbox Simulator
       setTimeout(() => {
-        setIsTestingLine(false);
-        showToast('🔔 [沙盒模擬] LINE 測試卡片發送成功！若連線至正式 GAS，LINE 將即時跳出卡片通知！', 'success');
+        setIsTestingTelegram(false);
+        showToast('🔔 [沙盒模擬] Telegram 測試卡片發送成功！若連線至正式 GAS，Telegram 群組將即時收到通知！', 'success');
       }, 700);
     }
   };
-
-  const handleMarkJoinedLine = () => {
-    localStorage.setItem('muji_official_line_joined', 'true');
-    setHasJoinedLine(true);
-    setShowLinePromptModal(false);
-    showToast('感謝您加入官方 LINE 帳號！已記錄您的狀態。', 'success');
-  };
-
-  // ------------------- 自訂雙鍵對話確認 Modal -------------------
+// ------------------- 自訂雙鍵對話確認 Modal -------------------
   const [customConfirmState, setCustomConfirmState] = useState<{
     isOpen: boolean;
     title: string;
@@ -1836,16 +1733,7 @@ export default function App() {
       }
     }
 
-    // 5. 載入官方 LINE 帳號狀態與初次使用提醒
-    const joinedLine = localStorage.getItem('muji_official_line_joined');
-    if (joinedLine === 'true') {
-      setHasJoinedLine(true);
-    } else {
-      setTimeout(() => {
-        setShowLinePromptModal(true);
-      }, 1000);
-    }
-  }, []);
+    }, []);
 
   // 在初始化載入完之後，延遲一秒將 isAppLoaded 設為 true，此後的新增才觸發推播
   useEffect(() => {
@@ -2456,12 +2344,12 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         setShowNotificationsOpen(false);
-                        setIsLineSettingsModalOpen(true);
+                        setIsTelegramSettingsModalOpen(true);
                       }}
                       className="w-full py-1.5 px-3 bg-white hover:bg-[#F2EFE7] text-[#4A4641] text-[11px] font-bold rounded-xl border border-[#E0DCD3] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                     >
                       <Sliders className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>設定各項 LINE 推播開關</span>
+                      <span>設定各項 Telegram 推播開關</span>
                     </button>
                   </div>
                 </motion.div>
@@ -2489,7 +2377,7 @@ export default function App() {
           }
         }}
         unsettledSplitCount={splitSummary.unsettledCount}
-        onOpenLineSettings={() => setIsLineSettingsModalOpen(true)}
+        onOpenTelegramSettings={() => setIsTelegramSettingsModalOpen(true)}
         onOpenTravelCalculator={() => setShowTravelCalculatorModal(true)}
         pendingQueueCount={pendingSyncQueue.length}
         onOpenDataBackup={() => setIsDataBackupOpen(true)}
@@ -3978,12 +3866,7 @@ export default function App() {
         onClose={() => setCustomConfirmState(null)}
       />
 
-      {/* 💬 初次使用「加入官方 LINE 帳號」提醒 Modal */}
-      <LinePromptModal
-        isOpen={showLinePromptModal}
-        onClose={() => setShowLinePromptModal(false)}
-        onMarkJoined={handleMarkJoinedLine}
-      />
+      
 
       {/* 底部 Float 警示視窗 (Toast) */}
       <AnimatePresence>
@@ -4114,22 +3997,15 @@ export default function App() {
         setCalcMode={setCalcMode}
       />
 
-        {/* 💬 LINE 即時通知推播開關與偏好設定 Modal */}
-        <LineSettingsModal
-          isOpen={isLineSettingsModalOpen}
-          onClose={() => setIsLineSettingsModalOpen(false)}
-          hasLineToken={hasLineToken}
-          deployLineToken={deployLineToken}
-          lineNotifyToken={lineNotifyToken}
-          setLineNotifyToken={setLineNotifyToken}
-          maskedLineToken={maskedLineToken}
-          isTestingLine={isTestingLine}
-          isSavingLineToken={isSavingLineToken}
-          handleTestLineNotify={handleTestLineNotify}
-          handleSaveLineNotifyToken={handleSaveLineNotifyToken}
-          lineNotifySettings={lineNotifySettings}
-          setAllLineNotifySettings={setAllLineNotifySettings}
-          toggleLineNotifySetting={toggleLineNotifySetting}
+        {/* 💬 Telegram 即時通知推播開關與偏好設定 Modal */}
+        <TelegramSettingsModal
+          isOpen={isTelegramSettingsModalOpen}
+          onClose={() => setIsTelegramSettingsModalOpen(false)}
+          isTestingTelegram={isTestingTelegram}
+          handleTestTelegramNotify={handleTestTelegramNotify}
+          notifySettings={telegramNotifySettings}
+          setAllNotifySettings={setAllTelegramNotifySettings}
+          toggleNotifySetting={toggleTelegramNotifySetting}
         />
 
         {/* 💾 資料備份、還原與離線同步管理 Modal */}
@@ -4164,13 +4040,15 @@ export default function App() {
           onClose={() => setIsDeployModalOpen(false)}
           deploySheetUrl={deploySheetUrl}
           setDeploySheetUrl={setDeploySheetUrl}
-          deployLineToken={deployLineToken}
-          setDeployLineToken={setDeployLineToken}
+          deployTelegramToken={deployTelegramToken}
+          setDeployTelegramToken={setDeployTelegramToken}
+          deployTelegramChatId={deployTelegramChatId}
+          setDeployTelegramChatId={setDeployTelegramChatId}
           gasWebUrl={gasWebUrl}
           setGasWebUrl={setGasWebUrl}
-          onOpenLineSettings={() => {
+          onOpenTelegramSettings={() => {
             setIsDeployModalOpen(false);
-            setIsLineSettingsModalOpen(true);
+            setIsTelegramSettingsModalOpen(true);
           }}
           saveDeployConfig={saveDeployConfig}
           activeDeployCodeTab={activeDeployCodeTab}
