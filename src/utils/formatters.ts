@@ -62,6 +62,47 @@ export function formatAmPmTime(timeInput: any): string {
 }
 
 /**
+ * 判斷指定的時間戳記或日期字串是否為「今天」（依使用者當地時間）
+ */
+export function isTodayNotification(timeInput: any): boolean {
+  if (!timeInput) return false;
+  let d: Date | null = null;
+  if (timeInput instanceof Date) {
+    d = timeInput;
+  } else if (typeof timeInput === 'number') {
+    d = new Date(timeInput);
+  } else {
+    const strVal = String(timeInput).trim();
+    // 優先比對 yyyy-mm-dd 或 yyyy/mm/dd 前綴
+    const dateMatch = strVal.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (dateMatch) {
+      const year = parseInt(dateMatch[1], 10);
+      const month = parseInt(dateMatch[2], 10) - 1;
+      const day = parseInt(dateMatch[3], 10);
+      const now = new Date();
+      return (
+        year === now.getFullYear() &&
+        month === now.getMonth() &&
+        day === now.getDate()
+      );
+    }
+    const cleanStr = strVal.replace(/上午|下午/g, '').replace(/T/g, ' ').replace(/-/g, '/');
+    const ms = Date.parse(cleanStr);
+    if (!isNaN(ms)) {
+      d = new Date(ms);
+    }
+  }
+
+  if (!d || isNaN(d.getTime())) return false;
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+/**
  * 輔助函式：可靠取得採購項目的標準格式化時間
  */
 export function getShoppingItemDisplayTime(item: ShoppingItem | any): string {

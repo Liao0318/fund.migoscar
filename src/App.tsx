@@ -158,6 +158,46 @@ export function formatAmPmTime(timeInput: any): string {
   return `${year}-${month}-${day} ${ampm} ${hStr}:${minutes}`;
 }
 
+/**
+ * 判斷指定的時間戳記或日期字串是否為「今天」（依使用者當地時間）
+ */
+export function isTodayNotification(timeInput: any): boolean {
+  if (!timeInput) return false;
+  let d: Date | null = null;
+  if (timeInput instanceof Date) {
+    d = timeInput;
+  } else if (typeof timeInput === 'number') {
+    d = new Date(timeInput);
+  } else {
+    const strVal = String(timeInput).trim();
+    const dateMatch = strVal.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (dateMatch) {
+      const year = parseInt(dateMatch[1], 10);
+      const month = parseInt(dateMatch[2], 10) - 1;
+      const day = parseInt(dateMatch[3], 10);
+      const now = new Date();
+      return (
+        year === now.getFullYear() &&
+        month === now.getMonth() &&
+        day === now.getDate()
+      );
+    }
+    const cleanStr = strVal.replace(/上午|下午/g, '').replace(/T/g, ' ').replace(/-/g, '/');
+    const ms = Date.parse(cleanStr);
+    if (!isNaN(ms)) {
+      d = new Date(ms);
+    }
+  }
+
+  if (!d || isNaN(d.getTime())) return false;
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
 // 輔助函式：可靠取得採購項目的標準格式化時間
 export function getShoppingItemDisplayTime(item: ShoppingItem | any): string {
   if (!item) return '';
@@ -1520,10 +1560,9 @@ export default function App() {
   const backfillNotificationsFromRecords = (ledgerRecords: RecordItem[]) => {
     if (!ledgerRecords || ledgerRecords.length === 0) return;
     
-    const oneWeekAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    
     setNotifications(prev => {
-      let updated = [...prev];
+      // 僅保留「今天」的通知
+      let updated = prev.filter(n => isTodayNotification(n.timestamp || n.time));
       let addedAny = false;
       
       const sortedLedger = [...ledgerRecords].sort((a, b) => {
@@ -1532,7 +1571,10 @@ export default function App() {
         return db - da;
       });
 
-      sortedLedger.slice(0, 3).forEach(rec => {
+      // 僅針對「今天」發生的記帳交易回填即時通知
+      const todayLedger = sortedLedger.filter(rec => isTodayNotification(rec.timestamp || rec.date));
+
+      todayLedger.slice(0, 5).forEach(rec => {
         const notifId = 'notif-sync-' + rec.id;
         const isIncome = rec.type.includes('收入');
         const titleTag = isIncome ? "💰 " : "💸 ";
@@ -1547,12 +1589,6 @@ export default function App() {
         );
         
         if (!exists) {
-          const isIncome = rec.type.includes('收入');
-          const titleTag = isIncome ? "💰 " : "💸 ";
-          const actionName = isIncome ? "撥入了公積金" : "新增了日常代墊";
-          const notifyTitle = `${titleTag}${rec.payer} ${actionName}`;
-          const notifyDesc = `「${rec.item}」：金額 $${(Number(rec.amount) || 0).toLocaleString()} 元 (${rec.month} 月份)`;
-          
           let recordTimestamp = Date.now();
           let timeDisplayStr = formatAmPmTime(rec.timestamp || rec.date || '');
           if (rec.timestamp) {
@@ -1584,9 +1620,8 @@ export default function App() {
         }
       });
 
-      if (addedAny) {
+      if (addedAny || updated.length !== prev.length) {
         updated.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        updated = updated.filter(n => (n.timestamp || Date.now()) >= oneWeekAgoMs);
         localStorage.setItem('muji_notifications', JSON.stringify(updated));
       }
       return updated;
@@ -1654,48 +1689,26 @@ export default function App() {
       }
     }
 
-    // 3. 載入通知紀錄（每週自動清理：僅保留一週內的通知紀錄，其餘自動刪除）
+    // 3. 載入通知紀錄（僅保留「當天」通知，隔天自動全數清除）
     const savedNotifications = localStorage.getItem('muji_notifications');
-    const oneWeekAgoMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
     let initialLoadedNotifs: AppNotification[] = [];
 
     if (savedNotifications) {
       try {
         const parsedNotifs: AppNotification[] = JSON.parse(savedNotifications);
-        initialLoadedNotifs = parsedNotifs.filter(n => {
-          let t = n.timestamp;
-          if (!t) {
-            try {
-              const parsed = Date.parse(n.time.replace(/-/g, '/'));
-              t = !isNaN(parsed) ? parsed : Date.now();
-            } catch (e) {
-              t = Date.now();
-            }
-          }
-          return t >= oneWeekAgoMs;
-        });
+        // 嚴格過濾出今天 (Local Date) 的通知，隔日舊通知全數捨棄清除
+        initialLoadedNotifs = parsedNotifs.filter(n => isTodayNotification(n.timestamp || n.time));
       } catch (e) {
         initialLoadedNotifs = [];
       }
     } else {
-      const parsedTime1 = Date.parse('2026-06-06 08:33'.replace(/-/g, '/'));
-      initialLoadedNotifs = [
-        {
-          id: 'notif-1',
-          title: '💡 系統連線成功',
-          desc: '已妥善準備好與 Muji 雲端記帳資料同步連結機制。',
-          time: '2026-06-06 08:33',
-          read: false,
-          type: 'system',
-          timestamp: !isNaN(parsedTime1) ? parsedTime1 : Date.now()
-        }
-      ];
+      initialLoadedNotifs = [];
     }
     
     setNotifications(initialLoadedNotifs);
     localStorage.setItem('muji_notifications', JSON.stringify(initialLoadedNotifs));
 
-    // 自動依據真實交易資料回填最新通知
+    // 自動依據當天真實交易資料回填最新今日通知
     backfillNotificationsFromRecords(loadedRecords);
 
     // 4. 載入通知偏好設定
@@ -1709,6 +1722,33 @@ export default function App() {
     }
 
     }, []);
+
+  // 🕒 跨日自動清理機制：定時與視窗喚醒時自動檢查，若跨越午夜則自動清除昨日以前的舊通知
+  useEffect(() => {
+    const cleanNonTodayNotifications = () => {
+      setNotifications(prev => {
+        const todayNotifs = prev.filter(n => isTodayNotification(n.timestamp || n.time));
+        if (todayNotifs.length !== prev.length) {
+          localStorage.setItem('muji_notifications', JSON.stringify(todayNotifs));
+          return todayNotifs;
+        }
+        return prev;
+      });
+    };
+
+    // 每 30 秒自動排程檢查一次
+    const timer = setInterval(cleanNonTodayNotifications, 30000);
+    // 使用者切換分頁或視窗重新聚焦時立即檢查
+    const onVisibilityOrFocus = () => cleanNonTodayNotifications();
+    window.addEventListener('focus', onVisibilityOrFocus);
+    document.addEventListener('visibilitychange', onVisibilityOrFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', onVisibilityOrFocus);
+    };
+  }, []);
 
   // 在初始化載入完之後，延遲一秒將 isAppLoaded 設為 true，此後的新增才觸發推播
   useEffect(() => {
@@ -1789,7 +1829,9 @@ export default function App() {
         type,
         timestamp: Date.now()
       };
-      const updated = [newNotif, ...prev];
+      // 僅保留今日通知 + 新增的通知
+      const todayPrev = prev.filter(n => isTodayNotification(n.timestamp || n.time));
+      const updated = [newNotif, ...todayPrev];
       localStorage.setItem('muji_notifications', JSON.stringify(updated));
       return updated;
     });
@@ -2257,7 +2299,7 @@ export default function App() {
                   <div className="p-4 border-b border-[#EEEDE3] bg-[#FAF9F5] flex items-center justify-between">
                     <div className="flex items-center gap-1.5 font-semibold text-xs text-[#3E3A36]">
                       <span>🔔</span>
-                      <span>通知紀錄 ({notifications.filter(n => !n.read).length})</span>
+                      <span>今日通知 ({notifications.filter(n => !n.read).length})</span>
                     </div>
                     {notifications.filter(n => !n.read).length > 0 && (
                       <button 
@@ -2275,7 +2317,8 @@ export default function App() {
                   <div className="max-h-64 overflow-y-auto divide-y divide-[#F5F4EE] max-w-full">
                     {notifications.length === 0 ? (
                       <div className="p-8 text-center text-xs text-[#BCB8B0]">
-                        目前沒有任何通知
+                        今日尚無任何即時通知
+                        <p className="text-[10px] text-[#C4C0B5] mt-1 font-light">（系統每日午夜將自動重置清除昨日通知）</p>
                       </div>
                     ) : (
                       notifications.map(n => (
@@ -2360,8 +2403,8 @@ export default function App() {
         onOpenPwaInstall={() => setIsPwaInstallModalOpen(true)}
       />
 
-      {/* 主呈現區 */}
-      <main className="w-full max-w-4xl mx-auto px-3 sm:px-4 flex-grow pb-32 sm:pb-40">
+      {/* 主呈現區 (預留固定頂部 Header 高度間距，避免內容被遮擋) */}
+      <main className="w-full max-w-4xl mx-auto px-3 sm:px-4 flex-grow pt-24 sm:pt-20 pb-32 sm:pb-40">
         
         {/* 核心內容視窗切換區，加入優雅 motion 轉場效果 */}
         <div className="relative">

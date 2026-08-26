@@ -32,17 +32,17 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPwaInstall
 }) => {
   return (
-    <header className="w-full max-w-4xl mx-auto px-3 sm:px-4 mt-4 sm:mt-6 md:mt-8 mb-4 sm:mb-6 font-sans">
-      <div className="bg-white/70 backdrop-blur-md border border-white/50 rounded-2xl p-3.5 sm:px-6 sm:py-5 flex flex-col sm:flex-row items-center justify-between shadow-2xs border-[#E9E6E0] gap-3 sm:gap-4">
+    <header className="fixed top-0 left-0 right-0 z-40 w-full font-sans bg-[#FAF9F5]/90 backdrop-blur-xl border-b border-[#EAE6DC]/80 shadow-[0_4px_20px_rgba(62,58,54,0.04)]">
+      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
         <div className="flex items-center space-x-3 w-full sm:w-auto">
-          <BrandLogo className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 select-none drop-shadow-2xs rounded-2xl" />
+          <BrandLogo className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 select-none drop-shadow-2xs rounded-xl" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-[#3E3A36] flex items-center gap-1">
-                伴伴記<span className="text-rose-500 text-base sm:text-lg">❤️</span>
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-[#3E3A36] flex items-center gap-1">
+                伴伴記<span className="text-rose-500 text-sm sm:text-base">❤️</span>
               </h1>
             </div>
-            <p className="text-[11px] sm:text-xs text-[#8C8475] font-light mt-0.5 truncate">公積金與代墊記帳</p>
+            <p className="text-[10px] sm:text-xs text-[#8C8475] font-light truncate">公積金與代墊記帳</p>
           </div>
         </div>
 

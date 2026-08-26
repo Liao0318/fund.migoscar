@@ -60,7 +60,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                 <div className="p-4 border-b border-[#EEEDE3] bg-[#FAF9F5] flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-semibold text-xs text-[#3E3A36]">
                     <span>🔔</span>
-                    <span>通知紀錄 ({unreadCount})</span>
+                    <span>今日通知 ({unreadCount})</span>
                   </div>
                   {unreadCount > 0 && (
                     <button 
@@ -78,7 +78,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                 <div className="max-h-64 overflow-y-auto divide-y divide-[#F5F4EE] max-w-full">
                   {safeNotifications.length === 0 ? (
                     <div className="p-8 text-center text-xs text-[#BCB8B0]">
-                      目前沒有任何通知
+                      今日尚無任何即時通知
+                      <p className="text-[10px] text-[#C4C0B5] mt-1 font-light">（系統每日午夜將自動重置清除昨日通知）</p>
                     </div>
                   ) : (
                     safeNotifications.map(n => (
