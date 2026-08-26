@@ -1,0 +1,6 @@
+{
+  "name": "伴伴記❤️",
+  "description": "雙人生活公積金、日常代墊與月底對帳結算系統",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

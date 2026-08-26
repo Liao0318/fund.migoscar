@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCFAF5" />
+      <stop offset="100%" stop-color="#F4EFE6" />
+    </linearGradient>
+    <linearGradient id="heartGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E26D6C" />
+      <stop offset="100%" stop-color="#C84B4A" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F2D399" />
+      <stop offset="50%" stop-color="#D8B574" />
+      <stop offset="100%" stop-color="#B28F4E" />
+    </linearGradient>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#8C8475" flood-opacity="0.12" />
+    </filter>
+  </defs>
+
+  <!-- Background Card -->
+  <rect width="512" height="512" rx="140" fill="url(#bgGradient)" />
+  <rect x="18" y="18" width="476" height="476" rx="122" fill="none" stroke="#E6E0D2" stroke-width="4" opacity="0.8" />
+
+  <!-- Outer Ring Accent -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="#EFE9DC" stroke-width="12" />
+  
+  <!-- Pair Heart Shape (雙人伴伴心) -->
+  <g filter="url(#softShadow)">
+    <!-- Main Big Heart -->
+    <path d="M 256,380 C 256,380 130,290 130,195 C 130,145 170,110 215,110 C 242,110 266,125 278,148 C 290,125 314,110 341,110 C 386,110 426,145 426,195 C 426,290 300,380 300,380 Z" fill="url(#heartGrad)" />
+    
+    <!-- Inner Companion Heart Cutout/Outline -->
+    <path d="M 256,345 C 256,345 155,270 155,195 C 155,160 182,135 215,135 C 238,135 258,148 268,168 L 256,188 L 244,168 C 254,148 274,135 297,135 C 330,135 357,160 357,195 C 357,270 256,345 256,345 Z" fill="#FFFDF8" opacity="0.22" />
+  </g>
+
+  <!-- Center Gold Ledger Coin (公積金與記帳雙人連線 symbol) -->
+  <circle cx="256" cy="230" r="52" fill="url(#goldGrad)" stroke="#8C7342" stroke-width="4" filter="url(#softShadow)" />
+  <!-- Coin Square Hole (方勝錢幣記帳標誌) -->
+  <rect x="240" y="214" width="32" height="32" rx="6" fill="#FCFAF5" stroke="#8C7342" stroke-width="4" />
+
+  <!-- Little Sparkle Stars -->
+  <path d="M 120,130 C 120,130 132,130 132,118 C 132,130 144,130 144,130 C 144,130 132,130 132,142 C 132,130 120,130 120,130 Z" fill="#E26D6C" />
+  <path d="M 375,340 C 375,340 385,340 385,330 C 385,340 395,340 395,340 C 395,340 385,340 385,350 C 385,340 375,340 375,340 Z" fill="#D8B574" />
+</svg>
