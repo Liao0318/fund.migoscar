@@ -986,49 +986,79 @@ function deleteRecordByRow(rowId) {
  * 💡 LINE Messaging API 外掛通知核心機制 (支援國泰風格卡片式 Flex Message 廣播推播)
  */
 /**
- * 💡 Telegram Bot外掛通知核心機制 (100% 永久免費無上限)
+ * 💡 Telegram Bot 外掛通知核心機制 (支援精美卡片 Blockquote 排版與內嵌互動按鈕)
  */
-function sendTelegramMessage(payload, customChatId) {
+function sendTelegramMessage(payload, customChatId, customToken) {
   try {
-    var token = (typeof HARDCODED_TELEGRAM_TOKEN !== 'undefined' && HARDCODED_TELEGRAM_TOKEN && HARDCODED_TELEGRAM_TOKEN.trim())
-      ? HARDCODED_TELEGRAM_TOKEN.trim()
-      : PropertiesService.getScriptProperties().getProperty("TELEGRAM_BOT_TOKEN");
+    var token = (customToken && customToken.trim())
+      ? customToken.trim()
+      : ((typeof HARDCODED_TELEGRAM_TOKEN !== 'undefined' && HARDCODED_TELEGRAM_TOKEN && HARDCODED_TELEGRAM_TOKEN.trim())
+          ? HARDCODED_TELEGRAM_TOKEN.trim()
+          : (PropertiesService.getScriptProperties().getProperty("TELEGRAM_BOT_TOKEN") || ""));
       
-    var chatId = customChatId || (typeof HARDCODED_TELEGRAM_CHAT_ID !== 'undefined' && HARDCODED_TELEGRAM_CHAT_ID && HARDCODED_TELEGRAM_CHAT_ID.trim())
-      ? (customChatId || HARDCODED_TELEGRAM_CHAT_ID.trim())
-      : PropertiesService.getScriptProperties().getProperty("TELEGRAM_CHAT_ID");
-      
+    var chatId = customChatId || "";
+    if (!chatId) {
+      if (typeof HARDCODED_TELEGRAM_CHAT_ID !== 'undefined' && HARDCODED_TELEGRAM_CHAT_ID && HARDCODED_TELEGRAM_CHAT_ID.trim()) {
+        chatId = HARDCODED_TELEGRAM_CHAT_ID.trim();
+      } else {
+        chatId = PropertiesService.getScriptProperties().getProperty("TELEGRAM_CHAT_ID") || "";
+      }
+    }
+       
     if (!token) return { success: false, message: "未設定 Telegram Bot Token" };
     if (!chatId) return { success: false, message: "未設定 Telegram Chat ID" };
     
     var textMessage = "";
     var webAppUrl = (typeof payload === 'object' && payload !== null && payload.targetUrl) ? payload.targetUrl : "https://liao0318.github.io/fund.migoscar/";
+    var buttonText = (typeof payload === 'object' && payload !== null && payload.btnText) ? payload.btnText : "🌐 開啟伴伴記全螢幕網頁";
     
     if (typeof payload === 'object' && payload !== null) {
       var lines = [];
       var header = payload.titleText || payload.altText || "🔔【伴伴記通知】";
+      
+      // 頂部卡片標題列
       lines.push("<b>" + escapeHtml(header) + "</b>");
       
+      // 標籤徽章列
       if (payload.badgeText) {
-        lines.push("🏷️ <i>" + escapeHtml(payload.badgeText) + "</i>");
+        lines.push("🏷️ <code>" + escapeHtml(payload.badgeText) + "</code>");
       }
-      lines.push("━━━━━━━━━━━━━━━━━━");
       
+      // 核心卡片內容 (使用 Telegram 官方 <blockquote> 營造優雅左側色條卡片)
       if (payload.details && payload.details.length > 0) {
+        var cardLines = [];
         for (var i = 0; i < payload.details.length; i++) {
           var item = payload.details[i];
           var lbl = item.label || "";
-          var val = String(item.value || "");
-          if (item.bold) {
-            lines.push("◆ <b>" + escapeHtml(lbl) + "</b>：<b>" + escapeHtml(val) + "</b>");
-          } else {
-            lines.push("◆ <b>" + escapeHtml(lbl) + "</b>：" + escapeHtml(val));
+          var rawVal = String(item.value || "");
+          var val = escapeHtml(rawVal);
+          
+          // 如果是金額或重要數值，套用 code 標籤讓排版更工整
+          if (rawVal.indexOf("$") !== -1 || rawVal.indexOf("NT") !== -1 || item.bold) {
+            val = "<code>" + val + "</code>";
           }
+          
+          var icon = "▫️";
+          if (lbl.indexOf("項目") !== -1 || lbl.indexOf("品項") !== -1) icon = "📦";
+          else if (lbl.indexOf("金額") !== -1 || lbl.indexOf("支出") !== -1 || lbl.indexOf("存入") !== -1) icon = "💵";
+          else if (lbl.indexOf("出資") !== -1 || lbl.indexOf("出錢") !== -1 || lbl.indexOf("人") !== -1 || lbl.indexOf("對象") !== -1 || lbl.indexOf("來源") !== -1) icon = "👤";
+          else if (lbl.indexOf("日期") !== -1) icon = "📅";
+          else if (lbl.indexOf("時間") !== -1) icon = "⏰";
+          else if (lbl.indexOf("剩餘") !== -1 || lbl.indexOf("餘額") !== -1) icon = "💰";
+          else if (lbl.indexOf("地點") !== -1 || lbl.indexOf("商店") !== -1) icon = "🏪";
+          else if (lbl.indexOf("期限") !== -1) icon = "⏳";
+          else if (lbl.indexOf("類型") !== -1) icon = "🏷️";
+          else if (lbl.indexOf("狀態") !== -1 || lbl.indexOf("對帳") !== -1) icon = "📌";
+          else if (lbl.indexOf("外幣") !== -1 || lbl.indexOf("匯率") !== -1) icon = "💱";
+          else if (lbl.indexOf("測試") !== -1 || lbl.indexOf("連線") !== -1) icon = "✨";
+          else if (lbl.indexOf("備註") !== -1) icon = "📝";
+          
+          cardLines.push(icon + " <b>" + escapeHtml(lbl) + "</b>： " + val);
         }
+        
+        lines.push("<blockquote>" + cardLines.join("\n") + "</blockquote>");
       }
       
-      lines.push("━━━━━━━━━━━━━━━━━━");
-      lines.push("🔗 <a href=\"" + webAppUrl + "\">點我開啟伴伴記全螢幕網頁</a>");
       textMessage = lines.join("\n");
     } else {
       textMessage = String(payload);
@@ -1040,7 +1070,17 @@ function sendTelegramMessage(payload, customChatId) {
       "chat_id": chatId.trim(),
       "text": textMessage,
       "parse_mode": "HTML",
-      "disable_web_page_preview": false
+      "disable_web_page_preview": true,
+      "reply_markup": {
+        "inline_keyboard": [
+          [
+            {
+              "text": buttonText,
+              "url": webAppUrl
+            }
+          ]
+        ]
+      }
     };
     
     var options = {
@@ -1055,7 +1095,7 @@ function sendTelegramMessage(payload, customChatId) {
     var respText = response.getContentText();
     
     if (respCode >= 200 && respCode < 300) {
-      return { success: true, message: "Telegram 訊息推播成功！" };
+      return { success: true, message: "Telegram 卡片訊息推播成功！" };
     } else {
       console.warn("Telegram API error: " + respCode + ", " + respText);
       return { success: false, message: "Telegram 發送失敗 (" + respCode + ")：" + respText };
@@ -1160,7 +1200,7 @@ function testTelegramNotify(customToken, customChatId) {
       badgeBg: "#38BDF8",
       details: testDetails,
       targetUrl: "https://liao0318.github.io/fund.migoscar/"
-    }, customChatId);
+    }, customChatId, customToken);
 
     if (sendRes && sendRes.success) {
       return { success: true, message: "🎉 Telegram 測試訊息已發送至群組！請查看 Telegram。" };

@@ -1,45 +1,131 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FCFAF5" />
-      <stop offset="100%" stop-color="#F4EFE6" />
+    <!-- Background Squircle Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF5F6" />
+      <stop offset="50%" stop-color="#FFF0F2" />
+      <stop offset="100%" stop-color="#FCE7EB" />
     </linearGradient>
-    <linearGradient id="heartGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#E26D6C" />
-      <stop offset="100%" stop-color="#C84B4A" />
+
+    <!-- Outer Squircle Layer Gradient -->
+    <linearGradient id="outerPlateGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#F8EAEB" />
     </linearGradient>
-    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#F2D399" />
-      <stop offset="50%" stop-color="#D8B574" />
-      <stop offset="100%" stop-color="#B28F4E" />
+
+    <!-- Main Heart Gradient (Coral Red-Pink to Warm Orange) -->
+    <linearGradient id="heartGrad" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#FF5A78" />
+      <stop offset="35%" stop-color="#FF636E" />
+      <stop offset="70%" stop-color="#FF7654" />
+      <stop offset="100%" stop-color="#FF8A43" />
     </linearGradient>
-    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#8C8475" flood-opacity="0.12" />
+
+    <!-- Heart Top Coin Slot Gradient -->
+    <linearGradient id="slotGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#C0364C" />
+      <stop offset="100%" stop-color="#D9485F" />
+    </linearGradient>
+
+    <!-- Golden Coin Outer Rim Gradient -->
+    <linearGradient id="coinRimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFF2A3" />
+      <stop offset="30%" stop-color="#FFD43F" />
+      <stop offset="70%" stop-color="#FFAE11" />
+      <stop offset="100%" stop-color="#E68A00" />
+    </linearGradient>
+
+    <!-- Golden Coin Inner Face Gradient -->
+    <linearGradient id="coinFaceGrad" x1="15%" y1="15%" x2="85%" y2="85%">
+      <stop offset="0%" stop-color="#FFEFA0" />
+      <stop offset="45%" stop-color="#FFCE38" />
+      <stop offset="80%" stop-color="#FFA70B" />
+      <stop offset="100%" stop-color="#F39200" />
+    </linearGradient>
+
+    <!-- Coin Bevel Accent -->
+    <linearGradient id="coinInnerBevel" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF9D2" stop-opacity="0.9" />
+      <stop offset="100%" stop-color="#E58500" stop-opacity="0.4" />
+    </linearGradient>
+
+    <!-- Soft Drop Shadows -->
+    <filter id="cardShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#E8C3C8" flood-opacity="0.5" />
+    </filter>
+
+    <filter id="heartShadow" x="-20%" y="-15%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="16" flood-color="#FF5A78" flood-opacity="0.32" />
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#C0364C" flood-opacity="0.2" />
+    </filter>
+
+    <filter id="coinShadow" x="-25%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#D4501B" flood-opacity="0.35" />
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#7A2400" flood-opacity="0.2" />
+    </filter>
+
+    <filter id="whiteHeartGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#D97A00" flood-opacity="0.28" />
     </filter>
   </defs>
 
-  <!-- Background Card -->
-  <rect width="512" height="512" rx="140" fill="url(#bgGradient)" />
-  <rect x="18" y="18" width="476" height="476" rx="122" fill="none" stroke="#E6E0D2" stroke-width="4" opacity="0.8" />
+  <!-- Outer Layer Soft App Icon Squircle Background -->
+  <rect x="24" y="24" width="464" height="464" rx="124" fill="url(#outerPlateGrad)" filter="url(#cardShadow)" />
+  <rect x="32" y="32" width="448" height="448" rx="116" fill="url(#bgGrad)" />
+  <rect x="32" y="32" width="448" height="448" rx="116" fill="none" stroke="#FFFFFF" stroke-width="4" opacity="0.8" />
 
-  <!-- Outer Ring Accent -->
-  <circle cx="256" cy="256" r="170" fill="none" stroke="#EFE9DC" stroke-width="12" />
-  
-  <!-- Pair Heart Shape (雙人伴伴心) -->
-  <g filter="url(#softShadow)">
-    <!-- Main Big Heart -->
-    <path d="M 256,380 C 256,380 130,290 130,195 C 130,145 170,110 215,110 C 242,110 266,125 278,148 C 290,125 314,110 341,110 C 386,110 426,145 426,195 C 426,290 300,380 300,380 Z" fill="url(#heartGrad)" />
-    
-    <!-- Inner Companion Heart Cutout/Outline -->
-    <path d="M 256,345 C 256,345 155,270 155,195 C 155,160 182,135 215,135 C 238,135 258,148 268,168 L 256,188 L 244,168 C 254,148 274,135 297,135 C 330,135 357,160 357,195 C 357,270 256,345 256,345 Z" fill="#FFFDF8" opacity="0.22" />
+  <!-- Background Decorative Sparkle Burst (Top Right) -->
+  <g opacity="0.55" stroke="#FF9FB0" stroke-width="6" stroke-linecap="round">
+    <!-- Center top-right tick -->
+    <line x1="388" y1="124" x2="398" y2="114" />
+    <!-- Upper tick -->
+    <line x1="366" y1="108" x2="368" y2="94" />
+    <!-- Right tick -->
+    <line x1="406" y1="144" x2="420" y2="146" />
   </g>
 
-  <!-- Center Gold Ledger Coin (公積金與記帳雙人連線 symbol) -->
-  <circle cx="256" cy="230" r="52" fill="url(#goldGrad)" stroke="#8C7342" stroke-width="4" filter="url(#softShadow)" />
-  <!-- Coin Square Hole (方勝錢幣記帳標誌) -->
-  <rect x="240" y="214" width="32" height="32" rx="6" fill="#FCFAF5" stroke="#8C7342" stroke-width="4" />
+  <!-- Background Decorative 4-Point Sparkle Star (Bottom Left) -->
+  <path d="M 112,320 Q 112,336 96,336 Q 112,336 112,352 Q 112,336 128,336 Q 112,336 112,320 Z" fill="#FFAFBC" opacity="0.6" />
+  
+  <!-- Tiny Twinkle Star (Bottom Right) -->
+  <circle cx="410" cy="380" r="4" fill="#FFA8B6" opacity="0.65" />
 
-  <!-- Little Sparkle Stars -->
-  <path d="M 120,130 C 120,130 132,130 132,118 C 132,130 144,130 144,130 C 144,130 132,130 132,142 C 132,130 120,130 120,130 Z" fill="#E26D6C" />
-  <path d="M 375,340 C 375,340 385,340 385,330 C 385,340 395,340 395,340 C 395,340 385,340 385,350 C 385,340 375,340 375,340 Z" fill="#D8B574" />
+  <!-- Main Piggy-Bank Heart Container -->
+  <g filter="url(#heartShadow)">
+    <!-- Heart Base Geometry -->
+    <path d="M 256,418 C 256,418 108,318 108,212 C 108,154 154,116 208,116 C 238,116 266,134 278,158 C 290,134 318,116 348,116 C 402,116 448,154 448,212 C 448,318 300,418 256,418 Z" 
+          fill="url(#heartGrad)" />
+
+    <!-- Top Glossy Reflection Arc on Left Lobe -->
+    <path d="M 136,204 C 136,162 168,136 204,136 C 220,136 235,144 246,156" 
+          fill="none" 
+          stroke="#FFFFFF" 
+          stroke-width="14" 
+          stroke-linecap="round" 
+          opacity="0.68" />
+          
+    <!-- Coin Slot at the top center of Heart -->
+    <rect x="194" y="172" width="68" height="11" rx="5.5" fill="url(#slotGrad)" />
+    <!-- Slot Inner Shadow / Bottom Highlight -->
+    <line x1="198" y1="184" x2="258" y2="184" stroke="#FF7B8E" stroke-width="2" stroke-linecap="round" opacity="0.5" />
+  </g>
+
+  <!-- Golden Heart Coin (Center Feature) -->
+  <g filter="url(#coinShadow)">
+    <!-- Outer Coin Rim Circle -->
+    <circle cx="256" cy="276" r="68" fill="url(#coinRimGrad)" />
+    
+    <!-- Coin Bevel Ring -->
+    <circle cx="256" cy="276" r="63" fill="none" stroke="url(#coinInnerBevel)" stroke-width="3" />
+    
+    <!-- Inner Coin Face Circle -->
+    <circle cx="256" cy="276" r="56" fill="url(#coinFaceGrad)" />
+    <circle cx="256" cy="276" r="56" fill="none" stroke="#FFA700" stroke-width="2" opacity="0.6" />
+
+    <!-- Pure White Heart in the Middle of the Coin -->
+    <path d="M 256,298 C 256,298 226,278 226,260 C 226,249 235,241 246,241 C 252,241 257,245 260,250 C 263,245 268,241 274,241 C 285,241 294,249 294,260 C 294,278 264,298 256,298 Z" 
+          fill="#FFFFFF" 
+          filter="url(#whiteHeartGlow)" />
+  </g>
+
 </svg>
