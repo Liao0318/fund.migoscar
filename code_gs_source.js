@@ -385,6 +385,57 @@ function setupDatabase() {
       ss.toast("已成功初始化「" + storeSheetName + "」工作表！", "系統通知");
     } catch(e) {}
   }
+
+  // 建立「旅遊行程」工作表
+  var travelTripSheetName = "旅遊行程";
+  var travelTripSheet = ss.getSheetByName(travelTripSheetName);
+  if (!travelTripSheet) {
+    travelTripSheet = ss.insertSheet(travelTripSheetName);
+    var travelTripHeaders = ["ID", "行程名稱", "目的地", "代表圖示", "開始日期", "結束日期", "幣別", "匯率", "預算台幣", "狀態", "主題顏色", "成員清單", "建立時間"];
+    travelTripSheet.getRange(1, 1, 1, travelTripHeaders.length).setValues([travelTripHeaders]);
+    travelTripSheet.getRange("A1:M1").setBackground("#F4F1EA")
+                                    .setFontColor("#4A4A4A")
+                                    .setFontWeight("bold")
+                                    .setHorizontalAlignment("center");
+    travelTripSheet.setFrozenRows(1);
+    try {
+      ss.toast("已成功初始化「" + travelTripSheetName + "」工作表！", "系統通知");
+    } catch(e) {}
+  }
+
+  // 建立「旅遊支出明細」工作表
+  var travelExpSheetName = "旅遊支出明細";
+  var travelExpSheet = ss.getSheetByName(travelExpSheetName);
+  if (!travelExpSheet) {
+    travelExpSheet = ss.insertSheet(travelExpSheetName);
+    var travelExpHeaders = ["ID", "行程ID", "日期", "分類", "品項名稱", "付款人", "幣別", "原幣金額", "匯率", "台幣總額", "分攤模式", "分攤成員", "成員分攤細項", "代墊人", "代墊金額", "地點", "備註", "已轉日常代墊", "建立時間"];
+    travelExpSheet.getRange(1, 1, 1, travelExpHeaders.length).setValues([travelExpHeaders]);
+    travelExpSheet.getRange("A1:S1").setBackground("#F4F1EA")
+                                   .setFontColor("#4A4A4A")
+                                   .setFontWeight("bold")
+                                   .setHorizontalAlignment("center");
+    travelExpSheet.setFrozenRows(1);
+    try {
+      ss.toast("已成功初始化「" + travelExpSheetName + "」工作表！", "系統通知");
+    } catch(e) {}
+  }
+
+  // 建立「旅遊心願清單」工作表
+  var travelWishSheetName = "旅遊心願清單";
+  var travelWishSheet = ss.getSheetByName(travelWishSheetName);
+  if (!travelWishSheet) {
+    travelWishSheet = ss.insertSheet(travelWishSheetName);
+    var travelWishHeaders = ["ID", "行程ID", "心願項目", "分類", "預估金額台幣", "提議人", "狀態", "備註"];
+    travelWishSheet.getRange(1, 1, 1, travelWishHeaders.length).setValues([travelWishHeaders]);
+    travelWishSheet.getRange("A1:H1").setBackground("#F4F1EA")
+                                    .setFontColor("#4A4A4A")
+                                    .setFontWeight("bold")
+                                    .setHorizontalAlignment("center");
+    travelWishSheet.setFrozenRows(1);
+    try {
+      ss.toast("已成功初始化「" + travelWishSheetName + "」工作表！", "系統通知");
+    } catch(e) {}
+  }
   
   return "工作表已準備就緒";
 }
@@ -1890,6 +1941,535 @@ function settleAllSplitRecords() {
   }
 }
 
+// ------------------- 旅遊分帳與出國專案功能 (Travel Split & Expense) -------------------
+
+// 獲取「旅遊行程」工作表
+function getTravelSheet() {
+  var ss = getDbSpreadsheet();
+  if (!ss) {
+    throw new Error("未連結任何有效的 Google 試算表。");
+  }
+  var sheetName = "旅遊行程";
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    setupDatabase();
+    sheet = ss.getSheetByName(sheetName);
+  }
+  return sheet;
+}
+
+// 獲取「旅遊支出明細」工作表
+function getTravelExpenseSheet() {
+  var ss = getDbSpreadsheet();
+  if (!ss) {
+    throw new Error("未連結任何有效的 Google 試算表。");
+  }
+  var sheetName = "旅遊支出明細";
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    setupDatabase();
+    sheet = ss.getSheetByName(sheetName);
+  }
+  return sheet;
+}
+
+// 獲取「旅遊心願清單」工作表
+function getTravelWishlistSheet() {
+  var ss = getDbSpreadsheet();
+  if (!ss) {
+    throw new Error("未連結任何有效的 Google 試算表。");
+  }
+  var sheetName = "旅遊心願清單";
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    setupDatabase();
+    sheet = ss.getSheetByName(sheetName);
+  }
+  return sheet;
+}
+
+// 輔助函式：將日期格式化為 YYYY-MM-DD
+function formatDateForSheet(d) {
+  if (!d) return "";
+  if (d instanceof Date) {
+    return Utilities.formatDate(d, "GMT+8", "yyyy-MM-dd");
+  }
+  var str = String(d).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str.substring(0, 10);
+  }
+  try {
+    var parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return Utilities.formatDate(parsed, "GMT+8", "yyyy-MM-dd");
+    }
+  } catch(e) {}
+  return str;
+}
+
+// 獲取所有旅遊行程、支出明細與心願清單
+function getTravelData() {
+  try {
+    var tripSheet = getTravelSheet();
+    var expSheet = getTravelExpenseSheet();
+    var wishSheet = getTravelWishlistSheet();
+
+    // 1. 讀取旅遊行程
+    var trips = [];
+    var tripLastRow = tripSheet.getLastRow();
+    if (tripLastRow > 1) {
+      var tripValues = tripSheet.getRange(2, 1, tripLastRow - 1, 13).getValues();
+      for (var i = 0; i < tripValues.length; i++) {
+        var row = tripValues[i];
+        var id = String(row[0] || "").trim();
+        if (!id) continue;
+        var title = String(row[1] || "").trim();
+        var destination = String(row[2] || "").trim();
+        var coverEmoji = String(row[3] || "✈️").trim();
+        var startDate = row[4] ? formatDateForSheet(row[4]) : "";
+        var endDate = row[5] ? formatDateForSheet(row[5]) : "";
+        var currency = String(row[6] || "JPY").trim();
+        var exchangeRate = parseFloat(row[7]) || 0.215;
+        var budgetTWD = row[8] !== "" && row[8] !== null && !isNaN(parseFloat(row[8])) ? parseFloat(row[8]) : undefined;
+        var status = String(row[9] || "進行中").trim();
+        var themeColor = String(row[10] || "rose").trim();
+        var membersRaw = String(row[11] || "").trim();
+        var members = ["廖", "周"];
+        if (membersRaw) {
+          try {
+            if (membersRaw.startsWith("[") && membersRaw.endsWith("]")) {
+              members = JSON.parse(membersRaw);
+            } else {
+              members = membersRaw.split(/[,，、]/).map(function(m) { return m.trim(); }).filter(Boolean);
+            }
+          } catch(e) {
+            members = ["廖", "周"];
+          }
+        }
+        var createdAt = row[12] ? formatDateForSheet(row[12]) : "";
+
+        trips.push({
+          id: id,
+          title: title,
+          destination: destination,
+          coverEmoji: coverEmoji,
+          startDate: startDate,
+          endDate: endDate,
+          currency: currency,
+          exchangeRate: exchangeRate,
+          budgetTWD: budgetTWD,
+          status: status,
+          themeColor: themeColor,
+          members: members,
+          createdAt: createdAt
+        });
+      }
+    }
+
+    // 2. 讀取旅遊支出明細
+    var expenses = [];
+    var expLastRow = expSheet.getLastRow();
+    if (expLastRow > 1) {
+      var expValues = expSheet.getRange(2, 1, expLastRow - 1, 19).getValues();
+      for (var j = 0; j < expValues.length; j++) {
+        var eRow = expValues[j];
+        var eId = String(eRow[0] || "").trim();
+        if (!eId) continue;
+        var tripId = String(eRow[1] || "").trim();
+        var date = eRow[2] ? formatDateForSheet(eRow[2]) : "";
+        var category = String(eRow[3] || "其他雜支").trim();
+        var itemName = String(eRow[4] || "").trim();
+        var payer = String(eRow[5] || "廖").trim();
+        var originalCurrency = String(eRow[6] || "JPY").trim();
+        var originalAmount = parseFloat(eRow[7]) || 0;
+        var exchangeRate = parseFloat(eRow[8]) || 1;
+        var totalAmountTWD = parseFloat(eRow[9]) || 0;
+        var splitMode = String(eRow[10] || "全體AA").trim();
+        
+        var participantsRaw = String(eRow[11] || "").trim();
+        var participants = [];
+        if (participantsRaw) {
+          try {
+            if (participantsRaw.startsWith("[")) {
+              participants = JSON.parse(participantsRaw);
+            } else {
+              participants = participantsRaw.split(/[,，、]/).map(function(p) { return p.trim(); }).filter(Boolean);
+            }
+          } catch(e) {}
+        }
+
+        var memberSplitsRaw = String(eRow[12] || "").trim();
+        var memberSplits = undefined;
+        if (memberSplitsRaw) {
+          try {
+            if (memberSplitsRaw.startsWith("{")) {
+              memberSplits = JSON.parse(memberSplitsRaw);
+            }
+          } catch(e) {}
+        }
+
+        var debtor = String(eRow[13] || "").trim();
+        var debtorAmountTWD = parseFloat(eRow[14]) || 0;
+        var location = String(eRow[15] || "").trim();
+        var note = String(eRow[16] || "").trim();
+        var syncedToSplit = (eRow[17] === true || String(eRow[17]).toUpperCase() === "TRUE");
+        var createdAt = eRow[18] ? formatDateForSheet(eRow[18]) : "";
+
+        expenses.push({
+          id: eId,
+          tripId: tripId,
+          date: date,
+          category: category,
+          itemName: itemName,
+          payer: payer,
+          originalCurrency: originalCurrency,
+          originalAmount: originalAmount,
+          exchangeRate: exchangeRate,
+          totalAmountTWD: totalAmountTWD,
+          splitMode: splitMode,
+          participants: participants,
+          memberSplits: memberSplits,
+          debtor: debtor,
+          debtorAmountTWD: debtorAmountTWD,
+          location: location,
+          note: note,
+          syncedToSplit: syncedToSplit,
+          createdAt: createdAt
+        });
+      }
+    }
+
+    // 3. 讀取旅遊心願清單
+    var wishlist = [];
+    var wishLastRow = wishSheet.getLastRow();
+    if (wishLastRow > 1) {
+      var wishValues = wishSheet.getRange(2, 1, wishLastRow - 1, 8).getValues();
+      for (var k = 0; k < wishValues.length; k++) {
+        var wRow = wishValues[k];
+        var wId = String(wRow[0] || "").trim();
+        if (!wId) continue;
+        var wTripId = String(wRow[1] || "").trim();
+        var wItemName = String(wRow[2] || "").trim();
+        var wCategory = String(wRow[3] || "美食餐廳").trim();
+        var estimatedAmountTWD = wRow[4] !== "" && wRow[4] !== null && !isNaN(parseFloat(wRow[4])) ? parseFloat(wRow[4]) : undefined;
+        var addedBy = String(wRow[5] || "廖").trim();
+        var status = String(wRow[6] || "待預訂").trim();
+        var note = String(wRow[7] || "").trim();
+
+        wishlist.push({
+          id: wId,
+          tripId: wTripId,
+          itemName: wItemName,
+          category: wCategory,
+          estimatedAmountTWD: estimatedAmountTWD,
+          addedBy: addedBy,
+          status: status,
+          note: note
+        });
+      }
+    }
+
+    return {
+      success: true,
+      trips: trips,
+      expenses: expenses,
+      wishlist: wishlist
+    };
+  } catch(e) {
+    return { success: false, message: "讀取旅遊分帳資料失敗：" + e.toString(), trips: [], expenses: [], wishlist: [] };
+  }
+}
+
+// 儲存或更新旅遊行程
+function saveTravelTrip(data) {
+  try {
+    var sheet = getTravelSheet();
+    var id = String(data.id || ("trip-" + Date.now())).trim();
+    var title = String(data.title || "東京自由行").trim();
+    var destination = String(data.destination || "自由行").trim();
+    var coverEmoji = String(data.coverEmoji || "✈️").trim();
+    var startDate = formatDateForSheet(data.startDate || new Date());
+    var endDate = formatDateForSheet(data.endDate || data.startDate || new Date());
+    var currency = String(data.currency || "JPY").trim();
+    var exchangeRate = parseFloat(data.exchangeRate) || 0.215;
+    var budgetTWD = data.budgetTWD !== undefined && data.budgetTWD !== null && !isNaN(parseFloat(data.budgetTWD)) ? parseFloat(data.budgetTWD) : "";
+    var status = String(data.status || "進行中").trim();
+    var themeColor = String(data.themeColor || "rose").trim();
+    var members = Array.isArray(data.members) ? JSON.stringify(data.members) : String(data.members || "[\"廖\",\"周\"]");
+    var createdAt = formatDateForSheet(data.createdAt || new Date());
+
+    var rowData = [
+      id,
+      title,
+      destination,
+      coverEmoji,
+      startDate,
+      endDate,
+      currency,
+      exchangeRate,
+      budgetTWD,
+      status,
+      themeColor,
+      members,
+      createdAt
+    ];
+
+    var lastRow = sheet.getLastRow();
+    var foundRow = -1;
+    if (lastRow > 1) {
+      var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]).trim() === id) {
+          foundRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    if (foundRow > 0) {
+      sheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.appendRow(rowData);
+    }
+
+    return { success: true, message: "行程資料已成功同步儲存！", id: id };
+  } catch(e) {
+    return { success: false, message: "儲存行程失敗：" + e.toString() };
+  }
+}
+
+// 刪除旅遊行程 (連帶刪除關聯支出與心願)
+function deleteTravelTrip(id) {
+  try {
+    var tripSheet = getTravelSheet();
+    var expSheet = getTravelExpenseSheet();
+    var wishSheet = getTravelWishlistSheet();
+    var targetId = String(id || "").trim();
+    if (!targetId) return { success: false, message: "請指定要刪除的行程 ID" };
+
+    // 1. 刪除行程列
+    var tripLastRow = tripSheet.getLastRow();
+    if (tripLastRow > 1) {
+      var tripIds = tripSheet.getRange(2, 1, tripLastRow - 1, 1).getValues();
+      for (var i = tripIds.length - 1; i >= 0; i--) {
+        if (String(tripIds[i][0]).trim() === targetId) {
+          tripSheet.deleteRow(i + 2);
+        }
+      }
+    }
+
+    // 2. 刪除該行程對應之所有支出列
+    var expLastRow = expSheet.getLastRow();
+    if (expLastRow > 1) {
+      var expTripIds = expSheet.getRange(2, 2, expLastRow - 1, 1).getValues();
+      for (var j = expTripIds.length - 1; j >= 0; j--) {
+        if (String(expTripIds[j][0]).trim() === targetId) {
+          expSheet.deleteRow(j + 2);
+        }
+      }
+    }
+
+    // 3. 刪除該行程對應之所有心願列
+    var wishLastRow = wishSheet.getLastRow();
+    if (wishLastRow > 1) {
+      var wishTripIds = wishSheet.getRange(2, 2, wishLastRow - 1, 1).getValues();
+      for (var k = wishTripIds.length - 1; k >= 0; k--) {
+        if (String(wishTripIds[k][0]).trim() === targetId) {
+          wishSheet.deleteRow(k + 2);
+        }
+      }
+    }
+
+    return { success: true, message: "已成功刪除行程及關聯支出資料！" };
+  } catch(e) {
+    return { success: false, message: "刪除行程失敗：" + e.toString() };
+  }
+}
+
+// 新增或更新旅遊支出
+function addTravelExpense(data) {
+  try {
+    var sheet = getTravelExpenseSheet();
+    var id = String(data.id || ("exp-" + Date.now())).trim();
+    var tripId = String(data.tripId || "").trim();
+    var date = formatDateForSheet(data.date || new Date());
+    var category = String(data.category || "其他雜支").trim();
+    var itemName = String(data.itemName || "旅費支出").trim();
+    var payer = String(data.payer || "廖").trim();
+    var originalCurrency = String(data.originalCurrency || "JPY").trim();
+    var originalAmount = parseFloat(data.originalAmount) || 0;
+    var exchangeRate = parseFloat(data.exchangeRate) || 1;
+    var totalAmountTWD = parseFloat(data.totalAmountTWD) || 0;
+    var splitMode = String(data.splitMode || "全體AA").trim();
+    var participants = Array.isArray(data.participants) ? JSON.stringify(data.participants) : String(data.participants || "");
+    var memberSplits = data.memberSplits && typeof data.memberSplits === 'object' ? JSON.stringify(data.memberSplits) : String(data.memberSplits || "");
+    var debtor = String(data.debtor || "").trim();
+    var debtorAmountTWD = parseFloat(data.debtorAmountTWD) || 0;
+    var location = String(data.location || "").trim();
+    var note = String(data.note || "").trim();
+    var syncedToSplit = (data.syncedToSplit === true || String(data.syncedToSplit).toUpperCase() === "TRUE") ? "TRUE" : "FALSE";
+    var createdAt = formatDateForSheet(data.createdAt || new Date());
+
+    var rowData = [
+      id,
+      tripId,
+      date,
+      category,
+      itemName,
+      payer,
+      originalCurrency,
+      originalAmount,
+      exchangeRate,
+      totalAmountTWD,
+      splitMode,
+      participants,
+      memberSplits,
+      debtor,
+      debtorAmountTWD,
+      location,
+      note,
+      syncedToSplit,
+      createdAt
+    ];
+
+    var lastRow = sheet.getLastRow();
+    var foundRow = -1;
+    if (lastRow > 1) {
+      var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]).trim() === id) {
+          foundRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    if (foundRow > 0) {
+      sheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.insertRowBefore(2);
+      sheet.getRange(2, 1, 1, rowData.length).setValues([rowData]);
+    }
+
+    return { success: true, message: "已成功記錄旅遊支出！", id: id };
+  } catch(e) {
+    return { success: false, message: "記錄旅遊支出失敗：" + e.toString() };
+  }
+}
+
+// 刪除旅遊支出
+function deleteTravelExpense(id) {
+  try {
+    var sheet = getTravelExpenseSheet();
+    var targetId = String(id || "").trim();
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無此支出紀錄" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === targetId) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "已成功刪除旅遊支出！" };
+      }
+    }
+    return { success: false, message: "未找到對應的旅遊支出" };
+  } catch(e) {
+    return { success: false, message: "刪除旅遊支出失敗：" + e.toString() };
+  }
+}
+
+// 新增或更新心願項目
+function addTravelWishItem(data) {
+  try {
+    var sheet = getTravelWishlistSheet();
+    var id = String(data.id || ("wish-" + Date.now())).trim();
+    var tripId = String(data.tripId || "").trim();
+    var itemName = String(data.itemName || "心願項目").trim();
+    var category = String(data.category || "美食餐廳").trim();
+    var estimatedAmountTWD = data.estimatedAmountTWD !== undefined && data.estimatedAmountTWD !== null && !isNaN(parseFloat(data.estimatedAmountTWD)) ? parseFloat(data.estimatedAmountTWD) : "";
+    var addedBy = String(data.addedBy || "廖").trim();
+    var status = String(data.status || "待預訂").trim();
+    var note = String(data.note || "").trim();
+
+    var rowData = [
+      id,
+      tripId,
+      itemName,
+      category,
+      estimatedAmountTWD,
+      addedBy,
+      status,
+      note
+    ];
+
+    var lastRow = sheet.getLastRow();
+    var foundRow = -1;
+    if (lastRow > 1) {
+      var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]).trim() === id) {
+          foundRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    if (foundRow > 0) {
+      sheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      sheet.insertRowBefore(2);
+      sheet.getRange(2, 1, 1, rowData.length).setValues([rowData]);
+    }
+
+    return { success: true, message: "已成功記錄心願項目！", id: id };
+  } catch(e) {
+    return { success: false, message: "記錄心願項目失敗：" + e.toString() };
+  }
+}
+
+// 更新心願狀態
+function toggleTravelWishStatus(data) {
+  try {
+    var sheet = getTravelWishlistSheet();
+    var targetId = String(data.id || "").trim();
+    var nextStatus = String(data.status || "已完成").trim();
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無心願項目" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === targetId) {
+        sheet.getRange(i + 2, 7).setValue(nextStatus);
+        return { success: true, message: "心願狀態已更新為「" + nextStatus + "」！" };
+      }
+    }
+    return { success: false, message: "未找到對應心願項目" };
+  } catch(e) {
+    return { success: false, message: "更新心願狀態失敗：" + e.toString() };
+  }
+}
+
+// 刪除心願項目
+function deleteTravelWishItem(id) {
+  try {
+    var sheet = getTravelWishlistSheet();
+    var targetId = String(id || "").trim();
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無此心願紀錄" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === targetId) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "已成功刪除心願項目！" };
+      }
+    }
+    return { success: false, message: "未找到對應的心願項目" };
+  } catch(e) {
+    return { success: false, message: "刪除心願項目失敗：" + e.toString() };
+  }
+}
+
 // ------------------- TELEGRAM WEBHOOK & HTTP API (doPost) 處理 -------------------
 
 function doPost(e) {
@@ -1932,9 +2512,13 @@ function doPost(e) {
       else if (data.action === "deleteSplitRecord") result = deleteSplitRecord(data.id || data.splitId);
       else if (data.action === "settleAllSplitRecords") result = settleAllSplitRecords();
       else if (data.action === "getTravelData") result = getTravelData();
-      else if (data.action === "addTravelPlan") result = addTravelPlan(data);
-      else if (data.action === "updateTravelPlan") result = updateTravelPlan(data);
-      else if (data.action === "deleteTravelPlan") result = deleteTravelPlan(data.id);
+      else if (data.action === "saveTravelTrip" || data.action === "addTravelPlan" || data.action === "updateTravelPlan") result = saveTravelTrip(data);
+      else if (data.action === "deleteTravelTrip" || data.action === "deleteTravelPlan") result = deleteTravelTrip(data.id || data.tripId);
+      else if (data.action === "addTravelExpense" || data.action === "saveTravelExpense") result = addTravelExpense(data);
+      else if (data.action === "deleteTravelExpense") result = deleteTravelExpense(data.id || data.expId);
+      else if (data.action === "addTravelWishItem" || data.action === "saveTravelWishItem") result = addTravelWishItem(data);
+      else if (data.action === "toggleTravelWishStatus") result = toggleTravelWishStatus(data);
+      else if (data.action === "deleteTravelWishItem") result = deleteTravelWishItem(data.id || data.wishId);
 
       return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
     }
