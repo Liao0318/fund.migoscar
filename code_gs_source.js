@@ -2357,6 +2357,73 @@ function addTravelExpense(data) {
   }
 }
 
+// 批次新增多筆旅遊支出 (支援 Excel 匯入與整張收據連記)
+function addBatchTravelExpenses(data) {
+  try {
+    var sheet = getTravelExpenseSheet();
+    var items = Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []);
+    if (!items || items.length === 0) {
+      return { success: false, message: "未提供任何支出資料" };
+    }
+
+    var rowsToAdd = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var id = String(it.id || ("exp-" + Date.now() + "-" + i)).trim();
+      var tripId = String(it.tripId || "").trim();
+      var date = formatDateForSheet(it.date || new Date());
+      var category = String(it.category || "其他雜支").trim();
+      var itemName = String(it.itemName || "旅費支出").trim();
+      var payer = String(it.payer || "廖").trim();
+      var originalCurrency = String(it.originalCurrency || "KRW").trim();
+      var originalAmount = parseFloat(it.originalAmount) || 0;
+      var exchangeRate = parseFloat(it.exchangeRate) || 1;
+      var totalAmountTWD = parseFloat(it.totalAmountTWD) || 0;
+      var splitMode = String(it.splitMode || "全體AA").trim();
+      var participants = Array.isArray(it.participants) ? JSON.stringify(it.participants) : String(it.participants || "");
+      var memberSplits = it.memberSplits && typeof it.memberSplits === 'object' ? JSON.stringify(it.memberSplits) : String(it.memberSplits || "");
+      var debtor = String(it.debtor || "").trim();
+      var debtorAmountTWD = parseFloat(it.debtorAmountTWD) || 0;
+      var location = String(it.location || "").trim();
+      var note = String(it.note || "").trim();
+      var syncedToSplit = (it.syncedToSplit === true || String(it.syncedToSplit).toUpperCase() === "TRUE") ? "TRUE" : "FALSE";
+      var createdAt = formatDateForSheet(it.createdAt || new Date());
+
+      rowsToAdd.push([
+        id,
+        tripId,
+        date,
+        category,
+        itemName,
+        payer,
+        originalCurrency,
+        originalAmount,
+        exchangeRate,
+        totalAmountTWD,
+        splitMode,
+        participants,
+        memberSplits,
+        debtor,
+        debtorAmountTWD,
+        location,
+        note,
+        syncedToSplit,
+        createdAt
+      ]);
+    }
+
+    if (rowsToAdd.length > 0) {
+      // 依序插入到開頭第 2 列
+      sheet.insertRowsBefore(2, rowsToAdd.length);
+      sheet.getRange(2, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+    }
+
+    return { success: true, message: "已成功批次寫入 " + rowsToAdd.length + " 筆旅遊支出！", count: rowsToAdd.length };
+  } catch(e) {
+    return { success: false, message: "批次記錄旅遊支出失敗：" + e.toString() };
+  }
+}
+
 // 刪除旅遊支出
 function deleteTravelExpense(id) {
   try {
@@ -2515,6 +2582,7 @@ function doPost(e) {
       else if (data.action === "saveTravelTrip" || data.action === "addTravelPlan" || data.action === "updateTravelPlan") result = saveTravelTrip(data);
       else if (data.action === "deleteTravelTrip" || data.action === "deleteTravelPlan") result = deleteTravelTrip(data.id || data.tripId);
       else if (data.action === "addTravelExpense" || data.action === "saveTravelExpense") result = addTravelExpense(data);
+      else if (data.action === "addBatchTravelExpenses" || data.action === "saveBatchTravelExpenses") result = addBatchTravelExpenses(data);
       else if (data.action === "deleteTravelExpense") result = deleteTravelExpense(data.id || data.expId);
       else if (data.action === "addTravelWishItem" || data.action === "saveTravelWishItem") result = addTravelWishItem(data);
       else if (data.action === "toggleTravelWishStatus") result = toggleTravelWishStatus(data);

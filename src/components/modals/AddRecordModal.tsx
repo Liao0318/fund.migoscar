@@ -383,9 +383,14 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
 
                   <div className="space-y-3">
                     {/* 對帳類型 */}
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-[#5C564E] uppercase tracking-wider">對帳類型</label>
-                      <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-xs font-bold text-[#5C564E] uppercase tracking-wider">
+                          帳務性質與類別 <span className="text-rose-500">*</span>
+                        </label>
+                        <span className="text-[10px] text-[#8C8475]">清楚區分代墊與存入</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <button
                           type="button"
                           onClick={() => setFormData(prev => ({
@@ -393,15 +398,28 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                             type: '支出-日常代墊',
                             payer: prev.payer === '共同帳戶' ? '廖尹丞' : prev.payer
                           }))}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
+                          className={`p-3 rounded-2xl border-2 transition-all text-left cursor-pointer active:scale-98 relative overflow-hidden ${
                             formData.type === '支出-日常代墊'
-                              ? 'bg-rose-50 border-rose-300 text-rose-800 shadow-2xs'
-                              : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#7A7469] hover:bg-white'
+                              ? 'bg-gradient-to-br from-rose-50 to-orange-50/60 border-rose-400 text-rose-950 shadow-sm ring-2 ring-rose-200/50'
+                              : 'bg-[#FAF9F5] border-[#E2DDD3] text-[#7A7469] hover:bg-white hover:border-[#D0C9BD]'
                           }`}
                         >
-                          <span>💸</span>
-                          <span>支出-日常代墊</span>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-black flex items-center gap-1.5">
+                              <span className="text-sm">💸</span>
+                              <span>個人代墊 (支出)</span>
+                            </span>
+                            {formData.type === '支出-日常代墊' && (
+                              <span className="text-[10px] font-bold bg-rose-500 text-white px-2 py-0.5 rounded-full">
+                                當前選擇
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#786F63] leading-relaxed">
+                            一人先刷卡付費，日後結算分攤或核銷。
+                          </p>
                         </button>
+
                         <button
                           type="button"
                           onClick={() => setFormData(prev => ({
@@ -409,14 +427,26 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                             type: '收入-固定公積金',
                             payer: '共同帳戶'
                           }))}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
+                          className={`p-3 rounded-2xl border-2 transition-all text-left cursor-pointer active:scale-98 relative overflow-hidden ${
                             formData.type === '收入-固定公積金'
-                              ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-2xs'
-                              : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#7A7469] hover:bg-white'
+                              ? 'bg-gradient-to-br from-emerald-50 to-teal-50/60 border-emerald-500 text-emerald-950 shadow-sm ring-2 ring-emerald-200/50'
+                              : 'bg-[#FAF9F5] border-[#E2DDD3] text-[#7A7469] hover:bg-white hover:border-[#D0C9BD]'
                           }`}
                         >
-                          <span>💰</span>
-                          <span>收入-固定公積金</span>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-black flex items-center gap-1.5">
+                              <span className="text-sm">💰</span>
+                              <span>存入公積金 (收入)</span>
+                            </span>
+                            {formData.type === '收入-固定公積金' && (
+                              <span className="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                                當前選擇
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#786F63] leading-relaxed">
+                            每月固定存入或補貼款，增加公積金結餘。
+                          </p>
                         </button>
                       </div>
                     </div>

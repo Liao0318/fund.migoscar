@@ -67,11 +67,8 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
                   <Smartphone className="w-5 h-5 text-rose-600" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-[#3E3A36] text-sm sm:text-base flex items-center gap-1.5">
-                    <span>安裝至手機桌面 (PWA)</span>
-                    <span className="text-[10px] text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full font-bold">
-                      App 體驗
-                    </span>
+                  <h3 className="font-extrabold text-[#3E3A36] text-sm sm:text-base">
+                    安裝至手機桌面 (PWA)
                   </h3>
                   <p className="text-[11px] text-[#8C8475]">全螢幕無網址列・秒速開啟・離線記帳支援</p>
                 </div>
@@ -93,9 +90,6 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="font-black text-sm text-[#3E3A36]">伴伴記❤️</span>
-                    <span className="text-[10px] bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded font-bold">
-                      情侶記帳
-                    </span>
                   </div>
                   <p className="text-[11px] text-[#8C8475] leading-relaxed">
                     公積金管理・代墊互抵・即時對帳・旅遊外幣

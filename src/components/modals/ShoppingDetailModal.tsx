@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShoppingBag, Pencil, X, Check, Store, Clock, User, FileText, Plus, Trash2 } from 'lucide-react';
+import { ShoppingBag, Pencil, X, Check, Store, Clock, User, FileText, Plus, Trash2, CreditCard } from 'lucide-react';
 import { ShoppingItem } from '../../types';
 import { getShoppingItemDisplayTime } from '../../utils/formatters';
 
@@ -10,6 +10,7 @@ interface ShoppingDetailModalProps {
   onEdit: (item: ShoppingItem) => void;
   onToggleStatus: (id: string, currentStatus: string) => void;
   onDelete: (id: string, name: string) => void;
+  onConvertToRecord?: (item: ShoppingItem) => void;
 }
 
 export const ShoppingDetailModal: React.FC<ShoppingDetailModalProps> = ({
@@ -17,7 +18,8 @@ export const ShoppingDetailModal: React.FC<ShoppingDetailModalProps> = ({
   onClose,
   onEdit,
   onToggleStatus,
-  onDelete
+  onDelete,
+  onConvertToRecord
 }) => {
   return (
     <AnimatePresence>
@@ -96,18 +98,36 @@ export const ShoppingDetailModal: React.FC<ShoppingDetailModalProps> = ({
                   {item.status === '已買到' ? '已採購完成' : item.category}
                 </span>
 
-                <button
-                  type="button"
-                  onClick={() => onToggleStatus(item.id, item.status)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 ${
-                    item.status === '已買到'
-                      ? 'bg-white border-[#E5E1D7] text-[#706B62] hover:bg-[#FAF9F5]'
-                      : 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
-                  }`}
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{item.status === '已買到' ? '標記為待購買' : '標記為已買到'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {onConvertToRecord && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const selected = item;
+                        onClose();
+                        onConvertToRecord(selected);
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-2xs"
+                      title="直接將此項目轉為家庭代墊或記帳支出"
+                    >
+                      <CreditCard className="w-3.5 h-3.5 text-amber-700" />
+                      <span>轉為記帳</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => onToggleStatus(item.id, item.status)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+                      item.status === '已買到'
+                        ? 'bg-white border-[#E5E1D7] text-[#706B62] hover:bg-[#FAF9F5]'
+                        : 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700 shadow-2xs'
+                    }`}
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{item.status === '已買到' ? '標記待買' : '標記買到'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* 物品名稱展示 */}

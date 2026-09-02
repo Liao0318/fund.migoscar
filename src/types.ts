@@ -58,7 +58,12 @@ export interface TravelExpenseItem {
   originalAmount: number;
   exchangeRate: number;
   totalAmountTWD: number;
-  splitMode: '全體AA' | '參與者AA' | '全額代墊' | '指定分攤' | '自訂金額' | 'AA平分' | '廖廖全出' | '周周全出';
+  splitMode: '全體AA' | '參與者AA' | '全額代墊' | '指定分攤' | '自訂金額' | 'AA平分' | '個人自付' | '廖廖全出' | '周周全出';
+  splitTarget?: string; // 若為個人自付，指定承擔成員（例如 '周沛緹', '育君', '廖尹丞'）
+  unitPrice?: number;   // 單價 (原幣)
+  quantity?: number;    // 數量
+  discount?: number;    // 折扣/備註金額 (原幣)
+  paymentMethod?: string; // 支付方式 (例如: 信用卡、現金)
   participants?: string[]; // 共同分攤的成員清單
   memberSplits?: Record<string, number>; // 每位成員應分攤之 TWD 金額
   customDebtorAmountTWD?: number;
@@ -149,7 +154,7 @@ export const DEFAULT_RATES_MAP: Record<string, number> = CURRENCIES.reduce((acc,
   return acc;
 }, {} as Record<string, number>);
 
-export interface TelegramNotifySettings {
+export interface AppNotifySettings {
   notifyOnAdd: boolean;
   notifyOnIncome: boolean;
   notifyOnEdit: boolean;
@@ -161,7 +166,26 @@ export interface TelegramNotifySettings {
   notifyOnShoppingDelete: boolean;
 }
 
-export type LineNotifySettings = TelegramNotifySettings;
+export type TelegramNotifySettings = AppNotifySettings;
+export type LineNotifySettings = AppNotifySettings;
+
+export interface SmartCommandCardData {
+  categoryBadge?: string;
+  tagPill?: string;
+  highlightTitle?: string;
+  highlightValue?: string;
+  highlightSub?: string;
+  items?: { label: string; value: string; isHighlight?: boolean }[];
+  footerNote?: string;
+}
+
+export interface SmartCommandResult {
+  success: boolean;
+  replyText: string;
+  type?: 'expense' | 'income' | 'shopping' | 'query' | 'settle' | 'delete' | 'notification' | 'error';
+  cardData?: SmartCommandCardData;
+  data?: any;
+}
 
 export interface CustomConfirmState {
   isOpen: boolean;
@@ -171,5 +195,49 @@ export interface CustomConfirmState {
   cancelText?: string;
   isDanger?: boolean;
   onConfirm: () => void;
+}
+
+export interface PartnerInviteData {
+  inviteCode: string; // e.g. "BB-8924"
+  adminEmail: string;
+  adminName: string;
+  adminRole?: '廖' | '周' | 'admin';
+  gasWebUrl: string;
+  deploySheetUrl?: string;
+  createdAt: string;
+}
+
+export interface CoupleBindingInfo {
+  adminEmail: string;
+  adminName: string;
+  partnerEmail?: string;
+  partnerName?: string;
+  partnerRole?: '廖' | '周';
+  inviteCode: string;
+  gasWebUrl?: string;
+  deploySheetUrl?: string;
+  boundAt?: string;
+}
+
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  role?: '廖' | '周' | 'admin' | 'guest';
+  userRole?: 'admin' | 'partner'; // 'admin': 主管理者 (控管 API / Code.gs 部署與派發邀請碼), 'partner': 伴侶 (透過邀請碼綁定，純記帳無權改動API)
+  adminEmail?: string;
+  adminName?: string;
+  partnerEmail?: string;
+  partnerName?: string;
+  inviteCode?: string;
+  isDevSandbox?: boolean;
+  loginTime?: string;
+  googleVerified?: boolean;
+  googleSub?: string;
+  accessToken?: string;
+  idToken?: string;
+  authMethod?: 'google_oauth' | 'google_gsi' | 'dev_sandbox' | 'partner_invite';
 }
 

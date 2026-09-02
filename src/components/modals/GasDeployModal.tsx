@@ -1,26 +1,28 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Send } from 'lucide-react';
+import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Sliders, Heart, Crown, Share2 } from 'lucide-react';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
+import { AuthUser } from '../../types';
 
 interface GasDeployModalProps {
   isOpen: boolean;
   onClose: () => void;
   deploySheetUrl: string;
   setDeploySheetUrl: (v: string) => void;
-  deployTelegramToken: string;
-  setDeployTelegramToken: (v: string) => void;
-  deployTelegramChatId: string;
-  setDeployTelegramChatId: (v: string) => void;
   gasWebUrl: string;
   setGasWebUrl: (v: string) => void;
-  onOpenTelegramSettings: () => void;
+  onOpenNotifySettings: () => void;
   saveDeployConfig: () => void;
   activeDeployCodeTab: 'codeGs' | 'indexHtml' | 'splitHtml';
   setActiveDeployCodeTab: (tab: 'codeGs' | 'indexHtml' | 'splitHtml') => void;
   copiedCodeType: string | null;
   copyDeployCode: (type: 'codeGs' | 'indexHtml' | 'splitHtml') => void;
   customizedCodeGs: string;
+  isSandboxMode?: boolean;
+  onToggleSandboxMode?: (enabled: boolean) => void;
+  currentUser?: AuthUser | null;
+  onOpenInviteManager?: () => void;
+  inviteCode?: string;
 }
 
 export const GasDeployModal: React.FC<GasDeployModalProps> = ({
@@ -28,19 +30,20 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
   onClose,
   deploySheetUrl,
   setDeploySheetUrl,
-  deployTelegramToken,
-  setDeployTelegramToken,
-  deployTelegramChatId,
-  setDeployTelegramChatId,
   gasWebUrl,
   setGasWebUrl,
-  onOpenTelegramSettings,
+  onOpenNotifySettings,
   saveDeployConfig,
   activeDeployCodeTab,
   setActiveDeployCodeTab,
   copiedCodeType,
   copyDeployCode,
-  customizedCodeGs
+  customizedCodeGs,
+  isSandboxMode = false,
+  onToggleSandboxMode,
+  currentUser,
+  onOpenInviteManager,
+  inviteCode
 }) => {
   return (
     <AnimatePresence>
@@ -60,13 +63,13 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                 </div>
                 <div>
                   <h3 className="font-extrabold text-[#3E3A36] text-sm sm:text-base flex items-center gap-2">
-                    <span>系統部署與一鍵連線設定</span>
+                    <span>Google 試算表連線與部署代碼</span>
                     <span className="text-[10px] text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-full font-bold border border-amber-200">
-                      隱密進階區
+                      資料庫同步
                     </span>
                   </h3>
                   <p className="text-[11px] text-[#8C8475] font-medium">
-                    輸入連線網址與 Telegram Token 後將自動注入代碼，點擊一鍵複製即可快速完成 Google Apps Script 部署
+                    輸入 Google 試算表連線網址或 Web App API 網址，一鍵複製 Code.gs 與 HTML 進行部署
                   </p>
                 </div>
               </div>
@@ -85,7 +88,7 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
               <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
                 <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5 border-b border-[#F2EDE1] pb-2">
                   <Settings className="w-4 h-4 text-amber-800" />
-                  <span>伺服器與 API 連線設定</span>
+                  <span>試算表與 Web App 連線設定</span>
                 </h4>
 
                 <div className="space-y-3">
@@ -106,37 +109,6 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                     </p>
                   </div>
 
-                  {/* Telegram Bot Token */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-bold text-[#3E3A36] mb-1">
-                        Telegram Bot Token
-                      </label>
-                      <input
-                        type="text"
-                        value={deployTelegramToken}
-                        onChange={(e) => setDeployTelegramToken(e.target.value)}
-                        placeholder="例如：8940545345:AAGTJSX-..."
-                        className="w-full px-3.5 py-2.5 text-xs bg-[#FAF9F5] border border-[#E5E0D2] rounded-xl focus:outline-none focus:border-sky-600 focus:bg-white transition-all font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-[#3E3A36] mb-1">
-                        Telegram Chat ID
-                      </label>
-                      <input
-                        type="text"
-                        value={deployTelegramChatId}
-                        onChange={(e) => setDeployTelegramChatId(e.target.value)}
-                        placeholder="例如：-5312205991"
-                        className="w-full px-3.5 py-2.5 text-xs bg-[#FAF9F5] border border-[#E5E0D2] rounded-xl focus:outline-none focus:border-sky-600 focus:bg-white transition-all font-mono"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-[#8C8475] -mt-1">
-                    用於發送記帳動態即時訊息廣播至您的 Telegram 群組，永久 100% 免費無額度上限！
-                  </p>
-
                   {/* Google Apps Script Web App API URL */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -149,7 +121,7 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                         </span>
                       ) : (
                         <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
-                          🟠 本機沙盒模式
+                          {isSandboxMode ? '🧪 開發者沙盒測試' : '🟡 尚未設定金鑰'}
                         </span>
                       )}
                     </div>
@@ -161,40 +133,85 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                       className="w-full px-3.5 py-2.5 text-xs bg-[#FAF9F5] border border-[#E5E0D2] rounded-xl focus:outline-none focus:border-amber-800 focus:bg-white transition-all font-mono"
                     />
                     <p className="text-[10px] text-[#8C8475] mt-1 leading-relaxed">
-                      在 Google Apps Script 點選「發布 ➔ 部署為網路應用程式」，執行身分選「我 (Me)」，存取權限選「所有人 (Anyone)」，貼上發布網址，即可讓 AI Studio 預覽版與 Google Sheet 100% 雙向即時資料抓取與對帳！
+                      在 Google Apps Script 點選「發布 ➔ 部署為網路應用程式」，執行身分選「我 (Me)」，存取權限選「所有人 (Anyone)」，貼上發布網址，即可讓伴伴記與 Google Sheet 100% 雙向即時資料抓取與對帳！
                     </p>
                   </div>
 
-                  {/* Telegram 通知開關快速入口 */}
-                  <div className="bg-[#FAF8F3] rounded-2xl p-3.5 border border-sky-200/80 flex items-center justify-between gap-3">
+                  {/* 🧪 開發者沙盒測試開關 */}
+                  {onToggleSandboxMode && (
+                    <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-800">🧪 開發人員沙盒測試模式</span>
+                          {isSandboxMode && (
+                            <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded">
+                              已啟用
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-600">啟用時所有記帳僅在瀏覽器本機模擬，供開發除錯測試使用</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onToggleSandboxMode(!isSandboxMode)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer shrink-0 ${
+                          isSandboxMode ? 'bg-amber-600' : 'bg-slate-300'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                            isSandboxMode ? 'translate-x-4.5' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* App 內建通知開關快速入口 */}
+                  <div className="bg-[#FAF8F3] rounded-2xl p-3.5 border border-rose-200/80 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-800 flex items-center justify-center font-bold shrink-0">
-                        <Send className="w-4 h-4 text-sky-600" />
+                      <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center font-bold shrink-0">
+                        <BellRing className="w-4 h-4 text-rose-600" />
                       </div>
                       <div>
-                        <h5 className="text-xs font-bold text-[#3E3A36]">Telegram 推播項目自訂開關 (共 9 項)</h5>
-                        <p className="text-[10px] text-[#8C8475]">可個別開啟或關閉支出代墊、充值、採購清單、月度結算等通知</p>
+                        <h5 className="text-xs font-bold text-[#3E3A36]">App 內建通知提醒設定 (共 9 項)</h5>
+                        <p className="text-[10px] text-[#8C8475]">可個別開啟或關閉支出代墊、充值、採購清單、月度結算等 App 即時通知</p>
                       </div>
                     </div>
                     <button
                       type="button"
-                      onClick={onOpenTelegramSettings}
-                      className="px-3 py-1.5 bg-white hover:bg-sky-50 text-sky-800 border border-sky-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
+                      onClick={onOpenNotifySettings}
+                      className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-800 border border-rose-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                     >
                       前往自訂開關
                     </button>
                   </div>
 
-                  <div className="pt-1 flex justify-end">
+                  <div className="pt-1 flex items-center justify-between gap-2 flex-wrap">
+                    {onOpenInviteManager && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenInviteManager();
+                        }}
+                        className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                      >
+                        <Heart className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
+                        <span>派發伴侶邀請碼 {inviteCode ? `(${inviteCode})` : ''}</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={saveDeployConfig}
-                      className="px-4 py-2 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                      className="ml-auto px-4 py-2 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
                     >
                       <Save className="w-3.5 h-3.5" />
                       <span>儲存並即時更新代碼</span>
                     </button>
                   </div>
+
                 </div>
               </div>
 
@@ -269,13 +286,11 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
 
                 {/* 提示訊息 */}
                 {activeDeployCodeTab === 'codeGs' && (
-                  <div className="bg-sky-50/80 p-2.5 rounded-xl border border-sky-200/80 text-[11px] text-sky-900 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-sky-700 shrink-0" />
+                  <div className="bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/80 text-[11px] text-amber-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-700 shrink-0" />
                     <span>
                       代碼已為您自動注入：
-                      {deploySheetUrl ? ' ✅ 試算表 ID' : ' ⚠️ 未設定試算表'} ｜ 
-                      {deployTelegramToken ? ' ✅ Telegram Token' : ' ⚠️ 未設定 Telegram Token'} ｜
-                      {deployTelegramChatId ? ' ✅ Chat ID' : ' ⚠️ 未設定 Chat ID'}
+                      {deploySheetUrl ? ' ✅ 試算表 ID' : ' ⚠️ 自動感應綁定試算表'} ｜ App 內建原生即時同步
                     </span>
                   </div>
                 )}
@@ -331,3 +346,4 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
     </AnimatePresence>
   );
 };
+

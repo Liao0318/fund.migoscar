@@ -12,10 +12,13 @@ import {
   Wallet,
   ChevronRight,
   ShieldCheck,
-  Heart
+  Heart,
+  MessageCircle,
+  Database,
+  Key
 } from 'lucide-react';
-import { motion } from 'motion/react';
-import { SplitRecordItem, SplitSummary } from '../../types';
+import { motion, AnimatePresence } from 'motion/react';
+import { SplitRecordItem, SplitSummary, SmartCommandResult } from '../../types';
 
 interface SplitHomeTabProps {
   summary: SplitSummary;
@@ -26,6 +29,10 @@ interface SplitHomeTabProps {
   onGoToHistory: () => void;
   onGoToSettlement: () => void;
   onOpenSettleModal: () => void;
+  onExecuteSmartCommand?: (cmd: string) => Promise<SmartCommandResult | boolean> | SmartCommandResult | boolean;
+  onOpenChatAssistant?: () => void;
+  isDbConnected?: boolean;
+  onOpenGasDeploy?: () => void;
 }
 
 const DEFAULT_SPLIT_SUMMARY: SplitSummary = {
@@ -47,12 +54,70 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
   onGoToHistory,
   onGoToSettlement,
   onOpenSettleModal,
+  onExecuteSmartCommand,
+  onOpenChatAssistant,
+  isDbConnected = true,
+  onOpenGasDeploy,
 }) => {
+  const [quickInput, setQuickInput] = React.useState('');
+  const [isSubmittingQuick, setIsSubmittingQuick] = React.useState(false);
+  const [quickMsg, setQuickMsg] = React.useState<string | null>(null);
+
+  const handleQuickSubmit = async (customCmd?: string) => {
+    const text = (customCmd || quickInput).trim();
+    if (!text || !onExecuteSmartCommand) return;
+    setIsSubmittingQuick(true);
+    setQuickMsg(null);
+    try {
+      const ok = await onExecuteSmartCommand(text);
+      if (ok) {
+        setQuickMsg(`✅ 已成功記帳：「${text}」`);
+        setQuickInput('');
+      } else {
+        setQuickMsg(`⚠️ 無法辨識指令，請試試：「廖 1200 晚餐」或「周 85 飲料」`);
+      }
+    } catch (e: any) {
+      setQuickMsg(`❌ 記帳失敗：${e?.message || '未知錯誤'}`);
+    } finally {
+      setIsSubmittingQuick(false);
+    }
+  };
   const safeSummary: SplitSummary = summary || DEFAULT_SPLIT_SUMMARY;
   const safeRecentItems = Array.isArray(recentItems) ? recentItems.filter(Boolean) : [];
 
+  if (!isDbConnected) {
+    return (
+      <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
+        {/* 尚未連線至資料庫 全幅提示卡片 */}
+        <div className="bg-white/85 backdrop-blur-md rounded-3xl p-8 sm:p-12 border border-[#E8E2D5] shadow-2xs text-center space-y-4 my-2">
+          <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-900 flex items-center justify-center mx-auto shadow-inner">
+            <Database className="w-8 h-8 text-amber-700" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg sm:text-2xl font-black text-[#3E3A36]">尚未連線至資料庫</h3>
+            <p className="text-xs sm:text-sm text-[#7A7366] leading-relaxed max-w-md mx-auto font-normal">
+              尚未登錄 Google 試算表 Web App API 金鑰，系統未連線至資料庫。為保護資料真實性與隱私，目前不顯示任何帳目數據。
+            </p>
+          </div>
+          {onOpenGasDeploy && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onOpenGasDeploy}
+                className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
+              >
+                <Key className="w-4 h-4" />
+                <span>設定連線金鑰與同步</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-12 font-sans">
+    <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
       {/* 頂部標題與快速更新列 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/70 backdrop-blur-md p-4 sm:px-6 sm:py-4 rounded-2xl border border-[#E9E5DC] shadow-2xs">
         <div className="flex items-center gap-3">
@@ -322,26 +387,84 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
         )}
       </div>
 
-      {/* Telegram 智能記帳指令提示 */}
-      <div className="bg-[#F0F8FF] rounded-2xl p-4 sm:p-5 border border-[#D0E6F9] space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-base">✈️</span>
-          <h4 className="text-xs sm:text-sm font-bold text-[#1E3A5F]">
-            Telegram「伴伴記❤️」智能記帳指令
-          </h4>
+      {/* App 內建智慧自然語言快捷記帳助理 */}
+      <div className="bg-gradient-to-br from-[#FFF5F5] to-[#FAF8F5] rounded-2xl p-4 sm:p-5 border border-rose-200/80 space-y-3 shadow-2xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚡</span>
+            <h4 className="text-xs sm:text-sm font-bold text-[#3E3A36]">
+              App 內建智慧快速記帳
+            </h4>
+          </div>
+          {onOpenChatAssistant && (
+            <button
+              type="button"
+              onClick={onOpenChatAssistant}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 shadow-2xs transition-all cursor-pointer active:scale-95"
+            >
+              <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+              <span>開啟小秘書視窗</span>
+            </button>
+          )}
         </div>
-        <p className="text-xs text-[#4A6482] leading-relaxed">
-          不用打開網頁，在 Telegram 情侶群組（@fund_migoscar_bot）直接傳送文字即可自動記帳與即時查帳：
+        <p className="text-xs text-[#7A756E] leading-relaxed">
+          直接輸入或點擊麥克風說出語句，系統自動辨識金額、代墊人與品項並完成記帳：
         </p>
+
+        {onExecuteSmartCommand && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={quickInput}
+                  onChange={(e) => setQuickInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleQuickSubmit();
+                    }
+                  }}
+                  placeholder="例如：廖 1200 晚餐、周 85 飲料、存 10000 薪資"
+                  className="w-full px-3.5 py-2.5 text-xs bg-white border border-[#E2DDD3] focus:border-rose-500 focus:ring-2 focus:ring-rose-200 rounded-xl focus:outline-none font-sans shadow-2xs transition-all"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleQuickSubmit()}
+                disabled={isSubmittingQuick || !quickInput.trim()}
+                className="px-4 py-2.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50 shrink-0"
+              >
+                {isSubmittingQuick ? '記帳中...' : '送出'}
+              </button>
+            </div>
+
+            {quickMsg && (
+              <div className="text-[11px] font-medium text-[#4A4641] bg-white/80 p-2 rounded-lg border border-rose-100">
+                {quickMsg}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px]">
-          <div className="bg-white p-2.5 rounded-xl border border-[#D0E6F9] font-mono text-[#334E68]">
-            <span className="font-bold text-rose-700">代墊記帳：</span> <code>廖 1200 晚餐</code> 或 <code>代墊 晚餐 1200</code><br />
-            <span className="text-[10px] text-[#627D98]">（自動一人一半 AA 平分各 $600）</span>
-          </div>
-          <div className="bg-white p-2.5 rounded-xl border border-[#D0E6F9] font-mono text-[#334E68]">
-            <span className="font-bold text-sky-700">即時查帳：</span> <code>查</code> 或 <code>查代墊</code> 或 <code>誰欠誰</code><br />
-            <span className="text-[10px] text-[#627D98]">（Telegram 機器人即時回傳對帳與公積金結餘）</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => handleQuickSubmit('廖 1200 晚餐')}
+            className="bg-white p-2.5 rounded-xl border border-rose-100 font-mono text-left hover:border-rose-300 transition-all cursor-pointer shadow-2xs group"
+          >
+            <span className="font-bold text-rose-700">代墊指令範例：</span> <code>廖 1200 晚餐</code>
+            <p className="text-[10px] text-[#8C8475] mt-0.5">（自動辨識一人一半 AA 平分各 $600）</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickSubmit('查代墊')}
+            className="bg-white p-2.5 rounded-xl border border-rose-100 font-mono text-left hover:border-rose-300 transition-all cursor-pointer shadow-2xs group"
+          >
+            <span className="font-bold text-sky-700">即時查帳指令範例：</span> <code>查代墊</code> 或 <code>查</code>
+            <p className="text-[10px] text-[#8C8475] mt-0.5">（即時彈出對帳與公積金結餘摘要）</p>
+          </button>
         </div>
       </div>
     </div>

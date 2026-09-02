@@ -1,5 +1,1085 @@
-export const INDEX_HTML_TEMPLATE = "<!DOCTYPE html>\n<html lang=\"zh-TW\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover\">\n  <title>伴伴記❤️ - 情侶生活公積金與代墊對帳</title>\n  <link rel=\"icon\" type=\"image/png\" href=\"https://img.icons8.com/color/180/cherry-blossom.png\">\n  <style>\n    * { box-sizing: border-box; margin: 0; padding: 0; }\n    html, body { width: 100%; height: 100%; overflow: hidden; background-color: #F7F5F0; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif; }\n    iframe { width: 100%; height: 100%; border: 0; display: block; }\n  </style>\n</head>\n<body>\n  <!-- 伴伴記公積金主前端 (託管於 GitHub Pages) -->\n  <iframe \n    id=\"banban-frame\" \n    src=\"https://liao0318.github.io/fund.migoscar/\" \n    allow=\"clipboard-read; clipboard-write; geolocation; camera;\"\n    title=\"伴伴記\"\n  ></iframe>\n</body>\n</html>";
+export const INDEX_HTML_TEMPLATE = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>伴伴記❤️ - 情侶生活公積金與代墊對帳</title>
+  <link rel="icon" type="image/png" href="https://img.icons8.com/color/180/cherry-blossom.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background-color: #F7F5F0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    iframe { width: 100%; height: 100%; border: 0; display: block; }
+  </style>
+</head>
+<body>
+  <!-- 伴伴記公積金主前端 (託管於 GitHub Pages) -->
+  <iframe 
+    id="banban-frame" 
+    src="https://liao0318.github.io/fund.migoscar/" 
+    allow="clipboard-read; clipboard-write; geolocation; camera;"
+    title="伴伴記"
+  ></iframe>
+</body>
+</html>`;
 
-export const SPLIT_INDEX_HTML_TEMPLATE = "<!DOCTYPE html>\n<html lang=\"zh-TW\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover\">\n  <title>伴伴記❤️ - 情侶代墊與私人借還</title>\n  <link rel=\"icon\" type=\"image/png\" href=\"https://img.icons8.com/color/180/cherry-blossom.png\">\n  <style>\n    * { box-sizing: border-box; margin: 0; padding: 0; }\n    html, body { width: 100%; height: 100%; overflow: hidden; background-color: #FAF8F5; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif; }\n    iframe { width: 100%; height: 100%; border: 0; display: block; }\n  </style>\n</head>\n<body>\n  <!-- 伴伴記情侶代墊分帳子頁面 (託管於 GitHub Pages) -->\n  <iframe \n    id=\"banban-split-frame\" \n    src=\"https://liao0318.github.io/fund.migoscar/#/split\" \n    allow=\"clipboard-read; clipboard-write; geolocation; camera;\"\n    title=\"伴伴記・代墊返還\"\n  ></iframe>\n</body>\n</html>";
+export const SPLIT_INDEX_HTML_TEMPLATE = `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>伴伴記❤️ - 情侶代墊與私人借還</title>
+  <link rel="icon" type="image/png" href="https://img.icons8.com/color/180/cherry-blossom.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background-color: #FAF8F5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    iframe { width: 100%; height: 100%; border: 0; display: block; }
+  </style>
+</head>
+<body>
+  <!-- 伴伴記情侶代墊分帳子頁面 (託管於 GitHub Pages) -->
+  <iframe 
+    id="banban-split-frame" 
+    src="https://liao0318.github.io/fund.migoscar/#/split" 
+    allow="clipboard-read; clipboard-write; geolocation; camera;"
+    title="伴伴記・代墊返還"
+  ></iframe>
+</body>
+</html>`;
 
-export const CODE_GS_TEMPLATE = "var HARDCODED_TELEGRAM_TOKEN = \"8940545345:AAGTJSX-EgRpbCGPfufxGhxEJTzAOvMw5I4\";\nvar HARDCODED_TELEGRAM_CHAT_ID = \"-5312205991\";\nvar HARDCODED_SPREADSHEET_ID = \"\";\n/**\n * 伴伴記❤️ - Google Apps Script 後端處理 (Code.gs)\n * 精通全端與 GAS 開發的資深工程師精心撰寫，包含完整防呆與即時結算邏輯。\n */\n\n// 💡 Google 試算表 ID / 網址（選填）\n// 如果您使用的是「獨立腳本」（非從試算表內『擴充功能 > Apps Script』建立），可直接貼上試算表完整網址或 ID 於此；留空則自動感應綁定的試算表\n// 💡 LINE Messaging API / Notify Channel Access Token\n// 如果您想直接寫死權杖，請貼在下方雙引號中（最優先採用）；若留空則會自動從 PropertiesService 讀取\n// 1. 網頁部署：渲染 Index.html，強力支援行動端 PWA 獨立無網址列全螢幕與自訂網頁標題與分頁 Favicon\nfunction doGet(e) {\n  // 1. 如果前端以 GET 請求 API action\n  if (e && e.parameter && e.parameter.action) {\n    var action = e.parameter.action;\n    if (action === \"getTravelData\") return ContentService.createTextOutput(JSON.stringify(getTravelData())).setMimeType(ContentService.MimeType.JSON);\n    if (action === \"getSplitData\") return ContentService.createTextOutput(JSON.stringify(getSplitData())).setMimeType(ContentService.MimeType.JSON);\n    if (action === \"getDashboardData\") return ContentService.createTextOutput(JSON.stringify(getDashboardData())).setMimeType(ContentService.MimeType.JSON);\n    if (action === \"getShoppingData\") return ContentService.createTextOutput(JSON.stringify(getShoppingData())).setMimeType(ContentService.MimeType.JSON);\n    return ContentService.createTextOutput(JSON.stringify({ success: true, message: \"伴伴記後端 API 連線正常！\" })).setMimeType(ContentService.MimeType.JSON);\n  }\n\n  // 2. 嘗試載入 Index.html（若有在 Apps Script 建立 Index 檔案）\n  try {\n    var output = HtmlService.createHtmlOutputFromFile('Index');\n    output.addMetaTag('viewport', 'width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no, viewport-fit=cover');\n    output.setTitle('伴伴記❤️');\n    output.setFaviconUrl(\"https://img.icons8.com/color/180/cherry-blossom.png\");\n    output.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);\n    return output;\n  } catch (err) {\n    // 3. 若未在 Apps Script 建立 Index.html，返回 API 正常運作狀態頁面（不報錯）\n    var fallbackHtml = '<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>伴伴記後端 API</title><style>body{font-family:sans-serif;text-align:center;padding:40px;background:#fdfaf7;color:#333;}h2{color:#2b825b;}.card{background:#fff;border-radius:12px;padding:24px;max-width:500px;margin:20px auto;box-shadow:0 4px 12px rgba(0,0,0,0.05);line-height:1.6;}</style></head><body><h2>✨ 伴伴記 Google Apps Script 後端 API 運作中</h2><div class=\"card\"><p>✅ 試算表資料庫與 LINE 機器人 Webhook 已就緒！</p><p>🚀 前端網頁可由 GitHub Pages 託管，或在 Apps Script 左側建立 <b>Index</b> (HTML) 檔案。</p></div></body></html>';\n    return HtmlService.createHtmlOutput(fallbackHtml)\n      .setTitle('伴伴記 後端 API 服務')\n      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);\n  }\n}\n\n// 輔助函式：鎖定為「yyyy-MM-dd 上午/下午 hh:mm」格式，不含時區或 ISO 字串\nfunction formatAmPmTime(dateInput) {\n  if (!dateInput) return \"\";\n  if (typeof dateInput === 'string' && (dateInput.indexOf('上午') !== -1 || dateInput.indexOf('下午') !== -1)) {\n    return dateInput;\n  }\n  \n  var d;\n  if (dateInput instanceof Date) {\n    d = dateInput;\n  } else {\n    try {\n      d = new Date(dateInput);\n    } catch(e) {\n      d = new Date();\n    }\n  }\n  \n  if (isNaN(d.getTime())) {\n    d = new Date();\n  }\n  \n  var timezone = \"GMT+8\";\n  try {\n    timezone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();\n  } catch(e) {}\n  \n  var year = Utilities.formatDate(d, timezone, \"yyyy\");\n  var month = Utilities.formatDate(d, timezone, \"MM\");\n  var day = Utilities.formatDate(d, timezone, \"dd\");\n  var hours = parseInt(Utilities.formatDate(d, timezone, \"HH\"), 10);\n  var minutes = Utilities.formatDate(d, timezone, \"mm\");\n  \n  var ampm = hours >= 12 ? '下午' : '上午';\n  var h12 = hours % 12;\n  if (h12 === 0) h12 = 12;\n  var hh = (h12 < 10 ? '0' : '') + h12;\n  \n  return year + \"-\" + month + \"-\" + day + \" \" + ampm + \" \" + hh + \":\" + minutes;\n}\n\n// 輔助函式：計算當前公積金池剩餘金額\nfunction calculateCurrentBalance() {\n  try {\n    var sheet = getDbSheet();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return 0;\n    \n    var reconciledMonths = getReconciledMonthsFromSheet();\n    var values = sheet.getRange(2, 1, lastRow - 1, 6).getValues();\n    \n    var totalIncome = 0;\n    var reconciledExpense = 0;\n    \n    for (var i = 0; i < values.length; i++) {\n      var row = values[i];\n      var amount = parseFloat(row[4]) || 0;\n      var type = row[5] ? row[5].toString() : \"\";\n      var monthVal = row[0];\n      var month = \"\";\n      if (monthVal) {\n        if (monthVal instanceof Date) {\n          month = Utilities.formatDate(monthVal, \"GMT+8\", \"yyyy-MM\");\n        } else {\n          month = monthVal.toString().trim().substring(0, 7);\n        }\n      }\n      \n      if (type.indexOf(\"收入\") !== -1) {\n        totalIncome += amount;\n      } else if (type.indexOf(\"支出\") !== -1) {\n        if (reconciledMonths.indexOf(month) !== -1) {\n          reconciledExpense += amount;\n        }\n      }\n    }\n    return totalIncome - reconciledExpense;\n  } catch(e) {\n    return 0;\n  }\n}\n\n// 輔助函式：計算當前銷帳後預計剩餘額度 (總撥入公積金 - 總日常代墊)\nfunction calculateEstimatedQuota() {\n  try {\n    var sheet = getDbSheet();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return 0;\n    \n    var values = sheet.getRange(2, 1, lastRow - 1, 6).getValues();\n    var totalIncome = 0;\n    var totalExpense = 0;\n    \n    for (var i = 0; i < values.length; i++) {\n      var row = values[i];\n      var amount = parseFloat(row[4]) || 0;\n      var type = row[5] ? row[5].toString() : \"\";\n      \n      if (type.indexOf(\"收入\") !== -1) {\n        totalIncome += amount;\n      } else if (type.indexOf(\"支出\") !== -1) {\n        totalExpense += amount;\n      }\n    }\n    return totalIncome - totalExpense;\n  } catch(e) {\n    return 0;\n  }\n}\n\n// 讀取 LINE 通知發送偏好設定\nfunction getLineNotifySettings() {\n  try {\n    var jsonStr = PropertiesService.getScriptProperties().getProperty(\"LINE_NOTIFY_SETTINGS\");\n    if (jsonStr) {\n      var s = JSON.parse(jsonStr);\n      return { \n        success: true, \n        settings: {\n          notifyOnAdd: s.notifyOnAdd !== false,\n          notifyOnIncome: s.notifyOnIncome !== false,\n          notifyOnEdit: s.notifyOnEdit !== false,\n          notifyOnDelete: s.notifyOnDelete !== false,\n          notifyOnSettle: s.notifyOnSettle !== false,\n          showBalance: s.showBalance !== false,\n          notifyOnShoppingAdd: s.notifyOnShoppingAdd !== false,\n          notifyOnShoppingComplete: s.notifyOnShoppingComplete !== false,\n          notifyOnShoppingDelete: s.notifyOnShoppingDelete !== false\n        } \n      };\n    }\n  } catch(e) {}\n  return { \n    success: true, \n    settings: {\n      notifyOnAdd: true,\n      notifyOnIncome: true,\n      notifyOnEdit: true,\n      notifyOnDelete: true,\n      notifyOnSettle: true,\n      showBalance: true,\n      notifyOnShoppingAdd: true,\n      notifyOnShoppingComplete: true,\n      notifyOnShoppingDelete: true\n    } \n  };\n}\n\n// 儲存 LINE 通知發送偏好設定\nfunction saveLineNotifySettings(settings) {\n  try {\n    if (typeof settings === 'object' && settings !== null) {\n      var payload = settings.settings ? settings.settings : settings;\n      PropertiesService.getScriptProperties().setProperty(\"LINE_NOTIFY_SETTINGS\", JSON.stringify(payload));\n      return { success: true, settings: payload, message: \"已成功儲存 LINE 通知項目偏好！\" };\n    }\n    return { success: false, message: \"設定資料格式不正確\" };\n  } catch(e) {\n    return { success: false, message: \"儲存設定失敗：\" + e.toString() };\n  }\n}\nfunction getDbSpreadsheet() {\n  var ss = null;\n  // 0. 如果有直接指定 HARDCODED_SPREADSHEET_ID，優先採用\n  if (typeof HARDCODED_SPREADSHEET_ID !== 'undefined' && HARDCODED_SPREADSHEET_ID && HARDCODED_SPREADSHEET_ID.trim()) {\n    var rawInput = HARDCODED_SPREADSHEET_ID.trim();\n    var sheetId = rawInput;\n    if (rawInput.indexOf(\"docs.google.com/spreadsheets\") !== -1) {\n      var match = rawInput.match(/\\/d\\/([a-zA-Z0-9_\\-]+)/);\n      if (match && match[1]) sheetId = match[1];\n    }\n    try {\n      ss = SpreadsheetApp.openById(sheetId);\n      if (ss) return ss;\n    } catch (e) {}\n  }\n\n  // 1. 嘗試取得容器綁定的活動試算表\n  try {\n    ss = SpreadsheetApp.getActiveSpreadsheet();\n  } catch (e) {}\n  if (ss) return ss;\n  \n  // 2. 如果失敗，嘗試從腳本屬性讀取使用者設定的 SPREADSHEET_ID\n  try {\n    var savedId = PropertiesService.getScriptProperties().getProperty(\"SPREADSHEET_ID\");\n    if (savedId) {\n      ss = SpreadsheetApp.openById(savedId);\n    }\n  } catch (e) {}\n  \n  return ss;\n}\n\n// 儲存試算表設定 API (由前端管理者呼叫)\nfunction saveSpreadsheetId(idOrUrl) {\n  try {\n    if (!idOrUrl) {\n      PropertiesService.getScriptProperties().deleteProperty(\"SPREADSHEET_ID\");\n      return { success: true, message: \"已清除自訂試算表綁定，改用預設綁定\" };\n    }\n    \n    // 解析 URL 取出 ID\n    var id = idOrUrl;\n    if (idOrUrl.indexOf(\"docs.google.com/spreadsheets\") !== -1) {\n      var matches = idOrUrl.match(/\\/d\\/([a-zA-Z0-9_\\-]+)/);\n      if (matches && matches[1]) {\n        id = matches[1];\n      }\n    }\n    \n    // 測試開啟\n    var testSs = SpreadsheetApp.openById(id);\n    PropertiesService.getScriptProperties().setProperty(\"SPREADSHEET_ID\", id);\n    \n    // 初始化該試算表\n    setupDatabase();\n    \n    return { success: true, message: \"成功綁定 Google 試算表！已偵測到「\" + testSs.getName() + \"」\" };\n  } catch (e) {\n    return { success: false, message: \"綁定失敗：\" + e.toString() };\n  }\n}\n\n// 取得目前的試算表綁定狀態學 API\nfunction getSpreadsheetConfig() {\n  try {\n    var ss = getDbSpreadsheet();\n    if (ss) {\n      return { \n        connected: true, \n        name: ss.getName(), \n        url: ss.getUrl(),\n        isCustom: !SpreadsheetApp.getActiveSpreadsheet()\n      };\n    } else {\n      return { connected: false, isCustom: false };\n    }\n  } catch(e) {\n    return { connected: false, error: e.toString() };\n  }\n}\n\n// 2. 資料庫初始化：檢查並建立「流水帳資料庫」與「月度核銷狀態」工作表，設定欄位標頭\nfunction setupDatabase() {\n  var ss = getDbSpreadsheet();\n  if (!ss) {\n    throw new Error(\"未連接任何試算表。請先至設定部署頁面綁定您的試算表。\");\n  }\n  \n  // 建立「流水帳資料庫」\n  var sheetName = \"流水帳資料庫\";\n  var sheet = ss.getSheetByName(sheetName);\n  if (!sheet) {\n    sheet = ss.insertSheet(sheetName);\n    var headers = [\"月份\", \"日期\", \"項目\", \"出錢人\", \"出錢金額\", \"類型\", \"時間戳記\"];\n    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);\n    sheet.getRange(\"A1:G1\").setBackground(\"#F4F1EA\")\n                           .setFontColor(\"#4A4A4A\")\n                           .setFontWeight(\"bold\")\n                           .setHorizontalAlignment(\"center\");\n    sheet.setFrozenRows(1);\n    try {\n      ss.toast(\"已成功初始化「\" + sheetName + \"」工作表！\", \"系統通知\");\n    } catch(e) {}\n  }\n\n  // 建立「月度核銷狀態」工作表\n  var settleSheetName = \"月度核銷狀態\";\n  var settleSheet = ss.getSheetByName(settleSheetName);\n  if (!settleSheet) {\n    settleSheet = ss.insertSheet(settleSheetName);\n    var settleHeaders = [\"月份\", \"已撥款核銷\"];\n    settleSheet.getRange(1, 1, 1, settleHeaders.length).setValues([settleHeaders]);\n    settleSheet.getRange(\"A1:B1\").setBackground(\"#F4F1EA\")\n                                 .setFontColor(\"#4A4A4A\")\n                                 .setFontWeight(\"bold\")\n                                 .setHorizontalAlignment(\"center\");\n    settleSheet.setFrozenRows(1);\n    try {\n      ss.toast(\"已成功初始化「\" + settleSheetName + \"」工作表！\", \"系統通知\");\n    } catch(e) {}\n  }\n\n  // 建立「購物清單」工作表\n  var shopSheetName = \"購物清單\";\n  var shopSheet = ss.getSheetByName(shopSheetName);\n  if (!shopSheet) {\n    shopSheet = ss.insertSheet(shopSheetName);\n    var shopHeaders = [\"ID\", \"分類\", \"品項名稱\", \"購買地點\", \"預計購買日期\", \"狀態\", \"建立者\", \"建立時間\", \"備註細項\"];\n    shopSheet.getRange(1, 1, 1, shopHeaders.length).setValues([shopHeaders]);\n    shopSheet.getRange(\"A1:I1\").setBackground(\"#F4F1EA\")\n                               .setFontColor(\"#4A4A4A\")\n                               .setFontWeight(\"bold\")\n                               .setHorizontalAlignment(\"center\");\n    shopSheet.setFrozenRows(1);\n    try {\n      ss.toast(\"已成功初始化「\" + shopSheetName + \"」工作表！\", \"系統通知\");\n    } catch(e) {}\n  }\n\n  // 建立「常用商店」工作表\n    // 建立「代墊明細」工作表\n  var splitSheetName = \"代墊明細\";\n  var splitSheet = ss.getSheetByName(splitSheetName);\n  if (!splitSheet) {\n    splitSheet = ss.insertSheet(splitSheetName);\n    var splitHeaders = [\"ID\", \"時間\", \"代墊人\", \"分帳模式\", \"項目描述\", \"總金額\", \"分帳結果\", \"狀態\", \"結清時間\", \"備註\"];\n    splitSheet.getRange(1, 1, 1, splitHeaders.length).setValues([splitHeaders]);\n    splitSheet.getRange(\"A1:J1\").setBackground(\"#F4F1EA\")\n                                .setFontColor(\"#4A4A4A\")\n                                .setFontWeight(\"bold\")\n                                .setHorizontalAlignment(\"center\");\n    splitSheet.setFrozenRows(1);\n    try {\n      ss.toast(\"已成功初始化「\" + splitSheetName + \"」工作表！\", \"系統通知\");\n    } catch(e) {}\n  }\n\n  var storeSheetName = \"常用商店\";\n  var storeSheet = ss.getSheetByName(storeSheetName);\n  if (!storeSheet) {\n    storeSheet = ss.insertSheet(storeSheetName);\n    var storeHeaders = [\"商店名稱\", \"備註\"];\n    storeSheet.getRange(1, 1, 1, storeHeaders.length).setValues([storeHeaders]);\n    storeSheet.getRange(\"A1:B1\").setBackground(\"#F4F1EA\")\n                                .setFontColor(\"#4A4A4A\")\n                                .setFontWeight(\"bold\")\n                                .setHorizontalAlignment(\"center\");\n    storeSheet.setFrozenRows(1);\n    \n    var defaultStores = [\n      [\"菜市場\", \"傳統市場生鮮食材\"],\n      [\"全聯福利中心\", \"日常食品生鮮超市\"],\n      [\"日日加\", \"生鮮肉品日用品\"],\n      [\"家樂福\", \"量販超市\"],\n      [\"好市多\", \"美式大包裝採購\"],\n      [\"寶雅\", \"美妝生活雜貨\"],\n      [\"7-ELEVEN\", \"超商急需\"],\n      [\"蝦皮購物\", \"線上網購組\"]\n    ];\n    storeSheet.getRange(2, 1, defaultStores.length, 2).setValues(defaultStores);\n    try {\n      ss.toast(\"已成功初始化「\" + storeSheetName + \"」工作表！\", \"系統通知\");\n    } catch(e) {}\n  }\n\n  // 建立「旅遊行程」工作表\n  var travelTripSheetName = \"旅遊行程\";\n  var travelTripSheet = ss.getSheetByName(travelTripSheetName);\n  if (!travelTripSheet) {\n    travelTripSheet = ss.insertSheet(travelTripSheetName);\n    var travelTripHeaders = [\"ID\", \"行程名稱\", \"目的地\", \"代表圖示\", \"開始日期\", \"結束日期\", \"幣別\", \"匯率\", \"預算台幣\", \"狀態\", \"主題顏色\", \"成員清單\", \"建立時間\"];\n    travelTripSheet.getRange(1, 1, 1, travelTripHeaders.length).setValues([travelTripHeaders]);\n    travelTripSheet.getRange(\"A1:M1\").setBackground(\"#F4F1EA\")\n                                    .setFontColor(\"#4A4A4A\")\n                                    .setFontWeight(\"bold\")\n                                    .setHorizontalAlignment(\"center\");\n    travelTripSheet.setFrozenRows(1);\n    try {\n      ss.toast(\"已成功初始化「\" + travelTripSheetName + \"」工作表！\", \"系統通知\");\n    } catch(e) {}\n  }\n\n  // 建立「旅遊支出明細」工作表\n  var travelExpSheetName = \"旅遊支出明細\";\n  var travelExpSheet = ss.getSheetByName(travelExpSheetName);\n  if (!travelExpSheet) {\n    travelExpSheet = ss.insertSheet(travelExpSheetName);\n    var travelExpHeaders = [\"ID\", \"行程ID\", \"日期\", \"分類\", \"品項名稱\", \"付款人\", \"幣別\", \"原幣金額\", \"匯率\", \"台幣總額\", \"分攤模式\", \"分攤成員\", \"成員分攤細項\", \"代墊人\", \"代墊金額\", \"地點\", \"備註\", \"已轉日常代墊\", \"建立時間\"];\n    travelExpSheet.getRange(1, 1, 1, travelExpHeaders.length).setValues([travelExpHeaders]);\n    travelExpSheet.getRange(\"A1:S1\").setBackground(\"#F4F1EA\")\n                                   .setFontColor(\"#4A4A4A\")\n                                   .setFontWeight(\"bold\")\n                                   .setHorizontalAlignment(\"center\");\n    travelExpSheet.setFrozenRows(1);\n    try {\n      ss.toast(\"已成功初始化「\" + travelExpSheetName + \"」工作表！\", \"系統通知\");\n    } catch(e) {}\n  }\n\n  // 建立「旅遊心願清單」工作表\n  var travelWishSheetName = \"旅遊心願清單\";\n  var travelWishSheet = ss.getSheetByName(travelWishSheetName);\n  if (!travelWishSheet) {\n    travelWishSheet = ss.insertSheet(travelWishSheetName);\n    var travelWishHeaders = [\"ID\", \"行程ID\", \"心願項目\", \"分類\", \"預估金額台幣\", \"提議人\", \"狀態\", \"備註\"];\n    travelWishSheet.getRange(1, 1, 1, travelWishHeaders.length).setValues([travelWishHeaders]);\n    travelWishSheet.getRange(\"A1:H1\").setBackground(\"#F4F1EA\")\n                                    .setFontColor(\"#4A4A4A\")\n                                    .setFontWeight(\"bold\")\n                                    .setHorizontalAlignment(\"center\");\n    travelWishSheet.setFrozenRows(1);\n    try {\n      ss.toast(\"已成功初始化「\" + travelWishSheetName + \"」工作表！\", \"系統通知\");\n    } catch(e) {}\n  }\n  \n  return \"工作表已準備就緒\";\n}\n\n// 獲取當前的「流水帳資料庫」工作表\nfunction getDbSheet() {\n  var ss = getDbSpreadsheet();\n  if (!ss) {\n    throw new Error(\"未連結任何有效的 Google 試算表。\\n如果您是建立「獨立腳本」，請至網頁右下角『設定部署』輸入您的 Google 試算表 ID/網址。\");\n  }\n  var sheetName = \"流水帳資料庫\";\n  var sheet = ss.getSheetByName(sheetName);\n  if (!sheet) {\n    setupDatabase();\n    sheet = ss.getSheetByName(sheetName);\n  }\n  return sheet;\n}\n\n// 獲取所有已核銷月份 (具有對帳資料自動自我修復與相容功能)\nfunction getReconciledMonthsFromSheet() {\n  try {\n    var ss = getDbSpreadsheet();\n    if (!ss) return [];\n    var sheetName = \"月度核銷狀態\";\n    var sheet = ss.getSheetByName(sheetName);\n    if (!sheet) {\n      setupDatabase();\n      sheet = ss.getSheetByName(sheetName);\n      if (!sheet) return [];\n    }\n    \n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return [];\n    \n    var data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();\n    var reconciled = [];\n    for (var i = 0; i < data.length; i++) {\n      var cellVal = data[i][0];\n      var monthStr = \"\";\n      if (cellVal instanceof Date || (cellVal && typeof cellVal.getFullYear === 'function')) {\n        var y = cellVal.getFullYear();\n        var m = cellVal.getMonth() + 1;\n        monthStr = y + \"-\" + (m < 10 ? \"0\" + m : m);\n      } else if (cellVal) {\n        var cleaned = cellVal.toString().replace(/['\"]/g, \"\").trim();\n        var parts = cleaned.split(/[-/]/);\n        if (parts.length === 2) {\n          var yearNum = parseInt(parts[0], 10);\n          var monthNum = parseInt(parts[1], 10);\n          if (!isNaN(yearNum) && !isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {\n            monthStr = yearNum + \"-\" + (monthNum < 10 ? \"0\" + monthNum : monthNum);\n          } else {\n            monthStr = cleaned;\n          }\n        } else {\n          monthStr = cleaned;\n        }\n      }\n      \n      var isReconciled = data[i][1];\n      if (isReconciled === true || isReconciled === \"TRUE\" || isReconciled === \"true\") {\n        if (monthStr && reconciled.indexOf(monthStr) === -1) {\n          reconciled.push(monthStr);\n        }\n      }\n    }\n    return reconciled;\n  } catch(e) {\n    return [];\n  }\n}\n\n// 更新/新增月份核銷狀態 (防呆排除同一月份重複行、直接勾選試算表複選框)\nfunction setMonthReconciled(month, isReconciled) {\n  try {\n    if (typeof month === 'object' && month !== null) {\n      if (typeof month.isReconciled !== 'undefined') isReconciled = month.isReconciled;\n      month = month.month || month.settlementMonth;\n    }\n    if (!month) return { success: false, message: \"請指定月份\" };\n\n    var ss = getDbSpreadsheet();\n    if (!ss) {\n      return { success: false, message: \"未連結試算表\" };\n    }\n    var sheetName = \"月度核銷狀態\";\n    var sheet = ss.getSheetByName(sheetName);\n    if (!sheet) {\n      setupDatabase();\n      sheet = ss.getSheetByName(sheetName);\n    }\n    \n    var lastRow = sheet.getLastRow();\n    var foundRow = -1;\n    if (lastRow > 1) {\n      var monthsRange = sheet.getRange(2, 1, lastRow - 1, 1);\n      var monthsValues = monthsRange.getValues();\n      // Also normalize the input month argument\n      var inputMonthCleaned = month.toString().replace(/['\"]/g, \"\").trim();\n      var inputParts = inputMonthCleaned.split(/[-/]/);\n      var normInputMonth = inputMonthCleaned;\n      if (inputParts.length === 2) {\n        var iy = parseInt(inputParts[0], 10);\n        var im = parseInt(inputParts[1], 10);\n        if (!isNaN(iy) && !isNaN(im) && im >= 1 && im <= 12) {\n          normInputMonth = iy + \"-\" + (im < 10 ? \"0\" + im : im);\n        }\n      }\n\n      for (var i = 0; i < monthsValues.length; i++) {\n        var cellVal = monthsValues[i][0];\n        var formattedCellVal = \"\";\n        if (cellVal instanceof Date || (cellVal && typeof cellVal.getFullYear === 'function')) {\n          var y = cellVal.getFullYear();\n          var m = cellVal.getMonth() + 1;\n          formattedCellVal = y + \"-\" + (m < 10 ? \"0\" + m : m);\n        } else if (cellVal) {\n          var cleaned = cellVal.toString().replace(/['\"]/g, \"\").trim();\n          var parts = cleaned.split(/[-/]/);\n          if (parts.length === 2) {\n            var yearNum = parseInt(parts[0], 10);\n            var monthNum = parseInt(parts[1], 10);\n            if (!isNaN(yearNum) && !isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {\n              formattedCellVal = yearNum + \"-\" + (monthNum < 10 ? \"0\" + monthNum : monthNum);\n            } else {\n              formattedCellVal = cleaned;\n            }\n          } else {\n            formattedCellVal = cleaned;\n          }\n        }\n        \n        if (formattedCellVal === normInputMonth) {\n          foundRow = i + 2;\n          break;\n        }\n      }\n    }\n    \n    // 如果 isReconciled 是字串則轉為 boolean\n    var boolReconciled = (isReconciled === true || isReconciled === \"true\" || isReconciled === \"TRUE\");\n    \n    if (foundRow !== -1) {\n      // 在現有列更新核銷狀態\n      sheet.getRange(foundRow, 2).setValue(boolReconciled);\n      \n      // 自動自我修復/除重：如果之前因為多重觸發產生了重複列，自動刪除更後面的重複項目\n      if (lastRow > foundRow) {\n        for (var j = lastRow; j > foundRow; j--) {\n          var checkVal = sheet.getRange(j, 1).getValue();\n          var formattedCheckVal = \"\";\n          if (checkVal instanceof Date || (checkVal && typeof checkVal.getFullYear === 'function')) {\n            var y = checkVal.getFullYear();\n            var m = checkVal.getMonth() + 1;\n            formattedCheckVal = y + \"-\" + (m < 10 ? \"0\" + m : m);\n          } else if (checkVal) {\n            formattedCheckVal = checkVal.toString().trim();\n          }\n          if (formattedCheckVal === month.toString().trim()) {\n            sheet.deleteRow(j);\n          }\n        }\n      }\n    } else {\n      // 無歷史資料，新增一列，並在試算表強制前置 ' 避免 Google 轉換為日期\n      var newRow = [\"'\" + month, boolReconciled];\n      sheet.appendRow(newRow);\n      var newLastRow = sheet.getLastRow();\n      // 同時插入 Checkbox，若已填入 boolean 值它將呈現為選中/未選中\n      sheet.getRange(newLastRow, 2).insertCheckboxes();\n    }\n\n    // 💡 串接 LINE 即時對帳狀態變動推播！\n    try {\n      var lineSettingsRes = getLineNotifySettings();\n      var lineSettings = lineSettingsRes.settings || {};\n      if (lineSettings.notifyOnSettle !== false) {\n        var estimatedQuota = calculateEstimatedQuota();\n        var now = new Date();\n        var timeStr = formatAmPmTime(now);\n        var statusText = boolReconciled ? \"已撥款核銷結清 ✅\" : \"尚有代墊待結算 ⏳\";\n        \n        var details = [\n          { label: \"對帳月份\", value: month + \" 月份\" },\n          { label: \"核銷狀態\", value: statusText, bold: true }\n        ];\n        if (lineSettings.showBalance !== false) {\n          details.push({\n            label: \"銷帳後預計剩餘\",\n            value: \"$\" + estimatedQuota.toLocaleString() + \" 元\",\n            bold: true,\n            color: estimatedQuota >= 0 ? \"#428564\" : \"#C55757\"\n          });\n        }\n        details.push({ label: \"時間\", value: timeStr });\n\n        sendLineNotify({\n          altText: \"🤝月度對帳狀態更新囉～\",\n          titleText: \"【對帳狀態更新】\" + month + \" 月份\",\n          badgeText: boolReconciled ? \"已結清\" : \"待對帳\",\n          badgeBg: boolReconciled ? \"#3A6D8C\" : \"#E58B23\",\n          details: details,\n          targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n        });\n      }\n    } catch(lineErr) {}\n\n    return { success: true, message: \"成功同步試算表！\" + month + \" 月度狀態已更新為 \" + (boolReconciled ? \"已核銷結清\" : \"待核銷狀態\") };\n  } catch(e) {\n    return { success: false, message: \"更新核銷狀態失敗：\" + e.toString() };\n  }\n}\n\n// 3. 寫入資料 API：附加新紀錄到試算表\nfunction addRecord(data) {\n  try {\n    var sheet = getDbSheet();\n    var now = new Date();\n    var timezone = \"GMT+8\";\n    try {\n      timezone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();\n    } catch(e) {}\n    \n    // 使用前端傳過來的日期，若無則預設今天\n    var dateStr = data.date || Utilities.formatDate(now, timezone, \"yyyy-MM-dd\");\n    var monthStr = dateStr.substring(0, 7);\n    var amount = parseFloat(data.amount) || 0;\n    \n    // 登錄流水清單的時間戳記\n    var timestampStr = formatAmPmTime(now);\n    var displayTimeStr = formatAmPmTime(now);\n    \n    var newRow = [\n      monthStr,\n      dateStr,\n      data.item || \"未分類項目\",\n      data.payer || \"廖尹丞\",\n      amount,\n      data.type || \"支出-日常代墊\",\n      timestampStr\n    ];\n    \n    sheet.appendRow(newRow);\n    \n    // 💡 串接 LINE 即時新增通知功能 (國泰風格卡片式 Flex Message)！\n    try {\n      var lineSettingsRes = getLineNotifySettings();\n      var lineSettings = lineSettingsRes.settings || {};\n      var isIncome = (data.type || \"\").indexOf(\"收入\") !== -1;\n      var shouldSend = isIncome ? (lineSettings.notifyOnIncome !== false) : (lineSettings.notifyOnAdd !== false);\n\n      if (shouldSend) {\n        var altText = isIncome ? \"💰公積金有一筆金額撥入囉～\" : \"💸你們有一筆金額支出囉～\";\n        var titleText = isIncome ? \"【帳戶撥入】NT$\" + amount.toLocaleString() + \"元\" : \"【代墊支出】NT$\" + amount.toLocaleString() + \"元\";\n        var badgeText = isIncome ? \"公積金撥入\" : \"代墊支出\";\n        var badgeBg = isIncome ? \"#3A6D8C\" : \"#C55757\";\n        var payerLabel = isIncome ? \"撥款人\" : \"出錢人\";\n        var estimatedQuota = calculateEstimatedQuota();\n        \n        var details = [\n          { label: payerLabel, value: data.payer || \"夥伴\" },\n          { label: \"項目\", value: (data.item || \"未分類項目\") + \" (\" + (data.type || \"帳目\") + \")\" },\n          { label: \"記帳日期\", value: dateStr }\n        ];\n        \n        if (lineSettings.showBalance !== false) {\n          details.push({\n            label: \"銷帳後預計剩餘\",\n            value: \"$\" + estimatedQuota.toLocaleString() + \" 元\",\n            bold: true,\n            color: estimatedQuota >= 0 ? \"#428564\" : \"#C55757\"\n          });\n        }\n        details.push({ label: \"時間\", value: displayTimeStr });\n\n        sendLineNotify({\n          altText: altText,\n          titleText: titleText,\n          badgeText: badgeText,\n          badgeBg: badgeBg,\n          details: details,\n          targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n        });\n      }\n    } catch(lineErr) {\n      console.error(\"LINE Notify failed:\", lineErr.toString());\n    }\n    \n    return { success: true, message: \"成功寫入一筆記帳資料！\" };\n  } catch(e) {\n    return { success: false, message: \"寫入失敗：\" + e.toString() };\n  }\n}\n\n// 3-1. 更新既有流水帳紀錄 API\nfunction updateRecordByRow(data) {\n  try {\n    var sheet = getDbSheet();\n    var rowId = parseInt(data.id, 10);\n    if (!rowId || isNaN(rowId) || rowId < 2) {\n      return { success: false, message: \"無效的紀錄列編號\" };\n    }\n    var now = new Date();\n    var timezone = \"GMT+8\";\n    try {\n      timezone = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();\n    } catch(e) {}\n    \n    var dateStr = data.date || Utilities.formatDate(now, timezone, \"yyyy-MM-dd\");\n    var monthStr = dateStr.substring(0, 7);\n    var amount = parseFloat(data.amount) || 0;\n    var timestampStr = formatAmPmTime(now);\n    var currency = data.currency || \"TWD\";\n    var originalAmount = parseFloat(data.originalAmount) || amount;\n    var exchangeRate = parseFloat(data.exchangeRate) || 1;\n    \n    sheet.getRange(rowId, 1, 1, 6).setValues([[\n      monthStr,\n      dateStr,\n      data.item || \"未分類項目\",\n      data.payer || \"廖尹丞\",\n      amount,\n      data.type || \"支出-日常代墊\"\n    ]]);\n    \n    // 💡 串接 LINE 即時修改通知\n    try {\n      var lineSettingsRes = getLineNotifySettings();\n      var lineSettings = lineSettingsRes.settings || {};\n      if (lineSettings.notifyOnEdit !== false) {\n        var isIncome = (data.type || \"\").indexOf(\"收入\") !== -1;\n        var altText = \"✏️ 伴伴記有一筆對帳項目已修改～\";\n        var titleText = \"【項目修改】NT$\" + amount.toLocaleString() + \"元\";\n        var badgeText = \"資料修改\";\n        var badgeBg = \"#E58B23\";\n        var payerLabel = isIncome ? \"撥款人\" : \"出錢人\";\n        var estimatedQuota = calculateEstimatedQuota();\n        \n        var details = [\n          { label: payerLabel, value: data.payer || \"夥伴\" },\n          { label: \"項目\", value: (data.item || \"未分類項目\") + \" (\" + (data.type || \"帳目\") + \")\" },\n          { label: \"記帳日期\", value: dateStr }\n        ];\n        \n        if (currency !== \"TWD\") {\n          details.push({ label: \"外幣換算\", value: originalAmount.toLocaleString() + \" \" + currency + \" (匯率 \" + exchangeRate + \")\" });\n        }\n        if (lineSettings.showBalance !== false) {\n          details.push({\n            label: \"銷帳後預計剩餘\",\n            value: \"$\" + estimatedQuota.toLocaleString() + \" 元\",\n            bold: true,\n            color: estimatedQuota >= 0 ? \"#428564\" : \"#C55757\"\n          });\n        }\n        details.push({ label: \"時間\", value: timestampStr });\n\n        sendLineNotify({\n          altText: altText,\n          titleText: titleText,\n          badgeText: badgeText,\n          badgeBg: badgeBg,\n          details: details,\n          targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n        });\n      }\n    } catch(lineErr) {}\n    \n    return { success: true, message: \"已成功更新對帳紀錄！\" };\n  } catch(e) {\n    return { success: false, message: \"更新紀錄失敗：\" + e.toString() };\n  }\n}\n\n// 4. 讀取與即時結算 API：獲取流水帳列表、統計廖尹丞與周沛緹的代墊支出總額\nfunction getDashboardData() {\n  try {\n    var ss = getDbSpreadsheet();\n    if (!ss) {\n      return {\n        success: false,\n        needsConfig: true,\n        message: \"未連結任何有效的 Google 試算表。請至網頁右下角『設定部署』輸入並綁定您的 Google 試算表 ID / 網址。\",\n        records: [],\n        liaoTotal: 0,\n        zhouTotal: 0,\n        reconciledMonths: []\n      };\n    }\n    \n    var sheet = getDbSheet();\n    var lastRow = sheet.getLastRow();\n    \n    var response = {\n      records: [],\n      liaoTotal: 0,\n      zhouTotal: 0,\n      reconciledMonths: [],\n      success: true\n    };\n    \n    try {\n      response.reconciledMonths = getReconciledMonthsFromSheet();\n    } catch(reconcileErr) {\n      response.reconciledMonths = [];\n    }\n    \n    if (lastRow <= 1) {\n      return response;\n    }\n    \n    // 💡 自我修復：如果以前的工作表欄位數小於 7，自動在 G1 補上「時間戳記」\n    try {\n      if (sheet.getLastColumn() < 7) {\n        sheet.getRange(1, 7).setValue(\"時間戳記\");\n        sheet.getRange(\"A1:G1\").setBackground(\"#F4F1EA\")\n                               .setFontColor(\"#4A4A4A\")\n                               .setFontWeight(\"bold\")\n                               .setHorizontalAlignment(\"center\");\n      }\n    } catch(errCol) {}\n\n    var dataRange = sheet.getRange(2, 1, lastRow - 1, 7);\n    var values = dataRange.getValues();\n    \n    var liaoTotal = 0;\n    var zhouTotal = 0;\n    var recordsList = [];\n    var timezone = \"GMT+8\";\n    try {\n      timezone = ss.getSpreadsheetTimeZone();\n    } catch(e) {}\n    \n    // 從最後一列往前讀取 (最新登錄在最前面)\n    for (var i = values.length - 1; i >= 0; i--) {\n      var row = values[i];\n      var monthVal = row[0];\n      var month = \"\";\n      if (monthVal) {\n        if (monthVal instanceof Date) {\n          month = Utilities.formatDate(monthVal, timezone, \"yyyy-MM\");\n        } else {\n          var mStr = monthVal.toString().trim();\n          if (/^\\d{4}-\\d{2}$/.test(mStr)) {\n            month = mStr;\n          } else if (/^\\d{4}-\\d{2}-\\d{2}$/.test(mStr)) {\n            month = mStr.substring(0, 7);\n          } else {\n            var parsedMonthDate = new Date(mStr);\n            if (!isNaN(parsedMonthDate.getTime())) {\n              month = Utilities.formatDate(parsedMonthDate, timezone, \"yyyy-MM\");\n            } else {\n              month = mStr;\n            }\n          }\n        }\n      }\n      \n      // 處理日期格式，若是 Date 物件則轉為 YYYY-MM-DD\n      var dateVal = row[1];\n      var dateStr = \"\";\n      if (dateVal) {\n        if (dateVal instanceof Date) {\n          dateStr = Utilities.formatDate(dateVal, timezone, \"yyyy-MM-dd\");\n        } else {\n          dateStr = dateVal.toString();\n        }\n      } else {\n        dateStr = month ? month + \"-01\" : \"\";\n      }\n      \n      var item = row[2] ? row[2].toString() : \"\";\n      var payer = row[3] ? row[3].toString() : \"\";\n      var amount = parseFloat(row[4]) || 0;\n      var type = row[5] ? row[5].toString() : \"\";\n      \n      // 讀取時間戳記\n      var timestampVal = row[6];\n      var timestampStr = \"\";\n      if (timestampVal) {\n        if (timestampVal instanceof Date) {\n          timestampStr = formatAmPmTime(timestampVal);\n        } else {\n          timestampStr = formatAmPmTime(timestampVal.toString());\n        }\n      } else {\n        // 沒有則預設使用當天\n        timestampStr = dateStr + \" 上午 12:00\";\n      }\n      \n      recordsList.push({\n        id: i + 2, // 試算表對應的 Row ID\n        month: month,\n        date: dateStr,\n        item: item,\n        payer: payer,\n        amount: amount,\n        type: type,\n        timestamp: timestampStr\n      });\n      \n      if (type && type.indexOf(\"支出\") !== -1) {\n        if (payer === \"廖尹丞\") {\n          liaoTotal += amount;\n        } else if (payer === \"周沛緹\") {\n          zhouTotal += amount;\n        }\n      }\n    }\n    \n    response.records = recordsList;\n    response.liaoTotal = liaoTotal;\n    response.zhouTotal = zhouTotal;\n    \n    return response;\n  } catch(e) {\n    return { success: false, message: \"讀取錯誤：\" + e.toString(), records: [], liaoTotal: 0, zhouTotal: 0, reconciledMonths: [] };\n  }\n}\n\n// 刪除特定欄位紀錄 API\nfunction deleteRecordByRow(rowId) {\n  try {\n    if (typeof rowId === 'object' && rowId !== null) {\n      rowId = rowId.rowId || rowId.id;\n    }\n    rowId = parseInt(rowId, 10);\n    if (!rowId || isNaN(rowId) || rowId < 2) {\n      return { success: false, message: \"無效的紀錄列編號\" };\n    }\n\n    var sheet = getDbSheet();\n    var item = \"\";\n    var payer = \"\";\n    var amount = 0;\n    var dateStr = \"\";\n    try {\n      var rowValues = sheet.getRange(rowId, 1, 1, 6).getValues()[0];\n      item = rowValues[2] ? rowValues[2].toString() : \"\";\n      payer = rowValues[3] ? rowValues[3].toString() : \"\";\n      amount = parseFloat(rowValues[4]) || 0;\n      var rawDate = rowValues[1];\n      if (rawDate instanceof Date) {\n        dateStr = Utilities.formatDate(rawDate, \"GMT+8\", \"yyyy-MM-dd\");\n      } else if (rawDate) {\n        dateStr = rawDate.toString();\n      }\n    } catch(errGet) {}\n    \n    sheet.deleteRow(rowId);\n    \n    if (item && payer) {\n      try {\n        var lineSettingsRes = getLineNotifySettings();\n        var lineSettings = lineSettingsRes.settings || {};\n        if (lineSettings.notifyOnDelete !== false) {\n          var estimatedQuota = calculateEstimatedQuota();\n          var now = new Date();\n          var timeStr = formatAmPmTime(now);\n          \n          var details = [\n            { label: \"操作者\", value: payer },\n            { label: \"撤銷項目\", value: item },\n            { label: \"原金額\", value: \"$\" + amount.toLocaleString() + \" 元\" }\n          ];\n          if (dateStr) {\n            details.push({ label: \"原記帳日期\", value: dateStr });\n          }\n          if (lineSettings.showBalance !== false) {\n            details.push({\n              label: \"銷帳後預計剩餘\",\n              value: \"$\" + estimatedQuota.toLocaleString() + \" 元\",\n              bold: true,\n              color: estimatedQuota >= 0 ? \"#428564\" : \"#C55757\"\n            });\n          }\n          details.push({ label: \"時間\", value: timeStr });\n\n          sendLineNotify({\n            altText: \"🗑️有項目刪除撤銷囉～\",\n            titleText: \"【撤銷代墊】NT$\" + amount.toLocaleString() + \"元\",\n            badgeText: \"撤銷紀錄\",\n            badgeBg: \"#706B62\",\n            details: details,\n            targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n          });\n        }\n      } catch(lineErr) {}\n    }\n    \n    return { success: true, message: \"已成功刪除記帳紀錄！\" };\n  } catch(e) {\n    return { success: false, message: \"刪除失敗：\" + e.toString() };\n  }\n}\n\n/**\n * 💡 LINE Messaging API 外掛通知核心機制 (支援國泰風格卡片式 Flex Message 廣播推播)\n */\n/**\n * 💡 Telegram Bot 外掛通知核心機制 (支援精美卡片 Blockquote 排版與內嵌互動按鈕)\n */\nfunction sendTelegramMessage(payload, customChatId, customToken) {\n  try {\n    var token = (customToken && customToken.trim())\n      ? customToken.trim()\n      : ((typeof HARDCODED_TELEGRAM_TOKEN !== 'undefined' && HARDCODED_TELEGRAM_TOKEN && HARDCODED_TELEGRAM_TOKEN.trim())\n          ? HARDCODED_TELEGRAM_TOKEN.trim()\n          : (PropertiesService.getScriptProperties().getProperty(\"TELEGRAM_BOT_TOKEN\") || \"\"));\n      \n    var chatId = customChatId || \"\";\n    if (!chatId) {\n      if (typeof HARDCODED_TELEGRAM_CHAT_ID !== 'undefined' && HARDCODED_TELEGRAM_CHAT_ID && HARDCODED_TELEGRAM_CHAT_ID.trim()) {\n        chatId = HARDCODED_TELEGRAM_CHAT_ID.trim();\n      } else {\n        chatId = PropertiesService.getScriptProperties().getProperty(\"TELEGRAM_CHAT_ID\") || \"\";\n      }\n    }\n       \n    if (!token) return { success: false, message: \"未設定 Telegram Bot Token\" };\n    if (!chatId) return { success: false, message: \"未設定 Telegram Chat ID\" };\n    \n    var textMessage = \"\";\n    var webAppUrl = (typeof payload === 'object' && payload !== null && payload.targetUrl) ? payload.targetUrl : \"https://liao0318.github.io/fund.migoscar/\";\n    var buttonText = (typeof payload === 'object' && payload !== null && payload.btnText) ? payload.btnText : \"🌐 開啟伴伴記全螢幕網頁\";\n    \n    if (typeof payload === 'object' && payload !== null) {\n      var lines = [];\n      var header = payload.titleText || payload.altText || \"🔔【伴伴記通知】\";\n      \n      // 頂部卡片標題列\n      lines.push(\"<b>\" + escapeHtml(header) + \"</b>\");\n      \n      // 標籤徽章列\n      if (payload.badgeText) {\n        lines.push(\"🏷️ <code>\" + escapeHtml(payload.badgeText) + \"</code>\");\n      }\n      \n      // 核心卡片內容 (使用 Telegram 官方 <blockquote> 營造優雅左側色條卡片)\n      if (payload.details && payload.details.length > 0) {\n        var cardLines = [];\n        for (var i = 0; i < payload.details.length; i++) {\n          var item = payload.details[i];\n          var lbl = item.label || \"\";\n          var rawVal = String(item.value || \"\");\n          var val = escapeHtml(rawVal);\n          \n          // 如果是金額或重要數值，套用 code 標籤讓排版更工整\n          if (rawVal.indexOf(\"$\") !== -1 || rawVal.indexOf(\"NT\") !== -1 || item.bold) {\n            val = \"<code>\" + val + \"</code>\";\n          }\n          \n          var icon = \"▫️\";\n          if (lbl.indexOf(\"項目\") !== -1 || lbl.indexOf(\"品項\") !== -1) icon = \"📦\";\n          else if (lbl.indexOf(\"金額\") !== -1 || lbl.indexOf(\"支出\") !== -1 || lbl.indexOf(\"存入\") !== -1) icon = \"💵\";\n          else if (lbl.indexOf(\"出資\") !== -1 || lbl.indexOf(\"出錢\") !== -1 || lbl.indexOf(\"人\") !== -1 || lbl.indexOf(\"對象\") !== -1 || lbl.indexOf(\"來源\") !== -1) icon = \"👤\";\n          else if (lbl.indexOf(\"日期\") !== -1) icon = \"📅\";\n          else if (lbl.indexOf(\"時間\") !== -1) icon = \"⏰\";\n          else if (lbl.indexOf(\"剩餘\") !== -1 || lbl.indexOf(\"餘額\") !== -1) icon = \"💰\";\n          else if (lbl.indexOf(\"地點\") !== -1 || lbl.indexOf(\"商店\") !== -1) icon = \"🏪\";\n          else if (lbl.indexOf(\"期限\") !== -1) icon = \"⏳\";\n          else if (lbl.indexOf(\"類型\") !== -1) icon = \"🏷️\";\n          else if (lbl.indexOf(\"狀態\") !== -1 || lbl.indexOf(\"對帳\") !== -1) icon = \"📌\";\n          else if (lbl.indexOf(\"外幣\") !== -1 || lbl.indexOf(\"匯率\") !== -1) icon = \"💱\";\n          else if (lbl.indexOf(\"測試\") !== -1 || lbl.indexOf(\"連線\") !== -1) icon = \"✨\";\n          else if (lbl.indexOf(\"備註\") !== -1) icon = \"📝\";\n          \n          cardLines.push(icon + \" <b>\" + escapeHtml(lbl) + \"</b>： \" + val);\n        }\n        \n        lines.push(\"<blockquote>\" + cardLines.join(\"\\n\") + \"</blockquote>\");\n      }\n      \n      textMessage = lines.join(\"\\n\");\n    } else {\n      textMessage = String(payload);\n    }\n    \n    var telegramApiUrl = \"https://api.telegram.org/bot\" + token.trim() + \"/sendMessage\";\n    \n    var requestBody = {\n      \"chat_id\": chatId.trim(),\n      \"text\": textMessage,\n      \"parse_mode\": \"HTML\",\n      \"disable_web_page_preview\": true,\n      \"reply_markup\": {\n        \"inline_keyboard\": [\n          [\n            {\n              \"text\": buttonText,\n              \"url\": webAppUrl\n            }\n          ]\n        ]\n      }\n    };\n    \n    var options = {\n      \"method\": \"post\",\n      \"contentType\": \"application/json\",\n      \"payload\": JSON.stringify(requestBody),\n      \"muteHttpExceptions\": true\n    };\n    \n    var response = UrlFetchApp.fetch(telegramApiUrl, options);\n    var respCode = response.getResponseCode();\n    var respText = response.getContentText();\n    \n    if (respCode >= 200 && respCode < 300) {\n      return { success: true, message: \"Telegram 卡片訊息推播成功！\" };\n    } else {\n      console.warn(\"Telegram API error: \" + respCode + \", \" + respText);\n      return { success: false, message: \"Telegram 發送失敗 (\" + respCode + \")：\" + respText };\n    }\n  } catch(err) {\n    console.error(\"sendTelegramMessage Exception: \" + err.toString());\n    return { success: false, message: \"Telegram 發送異常：\" + err.toString() };\n  }\n}\n\n// 輔助函式：逸出 Telegram HTML 標籤\nfunction escapeHtml(str) {\n  if (!str) return \"\";\n  return String(str)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\");\n}\n\nfunction sendLineNotify(payload) {\n  return sendTelegramMessage(payload);\n}\n\n\n// 儲存 Telegram Bot Token 與 Chat ID\nfunction saveTelegramCredentials(data) {\n  try {\n    var token = \"\";\n    var chatId = \"\";\n    if (typeof data === 'object' && data !== null) {\n      token = data.token || \"\";\n      chatId = data.chatId || \"\";\n    } else if (typeof data === 'string') {\n      token = data;\n    }\n    \n    if (token) {\n      PropertiesService.getScriptProperties().setProperty(\"TELEGRAM_BOT_TOKEN\", token.trim());\n    } else {\n      PropertiesService.getScriptProperties().deleteProperty(\"TELEGRAM_BOT_TOKEN\");\n    }\n    if (chatId) {\n      PropertiesService.getScriptProperties().setProperty(\"TELEGRAM_CHAT_ID\", chatId.trim());\n    }\n    \n    return { success: true, message: \"Telegram Bot Token 與 Chat ID 已成功儲存！\" };\n  } catch (e) {\n    return { success: false, message: \"儲存 Telegram 設定失敗：\" + e.toString() };\n  }\n}\n\nfunction saveLineNotifyToken(token) {\n  return saveTelegramCredentials(token);\n}\n\n// 讀取已經遮罩的 Telegram 設定\nfunction getTelegramCredentials() {\n  try {\n    var token = (typeof HARDCODED_TELEGRAM_TOKEN !== 'undefined' && HARDCODED_TELEGRAM_TOKEN && HARDCODED_TELEGRAM_TOKEN.trim())\n      ? HARDCODED_TELEGRAM_TOKEN.trim()\n      : PropertiesService.getScriptProperties().getProperty(\"TELEGRAM_BOT_TOKEN\");\n      \n    var chatId = (typeof HARDCODED_TELEGRAM_CHAT_ID !== 'undefined' && HARDCODED_TELEGRAM_CHAT_ID && HARDCODED_TELEGRAM_CHAT_ID.trim())\n      ? HARDCODED_TELEGRAM_CHAT_ID.trim()\n      : PropertiesService.getScriptProperties().getProperty(\"TELEGRAM_CHAT_ID\");\n      \n    var maskedToken = \"\";\n    if (token) {\n      maskedToken = token.length > 8\n        ? token.substring(0, 4) + \"********************\" + token.substring(token.length - 4)\n        : \"********\";\n    }\n    return { success: true, token: maskedToken, chatId: chatId || \"\", hasToken: !!token };\n  } catch (e) {\n    return { success: false, token: \"\", chatId: \"\" };\n  }\n}\n\nfunction getLineNotifyToken() {\n  return getTelegramCredentials();\n}\n\n// 測試發送 Telegram 訊息\nfunction testTelegramNotify(customToken, customChatId) {\n  try {\n    var estimatedQuota = calculateEstimatedQuota();\n    var now = new Date();\n    var dateStr = Utilities.formatDate(now, \"GMT+8\", \"yyyy-MM-dd\");\n    var timeStr = formatAmPmTime(now);\n\n    var testDetails = [\n      { label: \"連線測試\", value: \"Telegram 群組推播連線成功！🎉\" },\n      { label: \"測試日期\", value: dateStr },\n      { label: \"銷帳後預計剩餘\", value: \"NT$ \" + estimatedQuota.toLocaleString() + \" 元\", bold: true },\n      { label: \"時間\", value: timeStr }\n    ];\n\n    var sendRes = sendTelegramMessage({\n      altText: \"🔔伴伴記 Telegram 群組推播測試成功～\",\n      titleText: \"【Telegram 推播測試】連線成功 🎉\",\n      badgeText: \"連線正常\",\n      badgeBg: \"#38BDF8\",\n      details: testDetails,\n      targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n    }, customChatId, customToken);\n\n    if (sendRes && sendRes.success) {\n      return { success: true, message: \"🎉 Telegram 測試訊息已發送至群組！請查看 Telegram。\" };\n    } else {\n      return { success: false, message: sendRes ? sendRes.message : \"發送失敗，請確認 Token 與 Chat ID\" };\n    }\n  } catch(e) {\n    return { success: false, message: \"測試異常：\" + e.toString() };\n  }\n}\n\nfunction testLineNotify(token) {\n  return testTelegramNotify(token);\n}\n\n\nfunction getShoppingSheet() {\n  var ss = getDbSpreadsheet();\n  if (!ss) throw new Error(\"未連結試算表\");\n  var sheet = ss.getSheetByName(\"購物清單\");\n  if (!sheet) {\n    setupDatabase();\n    sheet = ss.getSheetByName(\"購物清單\");\n  }\n  return sheet;\n}\n\nfunction getStoresSheet() {\n  var ss = getDbSpreadsheet();\n  if (!ss) throw new Error(\"未連結試算表\");\n  var sheet = ss.getSheetByName(\"常用商店\");\n  if (!sheet) {\n    setupDatabase();\n    sheet = ss.getSheetByName(\"常用商店\");\n  }\n  return sheet;\n}\n\nfunction getShoppingData() {\n  try {\n    var shopSheet = getShoppingSheet();\n    var storeSheet = getStoresSheet();\n    \n    var items = [];\n    var lastRowShop = shopSheet.getLastRow();\n    if (lastRowShop > 1) {\n      var shopValues = shopSheet.getRange(2, 1, lastRowShop - 1, 9).getValues();\n      for (var i = 0; i < shopValues.length; i++) {\n        var r = shopValues[i];\n        if (r[0] || r[2]) {\n          var rawTime = r[7];\n          if (!rawTime && r[0]) {\n            var idStr = String(r[0]);\n            var match = idStr.match(/\\d{10,13}/);\n            if (match) {\n              var ts = parseInt(match[0], 10);\n              if (ts > 1500000000000 && ts < 2500000000000) {\n                rawTime = new Date(ts);\n              }\n            }\n          }\n          var formattedTime = rawTime ? formatAmPmTime(rawTime) : \"\";\n          items.push({\n            id: r[0] ? String(r[0]) : (\"shop-\" + (i + 1)),\n            category: r[1] ? String(r[1]) : \"需要買\",\n            item: r[2] ? String(r[2]) : \"未填品項\",\n            store: r[3] ? String(r[3]) : \"隨意\",\n            deadline: r[4] ? String(r[4]) : \"儘快\",\n            status: r[5] ? String(r[5]) : \"待購買\",\n            creator: r[6] ? String(r[6]) : \"夥伴\",\n            createdTime: formattedTime,\n            timeStr: formattedTime,\n            note: r[8] ? String(r[8]) : \"\"\n          });\n        }\n      }\n    }\n    \n    var stores = [];\n    var lastRowStore = storeSheet.getLastRow();\n    if (lastRowStore > 1) {\n      var storeValues = storeSheet.getRange(2, 1, lastRowStore - 1, 2).getValues();\n      for (var j = 0; j < storeValues.length; j++) {\n        var stName = storeValues[j][0] ? String(storeValues[j][0]).trim() : \"\";\n        if (stName && stores.indexOf(stName) === -1) {\n          stores.push(stName);\n        }\n      }\n    }\n    if (stores.length === 0) {\n      stores = [\"菜市場\", \"全聯福利中心\", \"日日加\", \"家樂福\", \"好市多\", \"寶雅\", \"7-ELEVEN\", \"蝦皮購物\"];\n    }\n    \n    return { success: true, items: items, stores: stores };\n  } catch(e) {\n    return { success: false, message: e.toString(), items: [], stores: [] };\n  }\n}\n\nfunction addShoppingItem(data, triggerBroadcast) {\n  try {\n    var sheet = getShoppingSheet();\n    var now = new Date();\n    var timeStr = formatAmPmTime(now);\n    \n    var id = (data && data.id) ? String(data.id) : (\"shop-\" + now.getTime());\n    var category = (data && data.category) ? data.category : \"需要買\";\n    var item = (data && data.item) ? data.item : \"未具名品項\";\n    var store = (data && data.store) ? data.store : \"隨意\";\n    var deadline = (data && data.deadline) ? data.deadline : \"儘快\";\n    var status = (data && data.status) ? data.status : \"待購買\";\n    var creator = (data && data.creator) ? data.creator : \"夥伴\";\n    var note = (data && data.note) ? data.note : \"\";\n    var createdTime = (data && data.createdTime) ? data.createdTime : timeStr;\n    \n    var newRow = [\n      id,\n      category,\n      item,\n      store,\n      deadline,\n      status,\n      creator,\n      createdTime,\n      note\n    ];\n    \n    sheet.appendRow(newRow);\n    \n    // 如果商店不在常用商店，自動記錄常用商店\n    try {\n      if (store && store !== \"隨意\" && store !== \"不限\") {\n        var storeSheet = getStoresSheet();\n        var lastStRow = storeSheet.getLastRow();\n        var exists = false;\n        if (lastStRow > 1) {\n          var existingStores = storeSheet.getRange(2, 1, lastStRow - 1, 1).getValues();\n          for (var s = 0; s < existingStores.length; s++) {\n            if (existingStores[s][0] && existingStores[s][0].toString().trim() === store.trim()) {\n              exists = true;\n              break;\n            }\n          }\n        }\n        if (!exists) {\n          storeSheet.appendRow([store.trim(), \"自訂新增商店\"]);\n        }\n      }\n    } catch(stErr) {}\n    \n    // 發送 LINE 即時廣播\n    if (triggerBroadcast !== false) {\n      try {\n        var lineSettingsRes = getLineNotifySettings();\n        var lineSettings = lineSettingsRes.settings || {};\n        if (lineSettings.notifyOnShoppingAdd !== false) {\n          var badgeBg = category === \"需要買\" ? \"#C55757\" : \"#E58B23\";\n          var details = [\n            { label: \"購買類型\", value: category },\n            { label: \"品項名稱\", value: item, bold: true },\n            { label: \"購買地點\", value: store },\n            { label: \"預計期限\", value: deadline, color: \"#2B825B\" },\n            { label: \"登記人\", value: creator },\n            { label: \"時間\", value: createdTime }\n          ];\n          if (note) {\n            details.push({ label: \"備註細項\", value: note });\n          }\n          \n          sendLineNotify({\n            altText: \"🛒 購物記事「\" + item + \"」已新增囉！\",\n            titleText: \"【採購記事新增】🛒\",\n            badgeText: category,\n            badgeBg: badgeBg,\n            details: details,\n            targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n          });\n        }\n      } catch(lineErr) {}\n    }\n    \n    return { \n      success: true, \n      id: id, \n      item: item, \n      category: category, \n      store: store, \n      deadline: deadline, \n      status: status,\n      creator: creator, \n      createdTime: createdTime, \n      timeStr: createdTime, \n      note: note \n    };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\nfunction updateShoppingItem(data) {\n  try {\n    var sheet = getShoppingSheet();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return { success: false, message: \"查無此項目\" };\n    \n    var id = data.id;\n    if (!id) return { success: false, message: \"缺乏項目 ID\" };\n    \n    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    var foundRow = -1;\n    for (var i = 0; i < ids.length; i++) {\n      if (String(ids[i][0]) === String(id)) {\n        foundRow = i + 2;\n        break;\n      }\n    }\n    \n    if (foundRow === -1) return { success: false, message: \"找不到該採購項目\" };\n    \n    if (data.category !== undefined) sheet.getRange(foundRow, 2).setValue(data.category);\n    if (data.item !== undefined) sheet.getRange(foundRow, 3).setValue(data.item);\n    if (data.store !== undefined) sheet.getRange(foundRow, 4).setValue(data.store);\n    if (data.deadline !== undefined) sheet.getRange(foundRow, 5).setValue(data.deadline);\n    if (data.status !== undefined) sheet.getRange(foundRow, 6).setValue(data.status);\n    if (data.creator !== undefined) sheet.getRange(foundRow, 7).setValue(data.creator);\n    if (data.createdTime !== undefined && data.createdTime) sheet.getRange(foundRow, 8).setValue(data.createdTime);\n    if (data.note !== undefined) sheet.getRange(foundRow, 9).setValue(data.note);\n    \n    return { success: true, message: \"採購項目與備註已成功更新！\" };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\nfunction toggleShoppingItemStatus(id, newStatus) {\n  try {\n    if (typeof id === 'object' && id !== null) {\n      newStatus = id.status || id.newStatus;\n      id = id.id;\n    }\n    var sheet = getShoppingSheet();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return { success: false, message: \"查無此項目\" };\n    \n    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    var foundRow = -1;\n    for (var i = 0; i < ids.length; i++) {\n      if (String(ids[i][0]) === String(id)) {\n        foundRow = i + 2;\n        break;\n      }\n    }\n    \n    if (foundRow === -1) return { success: false, message: \"找不到指定的採購項目\" };\n    \n    sheet.getRange(foundRow, 6).setValue(newStatus);\n    \n    // 如果標記為已買到，推播 LINE 通知\n    if (newStatus === \"已買到\") {\n      try {\n        var lineSettingsRes = getLineNotifySettings();\n        var lineSettings = lineSettingsRes.settings || {};\n        if (lineSettings.notifyOnShoppingComplete !== false) {\n          var rowData = sheet.getRange(foundRow, 1, 1, 8).getValues()[0];\n          var itemName = rowData[2] || \"項目\";\n          var itemStore = rowData[3] || \"門市\";\n          var now = new Date();\n          var timeStr = formatAmPmTime(now);\n          \n          var details = [\n            { label: \"狀態\", value: \"🎉 已順利採購完成！\", bold: true, color: \"#428564\" },\n            { label: \"品項\", value: itemName },\n            { label: \"地點\", value: itemStore },\n            { label: \"完成時間\", value: timeStr }\n          ];\n          \n          sendLineNotify({\n            altText: \"🎉 採購項目「\" + itemName + \"」已完成購買囉！\",\n            titleText: \"【採購完成通知】✅\",\n            badgeText: \"已完成\",\n            badgeBg: \"#428564\",\n            details: details,\n            targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n          });\n        }\n      } catch(lineErr) {}\n    }\n    \n    return { success: true, message: \"已更新狀態為「\" + newStatus + \"」\" };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\nfunction deleteShoppingItem(id) {\n  try {\n    if (typeof id === 'object' && id !== null) {\n      id = id.id;\n    }\n    var sheet = getShoppingSheet();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return { success: false, message: \"查無此項目\" };\n    \n    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    var foundRow = -1;\n    for (var i = 0; i < ids.length; i++) {\n      if (String(ids[i][0]) === String(id)) {\n        foundRow = i + 2;\n        break;\n      }\n    }\n    if (foundRow !== -1) {\n      var itemName = \"\";\n      try {\n        itemName = sheet.getRange(foundRow, 3).getValue().toString();\n      } catch(e) {}\n      sheet.deleteRow(foundRow);\n      \n      // 💡 推播 LINE 採購項目刪除通知\n      try {\n        var lineSettingsRes = getLineNotifySettings();\n        var lineSettings = lineSettingsRes.settings || {};\n        if (lineSettings.notifyOnShoppingDelete !== false && itemName) {\n          var now = new Date();\n          var timeStr = formatAmPmTime(now);\n          sendLineNotify({\n            altText: \"🗑️ 採購清單「\" + itemName + \"」已移除～\",\n            titleText: \"【採購項目移除】🗑️\",\n            badgeText: \"移除項目\",\n            badgeBg: \"#706B62\",\n            details: [\n              { label: \"異動狀態\", value: \"已自清單移除\" },\n              { label: \"品項名稱\", value: itemName },\n              { label: \"移除時間\", value: timeStr }\n            ],\n            targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n          });\n        }\n      } catch(lineErr) {}\n\n      return { success: true, message: \"已成功刪除採購項目！\" };\n    }\n    return { success: false, message: \"找不到該項目\" };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\nfunction clearDoneShoppingItems() {\n  try {\n    var sheet = getShoppingSheet();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return { success: true, count: 0, message: \"沒有已買到的項目\" };\n    \n    var values = sheet.getRange(2, 1, lastRow - 1, 6).getValues();\n    var deletedCount = 0;\n    for (var i = values.length - 1; i >= 0; i--) {\n      var status = String(values[i][5]);\n      if (status === \"已買到\") {\n        sheet.deleteRow(i + 2);\n        deletedCount++;\n      }\n    }\n    \n    // 💡 推播 LINE 一鍵清空已購通知\n    if (deletedCount > 0) {\n      try {\n        var lineSettingsRes = getLineNotifySettings();\n        var lineSettings = lineSettingsRes.settings || {};\n        if (lineSettings.notifyOnShoppingDelete !== false) {\n          var now = new Date();\n          var timeStr = formatAmPmTime(now);\n          sendLineNotify({\n            altText: \"🧹 已清空 \" + deletedCount + \" 項已購項目！\",\n            titleText: \"【清空已購項目】🧹\",\n            badgeText: \"清空已購\",\n            badgeBg: \"#3A6D8C\",\n            details: [\n              { label: \"清理狀態\", value: \"一鍵清空已完成品項\" },\n              { label: \"清空數量\", value: deletedCount + \" 項品項\" },\n              { label: \"完成時間\", value: timeStr }\n            ],\n            targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n          });\n        }\n      } catch(lineErr) {}\n    }\n\n    return { success: true, count: deletedCount, message: \"已成功清空 \" + deletedCount + \" 項已購項目！\" };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\nfunction saveStoresList(storesArray) {\n  try {\n    if (typeof storesArray === 'object' && storesArray !== null && !Array.isArray(storesArray)) {\n      storesArray = storesArray.stores || storesArray.storesList || storesArray.storesArray;\n    }\n    var sheet = getStoresSheet();\n    sheet.clearContents();\n    sheet.getRange(1, 1, 1, 2).setValues([[\"商店名稱\", \"備註\"]]);\n    sheet.getRange(\"A1:B1\").setBackground(\"#F4F1EA\")\n                           .setFontColor(\"#4A4A4A\")\n                           .setFontWeight(\"bold\")\n                           .setHorizontalAlignment(\"center\");\n    sheet.setFrozenRows(1);\n    \n    if (storesArray && storesArray.length > 0) {\n      var rows = [];\n      for (var i = 0; i < storesArray.length; i++) {\n        var sName = String(storesArray[i]).trim();\n        if (sName) {\n          rows.push([sName, \"常用商店\"]);\n        }\n      }\n      if (rows.length > 0) {\n        sheet.getRange(2, 1, rows.length, 2).setValues(rows);\n      }\n    }\n    return { success: true, message: \"常用商店清單已更新！\" };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\n\n// ------------------- 情侶代墊與私人借還功能 (Split / Debt) -------------------\n\n// 獲取「代墊明細」工作表\nfunction getSplitSheet() {\n  var ss = getDbSpreadsheet();\n  if (!ss) {\n    throw new Error(\"未連結任何有效的 Google 試算表。\");\n  }\n  var sheetName = \"代墊明細\";\n  var sheet = ss.getSheetByName(sheetName);\n  if (!sheet) {\n    setupDatabase();\n    sheet = ss.getSheetByName(sheetName);\n  }\n  return sheet;\n}\n\n// 獲取所有代墊借還資料與即時試算總結\nfunction getSplitData() {\n  try {\n    var sheet = getSplitSheet();\n    var lastRow = sheet.getLastRow();\n    \n    var items = [];\n    var liaoOwesZhou = 0; // 廖 欠 周 的總金額 (未結清)\n    var zhouOwesLiao = 0; // 周 欠 廖 的總金額 (未結清)\n    var unsettledCount = 0;\n    var settledCount = 0;\n    \n    if (lastRow > 1) {\n      var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();\n      for (var i = 0; i < values.length; i++) {\n        var row = values[i];\n        var id = String(row[0] || (\"split-\" + (i + 1)));\n        var time = row[1] ? formatAmPmTime(row[1]) : \"\";\n        var payer = String(row[2] || \"\").trim(); // 廖 / 周 / 廖尹丞 / 周沛緹\n        var splitMode = String(row[3] || \"AA平分\").trim();\n        var itemName = String(row[4] || \"\").trim();\n        var totalAmount = parseFloat(row[5]) || 0;\n        var splitResult = String(row[6] || \"\").trim();\n        var status = String(row[7] || \"未結清\").trim();\n        var settledTime = row[8] ? formatAmPmTime(row[8]) : \"\";\n        var note = String(row[9] || \"\").trim();\n        \n        // 正規化 payer 名稱\n        var payerNorm = (payer.indexOf(\"周\") !== -1) ? \"周\" : \"廖\";\n        var otherNorm = (payerNorm === \"廖\") ? \"周\" : \"廖\";\n        \n        // 計算分帳金額\n        var debtorAmount = 0;\n        if (splitMode === \"AA平分\") {\n          debtorAmount = Math.round(totalAmount / 2);\n        } else if (splitMode === \"全額代付\") {\n          debtorAmount = totalAmount;\n        } else {\n          // 自訂分攤模式\n          var amtMatch = splitResult.match(/\\d+(\\.\\d+)?/);\n          debtorAmount = amtMatch ? Math.round(parseFloat(amtMatch[0])) : Math.round(totalAmount / 2);\n        }\n        \n        if (status === \"未結清\") {\n          unsettledCount++;\n          if (payerNorm === \"廖\") {\n            zhouOwesLiao += debtorAmount;\n          } else {\n            liaoOwesZhou += debtorAmount;\n          }\n        } else {\n          settledCount++;\n        }\n        \n        items.push({\n          id: id,\n          rowNumber: i + 2,\n          time: time,\n          payer: payerNorm,\n          splitMode: splitMode,\n          itemName: itemName,\n          totalAmount: totalAmount,\n          splitResult: splitResult || (otherNorm + \" 應返還 \" + payerNorm + \" NT$ \" + debtorAmount),\n          debtor: otherNorm,\n          debtorAmount: debtorAmount,\n          status: status,\n          settledTime: settledTime,\n          note: note\n        });\n      }\n    }\n    \n    // 計算最終淨債務 (Net Debt)\n    var netDebtor = \"none\";\n    var netAmount = 0;\n    var summaryText = \"目前雙方已結清 💖\";\n    \n    if (liaoOwesZhou > zhouOwesLiao) {\n      netDebtor = \"廖\";\n      netAmount = liaoOwesZhou - zhouOwesLiao;\n      summaryText = \"廖 應返還 周 NT$ \" + netAmount.toLocaleString();\n    } else if (zhouOwesLiao > liaoOwesZhou) {\n      netDebtor = \"周\";\n      netAmount = zhouOwesLiao - liaoOwesZhou;\n      summaryText = \"周 應返還 廖 NT$ \" + netAmount.toLocaleString();\n    }\n    \n    return {\n      success: true,\n      items: items,\n      summary: {\n        liaoOwesZhou: liaoOwesZhou,\n        zhouOwesLiao: zhouOwesLiao,\n        netDebtor: netDebtor,\n        netAmount: netAmount,\n        summaryText: summaryText,\n        unsettledCount: unsettledCount,\n        settledCount: settledCount\n      }\n    };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\n// 新增代墊借還紀錄\nfunction addSplitRecord(data, shouldNotify) {\n  try {\n    var sheet = getSplitSheet();\n    var now = new Date();\n    var timeStr = formatAmPmTime(data.time || now);\n    var id = \"split-\" + now.getTime();\n    \n    var payer = String(data.payer || \"廖\").trim();\n    var payerNorm = (payer.indexOf(\"周\") !== -1) ? \"周\" : \"廖\";\n    var otherNorm = (payerNorm === \"廖\") ? \"周\" : \"廖\";\n    \n    var splitMode = String(data.splitMode || \"AA平分\").trim();\n    var itemName = String(data.itemName || data.item || \"生活代墊\").trim();\n    var totalAmount = Math.max(0, parseFloat(data.totalAmount || data.amount) || 0);\n    var note = String(data.note || \"\").trim();\n    \n    var debtorAmount = 0;\n    if (splitMode === \"AA平分\") {\n      debtorAmount = Math.round(totalAmount / 2);\n    } else if (splitMode === \"全額代付\") {\n      debtorAmount = totalAmount;\n    } else if (splitMode === \"自訂金額\" || splitMode === \"自訂分攤\") {\n      debtorAmount = Math.max(0, parseFloat(data.customOweAmount || data.debtorAmount) || Math.round(totalAmount / 2));\n    } else {\n      debtorAmount = Math.round(totalAmount / 2);\n    }\n    \n    var splitResult = otherNorm + \" 應返還 \" + payerNorm + \" NT$ \" + debtorAmount;\n    var status = \"未結清\";\n    var settledTime = \"\";\n    \n    var rowData = [\n      id,\n      timeStr,\n      payerNorm === \"廖\" ? \"廖尹丞\" : \"周沛緹\",\n      splitMode,\n      itemName,\n      totalAmount,\n      splitResult,\n      status,\n      settledTime,\n      note\n    ];\n    \n    // 插入至第 2 列 (最新在最上方)\n    sheet.insertRowBefore(2);\n    sheet.getRange(2, 1, 1, rowData.length).setValues([rowData]);\n    \n    // LINE 推播通知\n    if (shouldNotify !== false) {\n      try {\n        var payerDisplayName = payerNorm === \"廖\" ? \"廖尹丞\" : \"周沛緹\";\n        var otherDisplayName = otherNorm === \"廖\" ? \"廖尹丞\" : \"周沛緹\";\n        sendLineNotify({\n          altText: \"💳【代墊記帳】\" + payerDisplayName + \" 幫忙代付 NT$ \" + totalAmount + \"（\" + itemName + \"）\",\n          titleText: \"【情侶代墊記帳成功】💳\",\n          badgeText: payerDisplayName + \" 先墊\",\n          badgeBg: payerNorm === \"廖\" ? \"#2B825B\" : \"#8A5A36\",\n          details: [\n            { label: \"品項名稱\", value: itemName, bold: true },\n            { label: \"代墊總額\", value: \"NT$ \" + totalAmount.toLocaleString(), bold: true, color: \"#C55757\" },\n            { label: \"分帳模式\", value: splitMode },\n            { label: \"分帳結果\", value: otherDisplayName + \" 需返還 NT$ \" + debtorAmount.toLocaleString(), color: \"#2B825B\", bold: true },\n            { label: \"記錄時間\", value: timeStr }\n          ],\n          targetUrl: \"https://liao0318.github.io/fund.migoscar/split/\"\n        });\n      } catch(lineErr) {}\n    }\n    \n    return { success: true, id: id, message: \"代墊紀錄已成功寫入！\" };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\n// 刪除代墊紀錄\nfunction deleteSplitRecord(id) {\n  try {\n    var sheet = getSplitSheet();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return { success: false, message: \"查無此代墊紀錄\" };\n    \n    var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    for (var i = 0; i < values.length; i++) {\n      if (String(values[i][0]) === String(id)) {\n        sheet.deleteRow(i + 2);\n        return { success: true, message: \"已成功刪除代墊紀錄！\" };\n      }\n    }\n    return { success: false, message: \"未找到對應的代墊紀錄\" };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\n// 一鍵結清所有未結清代墊款項\nfunction settleAllSplitRecords() {\n  try {\n    var sheet = getSplitSheet();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return { success: true, settledCount: 0, message: \"目前沒有任何代墊紀錄\" };\n    \n    var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();\n    var settledCount = 0;\n    var nowStr = formatAmPmTime(new Date());\n    \n    for (var i = 0; i < values.length; i++) {\n      var status = String(values[i][7] || \"\");\n      if (status === \"未結清\") {\n        sheet.getRange(i + 2, 8).setValue(\"已結清\");\n        sheet.getRange(i + 2, 9).setValue(nowStr);\n        settledCount++;\n      }\n    }\n    \n    if (settledCount > 0) {\n      try {\n        sendLineNotify({\n          altText: \"✅【伴伴記代墊已全數結清】雙方款項已清帳！\",\n          titleText: \"【代墊借還款項已結清】✅\",\n          badgeText: \"全數結清\",\n          badgeBg: \"#2B825B\",\n          details: [\n            { label: \"結清狀態\", value: \"共結清 \" + settledCount + \" 筆代墊明細\" },\n            { label: \"目前債務\", value: \"雙方已結清歸零 💖\", color: \"#2B825B\", bold: true },\n            { label: \"結清時間\", value: nowStr }\n          ],\n          targetUrl: \"https://liao0318.github.io/fund.migoscar/split/\"\n        });\n      } catch(lineErr) {}\n    }\n    \n    return { success: true, settledCount: settledCount, message: \"已成功結清 \" + settledCount + \" 筆代墊明細！\" };\n  } catch(e) {\n    return { success: false, message: e.toString() };\n  }\n}\n\n// ------------------- 旅遊分帳與出國專案功能 (Travel Split & Expense) -------------------\n\n// 獲取「旅遊行程」工作表\nfunction getTravelSheet() {\n  var ss = getDbSpreadsheet();\n  if (!ss) {\n    throw new Error(\"未連結任何有效的 Google 試算表。\");\n  }\n  var sheetName = \"旅遊行程\";\n  var sheet = ss.getSheetByName(sheetName);\n  if (!sheet) {\n    setupDatabase();\n    sheet = ss.getSheetByName(sheetName);\n  }\n  return sheet;\n}\n\n// 獲取「旅遊支出明細」工作表\nfunction getTravelExpenseSheet() {\n  var ss = getDbSpreadsheet();\n  if (!ss) {\n    throw new Error(\"未連結任何有效的 Google 試算表。\");\n  }\n  var sheetName = \"旅遊支出明細\";\n  var sheet = ss.getSheetByName(sheetName);\n  if (!sheet) {\n    setupDatabase();\n    sheet = ss.getSheetByName(sheetName);\n  }\n  return sheet;\n}\n\n// 獲取「旅遊心願清單」工作表\nfunction getTravelWishlistSheet() {\n  var ss = getDbSpreadsheet();\n  if (!ss) {\n    throw new Error(\"未連結任何有效的 Google 試算表。\");\n  }\n  var sheetName = \"旅遊心願清單\";\n  var sheet = ss.getSheetByName(sheetName);\n  if (!sheet) {\n    setupDatabase();\n    sheet = ss.getSheetByName(sheetName);\n  }\n  return sheet;\n}\n\n// 輔助函式：將日期格式化為 YYYY-MM-DD\nfunction formatDateForSheet(d) {\n  if (!d) return \"\";\n  if (d instanceof Date) {\n    return Utilities.formatDate(d, \"GMT+8\", \"yyyy-MM-dd\");\n  }\n  var str = String(d).trim();\n  if (/^\\d{4}-\\d{2}-\\d{2}/.test(str)) {\n    return str.substring(0, 10);\n  }\n  try {\n    var parsed = new Date(str);\n    if (!isNaN(parsed.getTime())) {\n      return Utilities.formatDate(parsed, \"GMT+8\", \"yyyy-MM-dd\");\n    }\n  } catch(e) {}\n  return str;\n}\n\n// 獲取所有旅遊行程、支出明細與心願清單\nfunction getTravelData() {\n  try {\n    var tripSheet = getTravelSheet();\n    var expSheet = getTravelExpenseSheet();\n    var wishSheet = getTravelWishlistSheet();\n\n    // 1. 讀取旅遊行程\n    var trips = [];\n    var tripLastRow = tripSheet.getLastRow();\n    if (tripLastRow > 1) {\n      var tripValues = tripSheet.getRange(2, 1, tripLastRow - 1, 13).getValues();\n      for (var i = 0; i < tripValues.length; i++) {\n        var row = tripValues[i];\n        var id = String(row[0] || \"\").trim();\n        if (!id) continue;\n        var title = String(row[1] || \"\").trim();\n        var destination = String(row[2] || \"\").trim();\n        var coverEmoji = String(row[3] || \"✈️\").trim();\n        var startDate = row[4] ? formatDateForSheet(row[4]) : \"\";\n        var endDate = row[5] ? formatDateForSheet(row[5]) : \"\";\n        var currency = String(row[6] || \"JPY\").trim();\n        var exchangeRate = parseFloat(row[7]) || 0.215;\n        var budgetTWD = row[8] !== \"\" && row[8] !== null && !isNaN(parseFloat(row[8])) ? parseFloat(row[8]) : undefined;\n        var status = String(row[9] || \"進行中\").trim();\n        var themeColor = String(row[10] || \"rose\").trim();\n        var membersRaw = String(row[11] || \"\").trim();\n        var members = [\"廖\", \"周\"];\n        if (membersRaw) {\n          try {\n            if (membersRaw.startsWith(\"[\") && membersRaw.endsWith(\"]\")) {\n              members = JSON.parse(membersRaw);\n            } else {\n              members = membersRaw.split(/[,，、]/).map(function(m) { return m.trim(); }).filter(Boolean);\n            }\n          } catch(e) {\n            members = [\"廖\", \"周\"];\n          }\n        }\n        var createdAt = row[12] ? formatDateForSheet(row[12]) : \"\";\n\n        trips.push({\n          id: id,\n          title: title,\n          destination: destination,\n          coverEmoji: coverEmoji,\n          startDate: startDate,\n          endDate: endDate,\n          currency: currency,\n          exchangeRate: exchangeRate,\n          budgetTWD: budgetTWD,\n          status: status,\n          themeColor: themeColor,\n          members: members,\n          createdAt: createdAt\n        });\n      }\n    }\n\n    // 2. 讀取旅遊支出明細\n    var expenses = [];\n    var expLastRow = expSheet.getLastRow();\n    if (expLastRow > 1) {\n      var expValues = expSheet.getRange(2, 1, expLastRow - 1, 19).getValues();\n      for (var j = 0; j < expValues.length; j++) {\n        var eRow = expValues[j];\n        var eId = String(eRow[0] || \"\").trim();\n        if (!eId) continue;\n        var tripId = String(eRow[1] || \"\").trim();\n        var date = eRow[2] ? formatDateForSheet(eRow[2]) : \"\";\n        var category = String(eRow[3] || \"其他雜支\").trim();\n        var itemName = String(eRow[4] || \"\").trim();\n        var payer = String(eRow[5] || \"廖\").trim();\n        var originalCurrency = String(eRow[6] || \"JPY\").trim();\n        var originalAmount = parseFloat(eRow[7]) || 0;\n        var exchangeRate = parseFloat(eRow[8]) || 1;\n        var totalAmountTWD = parseFloat(eRow[9]) || 0;\n        var splitMode = String(eRow[10] || \"全體AA\").trim();\n        \n        var participantsRaw = String(eRow[11] || \"\").trim();\n        var participants = [];\n        if (participantsRaw) {\n          try {\n            if (participantsRaw.startsWith(\"[\")) {\n              participants = JSON.parse(participantsRaw);\n            } else {\n              participants = participantsRaw.split(/[,，、]/).map(function(p) { return p.trim(); }).filter(Boolean);\n            }\n          } catch(e) {}\n        }\n\n        var memberSplitsRaw = String(eRow[12] || \"\").trim();\n        var memberSplits = undefined;\n        if (memberSplitsRaw) {\n          try {\n            if (memberSplitsRaw.startsWith(\"{\")) {\n              memberSplits = JSON.parse(memberSplitsRaw);\n            }\n          } catch(e) {}\n        }\n\n        var debtor = String(eRow[13] || \"\").trim();\n        var debtorAmountTWD = parseFloat(eRow[14]) || 0;\n        var location = String(eRow[15] || \"\").trim();\n        var note = String(eRow[16] || \"\").trim();\n        var syncedToSplit = (eRow[17] === true || String(eRow[17]).toUpperCase() === \"TRUE\");\n        var createdAt = eRow[18] ? formatDateForSheet(eRow[18]) : \"\";\n\n        expenses.push({\n          id: eId,\n          tripId: tripId,\n          date: date,\n          category: category,\n          itemName: itemName,\n          payer: payer,\n          originalCurrency: originalCurrency,\n          originalAmount: originalAmount,\n          exchangeRate: exchangeRate,\n          totalAmountTWD: totalAmountTWD,\n          splitMode: splitMode,\n          participants: participants,\n          memberSplits: memberSplits,\n          debtor: debtor,\n          debtorAmountTWD: debtorAmountTWD,\n          location: location,\n          note: note,\n          syncedToSplit: syncedToSplit,\n          createdAt: createdAt\n        });\n      }\n    }\n\n    // 3. 讀取旅遊心願清單\n    var wishlist = [];\n    var wishLastRow = wishSheet.getLastRow();\n    if (wishLastRow > 1) {\n      var wishValues = wishSheet.getRange(2, 1, wishLastRow - 1, 8).getValues();\n      for (var k = 0; k < wishValues.length; k++) {\n        var wRow = wishValues[k];\n        var wId = String(wRow[0] || \"\").trim();\n        if (!wId) continue;\n        var wTripId = String(wRow[1] || \"\").trim();\n        var wItemName = String(wRow[2] || \"\").trim();\n        var wCategory = String(wRow[3] || \"美食餐廳\").trim();\n        var estimatedAmountTWD = wRow[4] !== \"\" && wRow[4] !== null && !isNaN(parseFloat(wRow[4])) ? parseFloat(wRow[4]) : undefined;\n        var addedBy = String(wRow[5] || \"廖\").trim();\n        var status = String(wRow[6] || \"待預訂\").trim();\n        var note = String(wRow[7] || \"\").trim();\n\n        wishlist.push({\n          id: wId,\n          tripId: wTripId,\n          itemName: wItemName,\n          category: wCategory,\n          estimatedAmountTWD: estimatedAmountTWD,\n          addedBy: addedBy,\n          status: status,\n          note: note\n        });\n      }\n    }\n\n    return {\n      success: true,\n      trips: trips,\n      expenses: expenses,\n      wishlist: wishlist\n    };\n  } catch(e) {\n    return { success: false, message: \"讀取旅遊分帳資料失敗：\" + e.toString(), trips: [], expenses: [], wishlist: [] };\n  }\n}\n\n// 儲存或更新旅遊行程\nfunction saveTravelTrip(data) {\n  try {\n    var sheet = getTravelSheet();\n    var id = String(data.id || (\"trip-\" + Date.now())).trim();\n    var title = String(data.title || \"東京自由行\").trim();\n    var destination = String(data.destination || \"自由行\").trim();\n    var coverEmoji = String(data.coverEmoji || \"✈️\").trim();\n    var startDate = formatDateForSheet(data.startDate || new Date());\n    var endDate = formatDateForSheet(data.endDate || data.startDate || new Date());\n    var currency = String(data.currency || \"JPY\").trim();\n    var exchangeRate = parseFloat(data.exchangeRate) || 0.215;\n    var budgetTWD = data.budgetTWD !== undefined && data.budgetTWD !== null && !isNaN(parseFloat(data.budgetTWD)) ? parseFloat(data.budgetTWD) : \"\";\n    var status = String(data.status || \"進行中\").trim();\n    var themeColor = String(data.themeColor || \"rose\").trim();\n    var members = Array.isArray(data.members) ? JSON.stringify(data.members) : String(data.members || \"[\\\"廖\\\",\\\"周\\\"]\");\n    var createdAt = formatDateForSheet(data.createdAt || new Date());\n\n    var rowData = [\n      id,\n      title,\n      destination,\n      coverEmoji,\n      startDate,\n      endDate,\n      currency,\n      exchangeRate,\n      budgetTWD,\n      status,\n      themeColor,\n      members,\n      createdAt\n    ];\n\n    var lastRow = sheet.getLastRow();\n    var foundRow = -1;\n    if (lastRow > 1) {\n      var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n      for (var i = 0; i < ids.length; i++) {\n        if (String(ids[i][0]).trim() === id) {\n          foundRow = i + 2;\n          break;\n        }\n      }\n    }\n\n    if (foundRow > 0) {\n      sheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);\n    } else {\n      sheet.appendRow(rowData);\n    }\n\n    return { success: true, message: \"行程資料已成功同步儲存！\", id: id };\n  } catch(e) {\n    return { success: false, message: \"儲存行程失敗：\" + e.toString() };\n  }\n}\n\n// 刪除旅遊行程 (連帶刪除關聯支出與心願)\nfunction deleteTravelTrip(id) {\n  try {\n    var tripSheet = getTravelSheet();\n    var expSheet = getTravelExpenseSheet();\n    var wishSheet = getTravelWishlistSheet();\n    var targetId = String(id || \"\").trim();\n    if (!targetId) return { success: false, message: \"請指定要刪除的行程 ID\" };\n\n    // 1. 刪除行程列\n    var tripLastRow = tripSheet.getLastRow();\n    if (tripLastRow > 1) {\n      var tripIds = tripSheet.getRange(2, 1, tripLastRow - 1, 1).getValues();\n      for (var i = tripIds.length - 1; i >= 0; i--) {\n        if (String(tripIds[i][0]).trim() === targetId) {\n          tripSheet.deleteRow(i + 2);\n        }\n      }\n    }\n\n    // 2. 刪除該行程對應之所有支出列\n    var expLastRow = expSheet.getLastRow();\n    if (expLastRow > 1) {\n      var expTripIds = expSheet.getRange(2, 2, expLastRow - 1, 1).getValues();\n      for (var j = expTripIds.length - 1; j >= 0; j--) {\n        if (String(expTripIds[j][0]).trim() === targetId) {\n          expSheet.deleteRow(j + 2);\n        }\n      }\n    }\n\n    // 3. 刪除該行程對應之所有心願列\n    var wishLastRow = wishSheet.getLastRow();\n    if (wishLastRow > 1) {\n      var wishTripIds = wishSheet.getRange(2, 2, wishLastRow - 1, 1).getValues();\n      for (var k = wishTripIds.length - 1; k >= 0; k--) {\n        if (String(wishTripIds[k][0]).trim() === targetId) {\n          wishSheet.deleteRow(k + 2);\n        }\n      }\n    }\n\n    return { success: true, message: \"已成功刪除行程及關聯支出資料！\" };\n  } catch(e) {\n    return { success: false, message: \"刪除行程失敗：\" + e.toString() };\n  }\n}\n\n// 新增或更新旅遊支出\nfunction addTravelExpense(data) {\n  try {\n    var sheet = getTravelExpenseSheet();\n    var id = String(data.id || (\"exp-\" + Date.now())).trim();\n    var tripId = String(data.tripId || \"\").trim();\n    var date = formatDateForSheet(data.date || new Date());\n    var category = String(data.category || \"其他雜支\").trim();\n    var itemName = String(data.itemName || \"旅費支出\").trim();\n    var payer = String(data.payer || \"廖\").trim();\n    var originalCurrency = String(data.originalCurrency || \"JPY\").trim();\n    var originalAmount = parseFloat(data.originalAmount) || 0;\n    var exchangeRate = parseFloat(data.exchangeRate) || 1;\n    var totalAmountTWD = parseFloat(data.totalAmountTWD) || 0;\n    var splitMode = String(data.splitMode || \"全體AA\").trim();\n    var participants = Array.isArray(data.participants) ? JSON.stringify(data.participants) : String(data.participants || \"\");\n    var memberSplits = data.memberSplits && typeof data.memberSplits === 'object' ? JSON.stringify(data.memberSplits) : String(data.memberSplits || \"\");\n    var debtor = String(data.debtor || \"\").trim();\n    var debtorAmountTWD = parseFloat(data.debtorAmountTWD) || 0;\n    var location = String(data.location || \"\").trim();\n    var note = String(data.note || \"\").trim();\n    var syncedToSplit = (data.syncedToSplit === true || String(data.syncedToSplit).toUpperCase() === \"TRUE\") ? \"TRUE\" : \"FALSE\";\n    var createdAt = formatDateForSheet(data.createdAt || new Date());\n\n    var rowData = [\n      id,\n      tripId,\n      date,\n      category,\n      itemName,\n      payer,\n      originalCurrency,\n      originalAmount,\n      exchangeRate,\n      totalAmountTWD,\n      splitMode,\n      participants,\n      memberSplits,\n      debtor,\n      debtorAmountTWD,\n      location,\n      note,\n      syncedToSplit,\n      createdAt\n    ];\n\n    var lastRow = sheet.getLastRow();\n    var foundRow = -1;\n    if (lastRow > 1) {\n      var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n      for (var i = 0; i < ids.length; i++) {\n        if (String(ids[i][0]).trim() === id) {\n          foundRow = i + 2;\n          break;\n        }\n      }\n    }\n\n    if (foundRow > 0) {\n      sheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);\n    } else {\n      sheet.insertRowBefore(2);\n      sheet.getRange(2, 1, 1, rowData.length).setValues([rowData]);\n    }\n\n    return { success: true, message: \"已成功記錄旅遊支出！\", id: id };\n  } catch(e) {\n    return { success: false, message: \"記錄旅遊支出失敗：\" + e.toString() };\n  }\n}\n\n// 刪除旅遊支出\nfunction deleteTravelExpense(id) {\n  try {\n    var sheet = getTravelExpenseSheet();\n    var targetId = String(id || \"\").trim();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return { success: false, message: \"查無此支出紀錄\" };\n\n    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    for (var i = 0; i < ids.length; i++) {\n      if (String(ids[i][0]).trim() === targetId) {\n        sheet.deleteRow(i + 2);\n        return { success: true, message: \"已成功刪除旅遊支出！\" };\n      }\n    }\n    return { success: false, message: \"未找到對應的旅遊支出\" };\n  } catch(e) {\n    return { success: false, message: \"刪除旅遊支出失敗：\" + e.toString() };\n  }\n}\n\n// 新增或更新心願項目\nfunction addTravelWishItem(data) {\n  try {\n    var sheet = getTravelWishlistSheet();\n    var id = String(data.id || (\"wish-\" + Date.now())).trim();\n    var tripId = String(data.tripId || \"\").trim();\n    var itemName = String(data.itemName || \"心願項目\").trim();\n    var category = String(data.category || \"美食餐廳\").trim();\n    var estimatedAmountTWD = data.estimatedAmountTWD !== undefined && data.estimatedAmountTWD !== null && !isNaN(parseFloat(data.estimatedAmountTWD)) ? parseFloat(data.estimatedAmountTWD) : \"\";\n    var addedBy = String(data.addedBy || \"廖\").trim();\n    var status = String(data.status || \"待預訂\").trim();\n    var note = String(data.note || \"\").trim();\n\n    var rowData = [\n      id,\n      tripId,\n      itemName,\n      category,\n      estimatedAmountTWD,\n      addedBy,\n      status,\n      note\n    ];\n\n    var lastRow = sheet.getLastRow();\n    var foundRow = -1;\n    if (lastRow > 1) {\n      var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n      for (var i = 0; i < ids.length; i++) {\n        if (String(ids[i][0]).trim() === id) {\n          foundRow = i + 2;\n          break;\n        }\n      }\n    }\n\n    if (foundRow > 0) {\n      sheet.getRange(foundRow, 1, 1, rowData.length).setValues([rowData]);\n    } else {\n      sheet.insertRowBefore(2);\n      sheet.getRange(2, 1, 1, rowData.length).setValues([rowData]);\n    }\n\n    return { success: true, message: \"已成功記錄心願項目！\", id: id };\n  } catch(e) {\n    return { success: false, message: \"記錄心願項目失敗：\" + e.toString() };\n  }\n}\n\n// 更新心願狀態\nfunction toggleTravelWishStatus(data) {\n  try {\n    var sheet = getTravelWishlistSheet();\n    var targetId = String(data.id || \"\").trim();\n    var nextStatus = String(data.status || \"已完成\").trim();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return { success: false, message: \"查無心願項目\" };\n\n    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    for (var i = 0; i < ids.length; i++) {\n      if (String(ids[i][0]).trim() === targetId) {\n        sheet.getRange(i + 2, 7).setValue(nextStatus);\n        return { success: true, message: \"心願狀態已更新為「\" + nextStatus + \"」！\" };\n      }\n    }\n    return { success: false, message: \"未找到對應心願項目\" };\n  } catch(e) {\n    return { success: false, message: \"更新心願狀態失敗：\" + e.toString() };\n  }\n}\n\n// 刪除心願項目\nfunction deleteTravelWishItem(id) {\n  try {\n    var sheet = getTravelWishlistSheet();\n    var targetId = String(id || \"\").trim();\n    var lastRow = sheet.getLastRow();\n    if (lastRow <= 1) return { success: false, message: \"查無此心願紀錄\" };\n\n    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();\n    for (var i = 0; i < ids.length; i++) {\n      if (String(ids[i][0]).trim() === targetId) {\n        sheet.deleteRow(i + 2);\n        return { success: true, message: \"已成功刪除心願項目！\" };\n      }\n    }\n    return { success: false, message: \"未找到對應的心願項目\" };\n  } catch(e) {\n    return { success: false, message: \"刪除心願項目失敗：\" + e.toString() };\n  }\n}\n\n// ------------------- TELEGRAM WEBHOOK & HTTP API (doPost) 處理 -------------------\n\nfunction doPost(e) {\n  try {\n    if (!e || !e.postData || !e.postData.contents) {\n      return ContentService.createTextOutput(JSON.stringify({ status: \"ok\" })).setMimeType(ContentService.MimeType.JSON);\n    }\n    \n    var data = null;\n    try {\n      data = JSON.parse(e.postData.contents);\n    } catch(parseErr) {\n      return ContentService.createTextOutput(JSON.stringify({ status: \"ok\" })).setMimeType(ContentService.MimeType.JSON);\n    }\n\n    // 1. 如果前端以 HTTP POST 呼叫 API action\n    if (data && data.action) {\n      var result = { success: false, message: \"未知操作\" };\n      if (data.action === \"getDashboardData\") result = getDashboardData();\n      else if (data.action === \"addRecord\") result = addRecord(data);\n      else if (data.action === \"updateRecordByRow\") result = updateRecordByRow(data);\n      else if (data.action === \"deleteRecordByRow\") result = deleteRecordByRow(data.rowId || data.id);\n      else if (data.action === \"setMonthReconciled\") result = setMonthReconciled(data.month, data.isReconciled);\n      else if (data.action === \"getShoppingData\") result = getShoppingData();\n      else if (data.action === \"addShoppingItem\") result = addShoppingItem(data);\n      else if (data.action === \"updateShoppingItem\") result = updateShoppingItem(data);\n      else if (data.action === \"toggleShoppingItemStatus\") result = toggleShoppingItemStatus(data.id, data.status || data.newStatus);\n      else if (data.action === \"deleteShoppingItem\") result = deleteShoppingItem(data.id);\n      else if (data.action === \"clearDoneShoppingItems\") result = clearDoneShoppingItems();\n      else if (data.action === \"saveStoresList\") result = saveStoresList(data.stores || data);\n      else if (data.action === \"saveSpreadsheetId\") result = saveSpreadsheetId(data.spreadsheetId || data.url || data);\n      else if (data.action === \"getSpreadsheetConfig\") result = getSpreadsheetConfig();\n      else if (data.action === \"getLineNotifySettings\" || data.action === \"getTelegramNotifySettings\") result = getLineNotifySettings();\n      else if (data.action === \"saveLineNotifySettings\" || data.action === \"saveTelegramNotifySettings\") result = saveLineNotifySettings(data.settings || data);\n      else if (data.action === \"getLineNotifyToken\" || data.action === \"getTelegramCredentials\") result = getTelegramCredentials();\n      else if (data.action === \"saveLineNotifyToken\" || data.action === \"saveTelegramCredentials\") result = saveTelegramCredentials(data);\n      else if (data.action === \"testLineNotify\" || data.action === \"testTelegramNotify\") result = testTelegramNotify(data.token, data.chatId);\n      else if (data.action === \"getSplitData\") result = getSplitData();\n      else if (data.action === \"addSplitRecord\") result = addSplitRecord(data);\n      else if (data.action === \"deleteSplitRecord\") result = deleteSplitRecord(data.id || data.splitId);\n      else if (data.action === \"settleAllSplitRecords\") result = settleAllSplitRecords();\n      else if (data.action === \"getTravelData\") result = getTravelData();\n      else if (data.action === \"saveTravelTrip\" || data.action === \"addTravelPlan\" || data.action === \"updateTravelPlan\") result = saveTravelTrip(data);\n      else if (data.action === \"deleteTravelTrip\" || data.action === \"deleteTravelPlan\") result = deleteTravelTrip(data.id || data.tripId);\n      else if (data.action === \"addTravelExpense\" || data.action === \"saveTravelExpense\") result = addTravelExpense(data);\n      else if (data.action === \"deleteTravelExpense\") result = deleteTravelExpense(data.id || data.expId);\n      else if (data.action === \"addTravelWishItem\" || data.action === \"saveTravelWishItem\") result = addTravelWishItem(data);\n      else if (data.action === \"toggleTravelWishStatus\") result = toggleTravelWishStatus(data);\n      else if (data.action === \"deleteTravelWishItem\") result = deleteTravelWishItem(data.id || data.wishId);\n\n      return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);\n    }\n    \n    // 2. Telegram Webhook 訊息處理 (支援群組或私訊發送指令記帳)\n    if (data.message && data.message.text) {\n      var userText = data.message.text.trim();\n      var incomingChatId = String(data.message.chat.id);\n      handleTelegramBotMessage(userText, incomingChatId);\n      return ContentService.createTextOutput(JSON.stringify({ status: \"ok\" })).setMimeType(ContentService.MimeType.JSON);\n    }\n    \n    return ContentService.createTextOutput(JSON.stringify({ status: \"ok\" })).setMimeType(ContentService.MimeType.JSON);\n  } catch(err) {\n    console.error(\"doPost error: \" + err.toString());\n    return ContentService.createTextOutput(JSON.stringify({ status: \"ok\", error: err.toString() })).setMimeType(ContentService.MimeType.JSON);\n  }\n}\n\n// 輔助函式：解析 Telegram 輸入的彈性日期格式 (如 8/12, 8-12, 8月12日, 2026-08-12, 昨天, 今天)\nfunction parseTelegramCommandDate(dateStr) {\n  var now = new Date();\n  var timezone = \"GMT+8\";\n  var curYear = parseInt(Utilities.formatDate(now, timezone, \"yyyy\"), 10);\n  \n  if (!dateStr || !dateStr.trim()) {\n    return Utilities.formatDate(now, timezone, \"yyyy-MM-dd\");\n  }\n  \n  var clean = dateStr.trim();\n  if (clean === \"今天\" || clean === \"今日\") {\n    return Utilities.formatDate(now, timezone, \"yyyy-MM-dd\");\n  }\n  if (clean === \"昨天\" || clean === \"昨日\") {\n    var d = new Date(now.getTime() - 86400000);\n    return Utilities.formatDate(d, timezone, \"yyyy-MM-dd\");\n  }\n  if (clean === \"前天\") {\n    var d2 = new Date(now.getTime() - 172800000);\n    return Utilities.formatDate(d2, timezone, \"yyyy-MM-dd\");\n  }\n  \n  // YYYY-MM-DD or YYYY/MM/DD\n  var matchFull = clean.match(/^(\\d{4})[\\/-](\\d{1,2})[\\/-](\\d{1,2})$/);\n  if (matchFull) {\n    var y = matchFull[1];\n    var m = (\"0\" + matchFull[2]).slice(-2);\n    var d = (\"0\" + matchFull[3]).slice(-2);\n    return y + \"-\" + m + \"-\" + d;\n  }\n  \n  // MM/DD or M/D or MM-DD or M-D (可帶「日」、「號」、「前」)\n  var matchMD = clean.match(/^(\\d{1,2})[\\/-](\\d{1,2})(?:日|號|前)?$/);\n  if (matchMD) {\n    var m = (\"0\" + matchMD[1]).slice(-2);\n    var d = (\"0\" + matchMD[2]).slice(-2);\n    return curYear + \"-\" + m + \"-\" + d;\n  }\n  \n  // M月D日 or M月D\n  var matchChineseMD = clean.match(/^(\\d{1,2})月(\\d{1,2})(?:日|號)?$/);\n  if (matchChineseMD) {\n    var m = (\"0\" + matchChineseMD[1]).slice(-2);\n    var d = (\"0\" + matchChineseMD[2]).slice(-2);\n    return curYear + \"-\" + m + \"-\" + d;\n  }\n  \n  return Utilities.formatDate(now, timezone, \"yyyy-MM-dd\");\n}\n\nfunction handleTelegramBotMessage(text, chatId) {\n  if (!text || !chatId) return;\n  var cleanText = text.trim();\n  \n  // 1. 指令說明 / 幫助懶人包\n  if (/^(說明|指令|幫助|功能|選單|help|\\?|？|\\/start|\\/help)$/i.test(cleanText)) {\n    var helpMsg = \"🤖<b>【伴伴記・Telegram 智能指令】</b>\\n\\n\" +\n      \"📌<b>【查詢功能】</b>\\n\" +\n      \"• 輸入「<code>查帳</code>」或「<code>公積金</code>」：查看本月收支與餘額\\n\" +\n      \"• 輸入「<code>購物清單</code>」或「<code>買什麼</code>」：查看待採購項目\\n\\n\" +\n      \"💰<b>【支出記帳 / 代墊】</b>\\n\" +\n      \"• 格式：[出資人] [金額] [品項] (選填日期)\\n\" +\n      \"  範例：\\n\" +\n      \"  <code>廖 20 便當</code> （廖尹丞代墊，今天）\\n\" +\n      \"  <code>廖 20 糖果 8/12</code> （廖尹丞代墊，8/12）\\n\" +\n      \"  <code>周 150 飲料</code> （周沛緹代墊，今天）\\n\" +\n      \"  <code>公積金 500 衛生紙</code> （公積金支出）\\n\\n\" +\n      \"📥<b>【收入 / 存入公積金】</b>\\n\" +\n      \"• 格式：存入 [金額] 公積金 (選填日期)\\n\" +\n      \"  範例：\\n\" +\n      \"  <code>存入 20000 公積金</code> （今天存入）\\n\" +\n      \"  <code>廖 存入 10000 公積金</code> （由廖尹丞存入）\\n\\n\" +\n      \"🛒<b>【快速新增採購清單】</b>\\n\" +\n      \"• 1. 品項-地點 期限 (需要買)\\n\" +\n      \"  範例：<code>1. 高麗菜-菜市場 8/13前</code>\\n\" +\n      \"• 2. 品項-地點 期限 (想要買)\\n\" +\n      \"  範例：<code>2. 雞塊-全聯 8/15前</code>\\n\\n\" +\n      \"🔗 <a href=\\\"https://liao0318.github.io/fund.migoscar/\\\">點我開啟伴伴記全螢幕網頁</a>\";\n    sendTelegramMessage(helpMsg, chatId);\n    return;\n  }\n\n  // 2. 查詢公積金與帳本餘額\n  if (cleanText === \"查帳\" || cleanText === \"公積金\" || cleanText === \"餘額\" || cleanText === \"帳本\" || cleanText === \"對帳\" || cleanText === \"本月\" || cleanText === \"/status\") {\n    try {\n      var dashRes = getDashboardData();\n      var summary = dashRes.summary || {};\n      var now = new Date();\n      var curMonth = Utilities.formatDate(now, \"GMT+8\", \"yyyy-MM\");\n      \n      var fundBalance = Math.round(summary.fundBalance || 0);\n      var currentBalance = Math.round(summary.currentBalance || 0);\n      var totalLiao = Math.round(summary.totalLiaoAdv || 0);\n      var totalChou = Math.round(summary.totalChouAdv || 0);\n\n      var statusText = \"\";\n      if (currentBalance > 0) {\n        statusText = \"✅ 沛緹 應向 尹丞 撥款 NT$ \" + currentBalance.toLocaleString();\n      } else if (currentBalance < 0) {\n        statusText = \"✅ 尹丞 應向 沛緹 撥款 NT$ \" + Math.abs(currentBalance).toLocaleString();\n      } else {\n        statusText = \"🎉 目前雙方收支已完全平帳！\";\n      }\n\n      sendTelegramMessage({\n        altText: \"📊【伴伴記・本月帳務總覽】\",\n        titleText: \"【帳本總覽・\" + curMonth + \"】📊\",\n        badgeText: \"即時結算\",\n        badgeBg: \"#4A7C59\",\n        details: [\n          { label: \"公積金餘額\", value: \"NT$ \" + fundBalance.toLocaleString(), bold: true },\n          { label: \"廖尹丞 代墊\", value: \"NT$ \" + totalLiao.toLocaleString() },\n          { label: \"周沛緹 代墊\", value: \"NT$ \" + totalChou.toLocaleString() },\n          { label: \"結算狀態\", value: statusText, bold: true }\n        ],\n        targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n      }, chatId);\n      return;\n    } catch(e) {\n      sendTelegramMessage(\"⚠️ 查詢帳務失敗：\" + e.toString(), chatId);\n      return;\n    }\n  }\n\n  // 3. 查詢待買清單\n  if (cleanText === \"購物清單\" || cleanText === \"清單\" || cleanText === \"買什麼\" || cleanText === \"購物\" || cleanText === \"待買\" || cleanText === \"/shopping\") {\n    var dataRes = getShoppingData();\n    var pending = (dataRes && dataRes.items) ? dataRes.items.filter(function(x) { return x.status === \"待購買\"; }) : [];\n    \n    if (pending.length === 0) {\n      sendTelegramMessage(\"🛒<b>【伴伴記・購物清單】</b>\\n尚無待採購項目！🎉\\n\\n💡 輸入範例新增：\\n<code>1. 高麗菜-菜市場 8/13前</code> (需要買)\\n<code>2. 雞塊-全聯 8/15前</code> (想要買)\", chatId);\n      return;\n    }\n    \n    var needs = [];\n    var wants = [];\n    for (var i = 0; i < pending.length; i++) {\n      var item = pending[i];\n      var str = \"• <b>\" + escapeHtml(item.item) + \"</b> (📍\" + escapeHtml(item.store || \"隨意\") + \" / ⏰\" + escapeHtml(item.deadline || \"無期限\") + \")\";\n      if (item.category === \"需要買\") {\n        needs.push(str);\n      } else {\n        wants.push(str);\n      }\n    }\n    \n    var outLines = [\"🛒<b>【伴伴記・待採購清單】</b>\\n\"];\n    if (needs.length > 0) {\n      outLines.push(\"🔴<b>【需要買】：</b>\");\n      outLines.push(needs.join(\"\\n\"));\n      outLines.push(\"\");\n    }\n    if (wants.length > 0) {\n      outLines.push(\"🟡<b>【想要買 (觀望)】：</b>\");\n      outLines.push(wants.join(\"\\n\"));\n      outLines.push(\"\");\n    }\n    outLines.push(\"━━━━━━━━━━━━━━━━━━\");\n    outLines.push(\"🔗 <a href=\\\"https://liao0318.github.io/fund.migoscar/\\\">點我開啟網頁版全螢幕管理</a>\");\n    \n    sendTelegramMessage(outLines.join(\"\\n\"), chatId);\n    return;\n  }\n  \n  // 4. 收入 / 存入公積金 指令解析：\n  var incomeMatch = cleanText.match(/^(?:(廖|尹丞|周|沛緹|公積金|公費)\\s+)?(?:存入|存|入帳|收入|公積金存入|公費存入)\\s*([0-9\\.]+)\\s*(?:元|NT|NTD)?\\s*(.*)$/i)\n    || cleanText.match(/^(?:存入|存|入帳|收入|公積金存入|公費存入)\\s*([0-9\\.]+)\\s*(?:元|NT|NTD)?\\s*(.*)$/i);\n    \n  if (incomeMatch) {\n    var payerKey = incomeMatch[1];\n    var amt = parseFloat(incomeMatch[2]) || 0;\n    var rest = incomeMatch[3] ? incomeMatch[3].trim() : \"\";\n    \n    var payerName = \"共同帳戶\";\n    if (payerKey === \"廖\" || payerKey === \"尹丞\") payerName = \"廖尹丞\";\n    else if (payerKey === \"周\" || payerKey === \"沛緹\") payerName = \"周沛緹\";\n    \n    var itemTitle = \"固定公積金存入\";\n    var dateStr = \"\";\n    \n    if (rest) {\n      var tokens = rest.split(/[\\s，,]+/);\n      var nonDateTokens = [];\n      for (var tIdx = 0; tIdx < tokens.length; tIdx++) {\n        var t = tokens[tIdx];\n        if (!dateStr && (/^\\d{1,2}[\\/-]\\d{1,2}/.test(t) || /^\\d{4}[\\/-]\\d{1,2}[\\/-]\\d{1,2}/.test(t) || /\\d{1,2}月\\d{1,2}/.test(t) || t === \"今天\" || t === \"昨天\" || t === \"前天\")) {\n          dateStr = t;\n        } else {\n          nonDateTokens.push(t);\n        }\n      }\n      var cleanRest = nonDateTokens.filter(function(t) { return t !== \"公積金\" && t !== \"公費\"; }).join(\" \").trim();\n      if (cleanRest) {\n        itemTitle = cleanRest;\n      }\n    }\n    \n    var recordDate = parseTelegramCommandDate(dateStr);\n    \n    if (amt > 0) {\n      var addIncRes = addRecord({\n        date: recordDate,\n        item: itemTitle,\n        amount: amt,\n        payer: payerName,\n        type: \"收入-固定公積金\"\n      });\n      \n      if (addIncRes && addIncRes.success) {\n        sendTelegramMessage({\n          altText: \"💰 已為您存入公積金 NT$ \" + amt.toLocaleString() + \"（\" + recordDate + \"）\",\n          titleText: \"【公積金存入成功】📥\",\n          badgeText: \"公積金存入\",\n          badgeBg: \"#3A6D8C\",\n          details: [\n            { label: \"項目名稱\", value: itemTitle, bold: true },\n            { label: \"存入金額\", value: \"NT$ \" + amt.toLocaleString(), bold: true },\n            { label: \"存入對象/來源\", value: payerName },\n            { label: \"記帳日期\", value: recordDate },\n            { label: \"記錄時間\", value: formatAmPmTime(new Date()) }\n          ],\n          targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n        }, chatId);\n      } else {\n        sendTelegramMessage(\"⚠️ 存入公積金失敗：\" + (addIncRes ? addIncRes.message : \"連線異常\"), chatId);\n      }\n      return;\n    }\n  }\n\n  // 5. 支出代墊指令解析：\n  var expenseMatch = cleanText.match(/^(廖|尹丞|周|沛緹|公積金|公費|記帳|支出)\\s+([0-9\\.]+)\\s*(?:元|NT|NTD)?\\s*(.*)$/i);\n  if (expenseMatch) {\n    var payerKey = expenseMatch[1];\n    var amt = parseFloat(expenseMatch[2]) || 0;\n    var rest = expenseMatch[3] ? expenseMatch[3].trim() : \"\";\n    \n    var payerName = \"廖尹丞\";\n    var expType = \"支出-日常代墊\";\n    \n    if (payerKey === \"周\" || payerKey === \"沛緹\") {\n      payerName = \"周沛緹\";\n      expType = \"支出-日常代墊\";\n    } else if (payerKey === \"公積金\" || payerKey === \"公費\") {\n      payerName = \"公積金\";\n      expType = \"支出-日常代墊\";\n    } else {\n      payerName = \"廖尹丞\";\n      expType = \"支出-日常代墊\";\n    }\n    \n    var itemTitle = rest || \"日常支出\";\n    var dateStr = \"\";\n    \n    if (rest) {\n      var tokens = rest.split(/[\\s，,]+/);\n      if (tokens.length > 1) {\n        var lastToken = tokens[tokens.length - 1];\n        if (/^\\d{1,2}[\\/-]\\d{1,2}/.test(lastToken) || /^\\d{4}[\\/-]\\d{1,2}[\\/-]\\d{1,2}/.test(lastToken) || /\\d{1,2}月\\d{1,2}/.test(lastToken) || lastToken === \"今天\" || lastToken === \"昨天\" || lastToken === \"前天\") {\n          dateStr = lastToken;\n          itemTitle = tokens.slice(0, -1).join(\" \").trim() || \"日常支出\";\n        }\n      } else if (/^\\d{1,2}[\\/-]\\d{1,2}/.test(rest) || /^\\d{4}[\\/-]\\d{1,2}[\\/-]\\d{1,2}/.test(rest) || /\\d{1,2}月\\d{1,2}/.test(rest) || rest === \"今天\" || rest === \"昨天\" || rest === \"前天\") {\n        dateStr = rest;\n        itemTitle = \"日常支出\";\n      }\n    }\n    \n    var recordDate = parseTelegramCommandDate(dateStr);\n    \n    if (amt > 0) {\n      var addRecRes = addRecord({\n        date: recordDate,\n        item: itemTitle,\n        amount: amt,\n        payer: payerName,\n        type: expType\n      });\n      \n      if (addRecRes && addRecRes.success) {\n        sendTelegramMessage({\n          altText: \"💰 已為您同步記帳 NT$ \" + amt.toLocaleString() + \"（\" + itemTitle + \"）\",\n          titleText: \"【Telegram 記帳成功】💰\",\n          badgeText: payerName + \" 代墊\",\n          badgeBg: payerName === \"廖尹丞\" ? \"#2B825B\" : (payerName === \"周沛緹\" ? \"#8A5A36\" : \"#4A7C59\"),\n          details: [\n            { label: \"品項名稱\", value: itemTitle, bold: true },\n            { label: \"支出金額\", value: \"NT$ \" + amt.toLocaleString(), bold: true },\n            { label: \"出資代墊\", value: payerName },\n            { label: \"記帳日期\", value: recordDate },\n            { label: \"記錄時間\", value: formatAmPmTime(new Date()) }\n          ],\n          targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n        }, chatId);\n      } else {\n        sendTelegramMessage(\"⚠️ 記帳寫入失敗：\" + (addRecRes ? addRecRes.message : \"連線異常\"), chatId);\n      }\n      return;\n    }\n  }\n\n  // 6. 購物清單指令解析新增：\n  var category = \"\";\n  var content = cleanText;\n  \n  if (/^(1[\\.,\\s]|需要買|需要)/.test(cleanText)) {\n    category = \"需要買\";\n    content = cleanText.replace(/^(1[\\.,\\s]|需要買|需要)\\s*/, \"\").trim();\n  } else if (/^(2[\\.,\\s]|想要買|想要|觀望)/.test(cleanText)) {\n    category = \"想要買\";\n    content = cleanText.replace(/^(2[\\.,\\s]|想要買|想要|觀望)\\s*/, \"\").trim();\n  }\n  \n  if (category && content) {\n    var itemName = \"\";\n    var storeName = \"隨意\";\n    var deadlineStr = \"儘快\";\n    \n    if (content.indexOf(\"-\") !== -1) {\n      var dashParts = content.split(\"-\");\n      itemName = dashParts[0].trim();\n      var restStr = dashParts.slice(1).join(\"-\").trim();\n      if (restStr) {\n        var restTokens = restStr.split(/[\\s，,]+/);\n        storeName = restTokens[0] ? restTokens[0].trim() : \"隨意\";\n        if (restTokens.length > 1) {\n          deadlineStr = restTokens.slice(1).join(\" \").trim();\n        }\n        if (/^\\d{1,2}[\\/-]\\d{1,2}/.test(storeName) || storeName.indexOf(\"前\") !== -1 || storeName.indexOf(\"月\") !== -1 || storeName.indexOf(\"日\") !== -1) {\n          deadlineStr = restTokens.join(\" \").trim();\n          storeName = \"隨意\";\n        }\n      }\n    } else {\n      var tokens = content.trim().split(/[\\s，,]+/);\n      itemName = tokens[0] ? tokens[0].trim() : \"\";\n      if (tokens.length >= 3) {\n        storeName = tokens[1] ? tokens[1].trim() : \"隨意\";\n        deadlineStr = tokens.slice(2).join(\" \").trim() || \"儘快\";\n      } else if (tokens.length === 2) {\n        var second = tokens[1].trim();\n        if (/^\\d{1,2}[\\/-]\\d{1,2}/.test(second) || second.indexOf(\"前\") !== -1 || second.indexOf(\"月\") !== -1 || second.indexOf(\"日\") !== -1 || second === \"今天\" || second === \"明天\" || second === \"儘快\" || second === \"盡快\" || second === \"無期限\") {\n          deadlineStr = second;\n          storeName = \"隨意\";\n        } else {\n          storeName = second;\n          deadlineStr = \"儘快\";\n        }\n      }\n    }\n    \n    if (!itemName) return;\n    \n    var addRes = addShoppingItem({\n      category: category,\n      item: itemName,\n      store: storeName,\n      deadline: deadlineStr,\n      creator: \"Telegram 訊息寫入\"\n    }, false);\n    \n    if (addRes && addRes.success) {\n      sendTelegramMessage({\n        altText: \"🛒 已為您同步至【伴伴記購物清單】！\",\n        titleText: \"【購物清單同步成功】🛒\",\n        badgeText: category,\n        badgeBg: category === \"需要買\" ? \"#C55757\" : \"#E58B23\",\n        details: [\n          { label: \"類型\", value: category },\n          { label: \"品項名稱\", value: itemName, bold: true },\n          { label: \"購買地點\", value: storeName },\n          { label: \"預計期限\", value: deadlineStr },\n          { label: \"資料庫\", value: \"已成功寫入 Google 試算表\" }\n        ],\n        targetUrl: \"https://liao0318.github.io/fund.migoscar/\"\n      }, chatId);\n    } else {\n      sendTelegramMessage(\"⚠️ 寫入購物清單失敗：\" + (addRes ? addRes.message : \"連線錯誤\"), chatId);\n    }\n  }\n}\n";
+export const CODE_GS_TEMPLATE = `var HARDCODED_SPREADSHEET_ID = "";
+/**
+ * 伴伴記❤️ - Google Apps Script 後端處理 (Code.gs)
+ * 輕量高效率 Google 試算表資料庫與即時對帳 API 服務。
+ */
+
+function doGet(e) {
+  if (e && e.parameter && e.parameter.action) {
+    var action = e.parameter.action;
+    if (action === "getTravelData") return jsonResponse(getTravelData());
+    if (action === "getSplitData") return jsonResponse(getSplitData());
+    if (action === "getDashboardData") return jsonResponse(getDashboardData());
+    if (action === "getShoppingData") return jsonResponse(getShoppingData());
+    if (action === "getStoreData") return jsonResponse(getStoreData());
+    return jsonResponse({ success: true, message: "伴伴記後端 API 連線正常！" });
+  }
+
+  try {
+    var output = HtmlService.createHtmlOutputFromFile('Index');
+    output.addMetaTag('viewport', 'width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no, viewport-fit=cover');
+    output.setTitle('伴伴記❤️');
+    output.setFaviconUrl("https://img.icons8.com/color/180/cherry-blossom.png");
+    output.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    return output;
+  } catch (err) {
+    var fallbackHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>伴伴記後端 API</title><style>body{font-family:sans-serif;text-align:center;padding:40px;background:#fdfaf7;color:#333;}h2{color:#e11d48;}.card{background:#fff;border-radius:16px;padding:24px;max-width:500px;margin:20px auto;box-shadow:0 4px 16px rgba(0,0,0,0.06);line-height:1.6;}</style></head><body><h2>🌸 伴伴記 Google Apps Script 後端 API 運作中</h2><div class="card"><p>✅ 試算表資料庫與 App 內建即時同步 API 已就緒！</p><p>🚀 前端網頁由 GitHub Pages 託管，支援手機 PWA 與離線對帳。</p></div></body></html>';
+    return HtmlService.createHtmlOutput(fallbackHtml)
+      .setTitle('伴伴記 後端 API 服務')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+}
+
+function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+  } catch (lockErr) {}
+
+  try {
+    var payload = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        payload = JSON.parse(e.postData.contents);
+      } catch (parseErr) {
+        payload = {};
+      }
+    }
+
+    var action = payload.action || (e && e.parameter && e.parameter.action) || "";
+    var res = { success: false, message: "未知的 API 動作：" + action };
+
+    // 1. 公積金流水帳 API
+    if (action === "getDashboardData") res = getDashboardData();
+    else if (action === "addRecord") res = addRecord(payload);
+    else if (action === "updateRecordByRow") res = updateRecordByRow(payload);
+    else if (action === "deleteRecordByRow") res = deleteRecordByRow(payload);
+    else if (action === "setMonthReconciled") res = setMonthReconciled(payload.month, payload.isReconciled);
+
+    // 2. 代墊明細 API
+    else if (action === "getSplitData") res = getSplitData();
+    else if (action === "addSplitRecord") res = addSplitRecord(payload);
+    else if (action === "updateSplitRecord") res = updateSplitRecord(payload);
+    else if (action === "deleteSplitRecord") res = deleteSplitRecord(payload);
+    else if (action === "settleAllSplitRecords" || action === "settleSplitRecords") res = settleAllSplitRecords(payload);
+
+    // 3. 購物清單 API
+    else if (action === "getShoppingData") res = getShoppingData();
+    else if (action === "addShoppingItem") res = addShoppingItem(payload);
+    else if (action === "updateShoppingItem") res = updateShoppingItem(payload);
+    else if (action === "toggleShoppingItemStatus") res = toggleShoppingItemStatus(payload);
+    else if (action === "deleteShoppingItem") res = deleteShoppingItem(payload);
+    else if (action === "clearDoneShoppingItems") res = clearDoneShoppingItems();
+
+    // 4. 常用商店 API
+    else if (action === "getStoreData") res = getStoreData();
+    else if (action === "addStoreItem") res = addStoreItem(payload);
+    else if (action === "deleteStoreItem") res = deleteStoreItem(payload);
+
+    // 5. 旅遊記帳 API
+    else if (action === "getTravelData") res = getTravelData();
+    else if (action === "saveTravelTrip" || action === "addTravelTrip") res = saveTravelTrip(payload);
+    else if (action === "deleteTravelTrip") res = deleteTravelTrip(payload);
+    else if (action === "addTravelExpense") res = addTravelExpense(payload);
+    else if (action === "addBatchTravelExpenses") res = addBatchTravelExpenses(payload);
+    else if (action === "updateTravelExpense") res = updateTravelExpense(payload);
+    else if (action === "deleteTravelExpense") res = deleteTravelExpense(payload);
+    else if (action === "addTravelWishItem") res = addTravelWishItem(payload);
+    else if (action === "toggleTravelWishStatus") res = toggleTravelWishStatus(payload);
+    else if (action === "deleteTravelWishItem") res = deleteTravelWishItem(payload);
+
+    // 6. 設定與資料庫管理 API
+    else if (action === "saveSpreadsheetId") res = saveSpreadsheetId(payload.spreadsheetId || payload.url);
+    else if (action === "getSpreadsheetConfig") res = getSpreadsheetConfig();
+    else if (action === "setupDatabase") res = { success: true, message: setupDatabase() };
+
+    return jsonResponse(res);
+  } catch (err) {
+    return jsonResponse({ success: false, message: "伺服器處理異常：" + err.toString() });
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (e) {}
+  }
+}
+
+function jsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
+}
+
+function getDbSpreadsheet() {
+  if (typeof HARDCODED_SPREADSHEET_ID !== 'undefined' && HARDCODED_SPREADSHEET_ID && HARDCODED_SPREADSHEET_ID.trim()) {
+    var raw = HARDCODED_SPREADSHEET_ID.trim();
+    var id = raw;
+    if (raw.indexOf("docs.google.com/spreadsheets") !== -1) {
+      var m = raw.match(/\\/d\\/([a-zA-Z0-9_\\-]+)/);
+      if (m && m[1]) id = m[1];
+    }
+    try {
+      var ss = SpreadsheetApp.openById(id);
+      if (ss) return ss;
+    } catch (e) {}
+  }
+
+  try {
+    var active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) return active;
+  } catch (e) {}
+
+  try {
+    var savedId = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
+    if (savedId) return SpreadsheetApp.openById(savedId);
+  } catch (e) {}
+
+  return null;
+}
+
+function saveSpreadsheetId(idOrUrl) {
+  try {
+    if (!idOrUrl) {
+      PropertiesService.getScriptProperties().deleteProperty("SPREADSHEET_ID");
+      return { success: true, message: "已重置試算表綁定" };
+    }
+    var id = idOrUrl;
+    if (idOrUrl.indexOf("docs.google.com/spreadsheets") !== -1) {
+      var matches = idOrUrl.match(/\\/d\\/([a-zA-Z0-9_\\-]+)/);
+      if (matches && matches[1]) id = matches[1];
+    }
+    var ss = SpreadsheetApp.openById(id);
+    PropertiesService.getScriptProperties().setProperty("SPREADSHEET_ID", id);
+    setupDatabase();
+    return { success: true, message: "成功綁定 Google 試算表「" + ss.getName() + "」！" };
+  } catch (e) {
+    return { success: false, message: "綁定失敗：" + e.toString() };
+  }
+}
+
+function getSpreadsheetConfig() {
+  try {
+    var ss = getDbSpreadsheet();
+    if (ss) {
+      return { connected: true, name: ss.getName(), url: ss.getUrl() };
+    }
+    return { connected: false };
+  } catch (e) {
+    return { connected: false, error: e.toString() };
+  }
+}
+
+function setupDatabase() {
+  var ss = getDbSpreadsheet();
+  if (!ss) throw new Error("未連接任何試算表。請先至設定頁面綁定您的試算表。");
+
+  var headerStyle = function(sheet, headers) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length)
+      .setBackground("#F4F1EA")
+      .setFontColor("#3E3A36")
+      .setFontWeight("bold")
+      .setHorizontalAlignment("center");
+    sheet.setFrozenRows(1);
+  };
+
+  var sheetsDef = [
+    { name: "流水帳資料庫", headers: ["月份", "日期", "項目", "出錢人", "出錢金額", "類型", "時間戳記"] },
+    { name: "月度核銷狀態", headers: ["月份", "已撥款核銷"] },
+    { name: "代墊明細", headers: ["ID", "時間", "代墊人", "分帳模式", "項目描述", "總金額", "分帳結果", "狀態", "結清時間", "備註"] },
+    { name: "購物清單", headers: ["ID", "分類", "品項名稱", "購買地點", "預計購買日期", "狀態", "建立者", "建立時間", "備註細項"] },
+    { name: "常用商店", headers: ["商店名稱", "備註"] },
+    { name: "旅遊行程", headers: ["ID", "行程名稱", "目的地", "代表圖示", "開始日期", "結束日期", "幣別", "匯率", "預算台幣", "狀態", "主題顏色", "成員清單", "建立時間"] },
+    { name: "旅遊支出明細", headers: ["ID", "行程ID", "日期", "分類", "品項名稱", "付款人", "幣別", "原幣金額", "匯率", "台幣總額", "分攤模式", "分攤成員", "成員分攤細項", "代墊人", "代墊金額", "地點", "備註", "已轉日常代墊", "建立時間"] },
+    { name: "旅遊心願清單", headers: ["ID", "行程ID", "心願項目", "分類", "預估金額台幣", "提議人", "狀態", "備註"] }
+  ];
+
+  sheetsDef.forEach(function(def) {
+    var sh = ss.getSheetByName(def.name);
+    if (!sh) {
+      sh = ss.insertSheet(def.name);
+      headerStyle(sh, def.headers);
+    }
+  });
+
+  return "所有 8 張工作表初始化已就緒！";
+}
+
+function getDbSheet() {
+  var ss = getDbSpreadsheet();
+  if (!ss) throw new Error("未連結試算表");
+  var sh = ss.getSheetByName("流水帳資料庫");
+  if (!sh) {
+    setupDatabase();
+    sh = ss.getSheetByName("流水帳資料庫");
+  }
+  return sh;
+}
+
+function formatAmPmTime(dateInput) {
+  if (!dateInput) return "";
+  var d;
+  if (dateInput instanceof Date) d = dateInput;
+  else {
+    try { d = new Date(dateInput); } catch (e) { d = new Date(); }
+  }
+  if (isNaN(d.getTime())) d = new Date();
+
+  var timezone = "GMT+8";
+  var year = Utilities.formatDate(d, timezone, "yyyy");
+  var month = Utilities.formatDate(d, timezone, "MM");
+  var day = Utilities.formatDate(d, timezone, "dd");
+  var hours = parseInt(Utilities.formatDate(d, timezone, "HH"), 10);
+  var minutes = Utilities.formatDate(d, timezone, "mm");
+  var ampm = hours >= 12 ? '下午' : '上午';
+  var h12 = hours % 12;
+  if (h12 === 0) h12 = 12;
+  var hh = (h12 < 10 ? '0' : '') + h12;
+  return year + "-" + month + "-" + day + " " + ampm + " " + hh + ":" + minutes;
+}
+
+function getDashboardData() {
+  try {
+    var sheet = getDbSheet();
+    var lastRow = sheet.getLastRow();
+    var response = { records: [], liaoTotal: 0, zhouTotal: 0, reconciledMonths: [], success: true };
+
+    try {
+      response.reconciledMonths = getReconciledMonthsFromSheet();
+    } catch (e) {}
+
+    if (lastRow <= 1) return response;
+
+    var values = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    var liaoTotal = 0;
+    var zhouTotal = 0;
+    var recordsList = [];
+
+    for (var i = values.length - 1; i >= 0; i--) {
+      var row = values[i];
+      var monthVal = row[0];
+      var month = monthVal instanceof Date ? Utilities.formatDate(monthVal, "GMT+8", "yyyy-MM") : String(monthVal || "").substring(0, 7);
+      var dateVal = row[1];
+      var dateStr = dateVal instanceof Date ? Utilities.formatDate(dateVal, "GMT+8", "yyyy-MM-dd") : String(dateVal || (month ? month + "-01" : ""));
+      var item = String(row[2] || "");
+      var payer = String(row[3] || "");
+      var amount = parseFloat(row[4]) || 0;
+      var type = String(row[5] || "");
+      var timestampVal = row[6];
+      var timestampStr = timestampVal ? (timestampVal instanceof Date ? formatAmPmTime(timestampVal) : String(timestampVal)) : dateStr + " 上午 12:00";
+
+      recordsList.push({
+        id: i + 2,
+        month: month,
+        date: dateStr,
+        item: item,
+        payer: payer,
+        amount: amount,
+        type: type,
+        timestamp: timestampStr
+      });
+
+      if (type.indexOf("支出") !== -1) {
+        if (payer === "廖尹丞") liaoTotal += amount;
+        else if (payer === "周沛緹") zhouTotal += amount;
+      }
+    }
+
+    response.records = recordsList;
+    response.liaoTotal = liaoTotal;
+    response.zhouTotal = zhouTotal;
+    return response;
+  } catch (e) {
+    return { success: false, message: "讀取錯誤：" + e.toString(), records: [], liaoTotal: 0, zhouTotal: 0, reconciledMonths: [] };
+  }
+}
+
+function addRecord(data) {
+  try {
+    var sheet = getDbSheet();
+    var now = new Date();
+    var dateStr = data.date || Utilities.formatDate(now, "GMT+8", "yyyy-MM-dd");
+    var monthStr = dateStr.substring(0, 7);
+    var amount = parseFloat(data.amount) || 0;
+    var timestampStr = formatAmPmTime(now);
+
+    var newRow = [
+      monthStr,
+      dateStr,
+      data.item || "未分類項目",
+      data.payer || "廖尹丞",
+      amount,
+      data.type || "支出-日常代墊",
+      timestampStr
+    ];
+    sheet.appendRow(newRow);
+    return { success: true, message: "成功寫入一筆記帳資料！" };
+  } catch (e) {
+    return { success: false, message: "寫入失敗：" + e.toString() };
+  }
+}
+
+function updateRecordByRow(data) {
+  try {
+    var sheet = getDbSheet();
+    var rowId = parseInt(data.id || data.rowId, 10);
+    if (!rowId || rowId < 2) return { success: false, message: "無效的紀錄編號" };
+
+    var now = new Date();
+    var dateStr = data.date || Utilities.formatDate(now, "GMT+8", "yyyy-MM-dd");
+    var monthStr = dateStr.substring(0, 7);
+    var amount = parseFloat(data.amount) || 0;
+
+    sheet.getRange(rowId, 1, 1, 6).setValues([[
+      monthStr,
+      dateStr,
+      data.item || "未分類項目",
+      data.payer || "廖尹丞",
+      amount,
+      data.type || "支出-日常代墊"
+    ]]);
+    return { success: true, message: "已成功更新紀錄！" };
+  } catch (e) {
+    return { success: false, message: "更新失敗：" + e.toString() };
+  }
+}
+
+function deleteRecordByRow(payload) {
+  try {
+    var rowId = parseInt(typeof payload === 'object' ? (payload.id || payload.rowId) : payload, 10);
+    if (!rowId || rowId < 2) return { success: false, message: "無效的紀錄編號" };
+    var sheet = getDbSheet();
+    sheet.deleteRow(rowId);
+    return { success: true, message: "已成功刪除記帳紀錄！" };
+  } catch (e) {
+    return { success: false, message: "刪除失敗：" + e.toString() };
+  }
+}
+
+function getReconciledMonthsFromSheet() {
+  try {
+    var ss = getDbSpreadsheet();
+    if (!ss) return [];
+    var sheet = ss.getSheetByName("月度核銷狀態");
+    if (!sheet) return [];
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return [];
+
+    var data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    var reconciled = [];
+    for (var i = 0; i < data.length; i++) {
+      var cellVal = data[i][0];
+      var monthStr = cellVal instanceof Date ? Utilities.formatDate(cellVal, "GMT+8", "yyyy-MM") : String(cellVal || "").trim();
+      var isReconciled = data[i][1];
+      if (isReconciled === true || isReconciled === "TRUE" || isReconciled === "true") {
+        if (monthStr && reconciled.indexOf(monthStr) === -1) reconciled.push(monthStr);
+      }
+    }
+    return reconciled;
+  } catch (e) {
+    return [];
+  }
+}
+
+function setMonthReconciled(month, isReconciled) {
+  try {
+    if (!month) return { success: false, message: "請指定月份" };
+    var ss = getDbSpreadsheet();
+    if (!ss) return { success: false, message: "未連結試算表" };
+    var sheet = ss.getSheetByName("月度核銷狀態");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("月度核銷狀態");
+    }
+
+    var lastRow = sheet.getLastRow();
+    var boolReconciled = (isReconciled === true || isReconciled === "true" || isReconciled === "TRUE");
+    var foundRow = -1;
+
+    if (lastRow > 1) {
+      var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < values.length; i++) {
+        var val = values[i][0];
+        var mStr = val instanceof Date ? Utilities.formatDate(val, "GMT+8", "yyyy-MM") : String(val || "").trim();
+        if (mStr === String(month).trim()) {
+          foundRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    if (foundRow !== -1) {
+      sheet.getRange(foundRow, 2).setValue(boolReconciled);
+    } else {
+      sheet.appendRow(["'" + month, boolReconciled]);
+      sheet.getRange(sheet.getLastRow(), 2).insertCheckboxes();
+    }
+    return { success: true, message: "成功更新 " + month + " 核銷狀態！" };
+  } catch (e) {
+    return { success: false, message: "更新失敗：" + e.toString() };
+  }
+}
+
+// 7. 代墊分帳 API (代墊明細工作表)
+function getSplitData() {
+  try {
+    var ss = getDbSpreadsheet();
+    if (!ss) return { success: false, items: [] };
+    var sheet = ss.getSheetByName("代墊明細");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("代墊明細");
+    }
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, items: [] };
+
+    var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+    var items = [];
+    for (var i = values.length - 1; i >= 0; i--) {
+      var row = values[i];
+      if (!row[0]) continue;
+      items.push({
+        id: String(row[0]),
+        date: row[1] instanceof Date ? Utilities.formatDate(row[1], "GMT+8", "yyyy-MM-dd HH:mm") : String(row[1] || ""),
+        payer: String(row[2] || "廖尹丞"),
+        splitMode: String(row[3] || "equal"),
+        description: String(row[4] || ""),
+        amount: parseFloat(row[5]) || 0,
+        splitResult: String(row[6] || ""),
+        status: String(row[7] || "unsettled"),
+        settledAt: row[8] instanceof Date ? Utilities.formatDate(row[8], "GMT+8", "yyyy-MM-dd HH:mm") : String(row[8] || ""),
+        note: String(row[9] || "")
+      });
+    }
+    return { success: true, items: items };
+  } catch (e) {
+    return { success: false, message: e.toString(), items: [] };
+  }
+}
+
+function addSplitRecord(data) {
+  try {
+    var ss = getDbSpreadsheet();
+    if (!ss) return { success: false, message: "未連結試算表" };
+    var sheet = ss.getSheetByName("代墊明細");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("代墊明細");
+    }
+
+    var id = data.id || "split-" + Date.now();
+    var nowStr = formatAmPmTime(new Date());
+    var row = [
+      id,
+      data.date || nowStr,
+      data.payer || "廖尹丞",
+      data.splitMode || "equal",
+      data.description || "日常代墊",
+      parseFloat(data.amount) || 0,
+      typeof data.splitResult === 'object' ? JSON.stringify(data.splitResult) : String(data.splitResult || ""),
+      data.status || "unsettled",
+      data.settledAt || "",
+      data.note || ""
+    ];
+    sheet.appendRow(row);
+    return { success: true, message: "成功新增代墊紀錄！", id: id };
+  } catch (e) {
+    return { success: false, message: "新增失敗：" + e.toString() };
+  }
+}
+
+function deleteSplitRecord(payload) {
+  try {
+    var id = typeof payload === 'object' ? (payload.id) : payload;
+    if (!id) return { success: false, message: "請指定代墊 ID" };
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("代墊明細");
+    if (!sheet) return { success: false, message: "查無代墊工作表" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無紀錄" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "已成功刪除代墊紀錄！" };
+      }
+    }
+    return { success: false, message: "找不到該筆代墊紀錄" };
+  } catch (e) {
+    return { success: false, message: "刪除失敗：" + e.toString() };
+  }
+}
+
+function settleAllSplitRecords(payload) {
+  try {
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("代墊明細");
+    if (!sheet) return { success: false, message: "查無代墊工作表" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, message: "目前無待結算項目" };
+
+    var statuses = sheet.getRange(2, 8, lastRow - 1, 1).getValues();
+    var settledTime = formatAmPmTime(new Date());
+    var count = 0;
+
+    for (var i = 0; i < statuses.length; i++) {
+      if (String(statuses[i][0]) === "unsettled") {
+        sheet.getRange(i + 2, 8).setValue("settled");
+        sheet.getRange(i + 2, 9).setValue(settledTime);
+        count++;
+      }
+    }
+    return { success: true, message: "已成功核銷結清 " + count + " 筆代墊紀錄！", count: count };
+  } catch (e) {
+    return { success: false, message: "結算失敗：" + e.toString() };
+  }
+}
+
+// 8. 購物清單 API
+function getShoppingData() {
+  try {
+    var ss = getDbSpreadsheet();
+    if (!ss) return { success: false, items: [] };
+    var sheet = ss.getSheetByName("購物清單");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("購物清單");
+    }
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, items: [] };
+
+    var values = sheet.getRange(2, 1, lastRow - 1, 9).getValues();
+    var items = [];
+    for (var i = values.length - 1; i >= 0; i--) {
+      var row = values[i];
+      if (!row[0]) continue;
+      items.push({
+        id: String(row[0]),
+        category: String(row[1] || "需要買"),
+        item: String(row[2] || ""),
+        store: String(row[3] || "隨意"),
+        deadline: String(row[4] || "儘快"),
+        status: String(row[5] || "pending"),
+        creator: String(row[6] || "伴伴記"),
+        createdTime: String(row[7] || ""),
+        note: String(row[8] || "")
+      });
+    }
+    return { success: true, items: items };
+  } catch (e) {
+    return { success: false, message: e.toString(), items: [] };
+  }
+}
+
+function addShoppingItem(data) {
+  try {
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("購物清單");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("購物清單");
+    }
+    var id = data.id || "shop-" + Date.now();
+    var nowStr = formatAmPmTime(new Date());
+    var newRow = [
+      id,
+      data.category || "需要買",
+      data.item || "採買項目",
+      data.store || "隨意",
+      data.deadline || "儘快",
+      data.status || "pending",
+      data.creator || "廖尹丞",
+      data.createdTime || nowStr,
+      data.note || ""
+    ];
+    sheet.appendRow(newRow);
+    return { success: true, message: "已加入購物清單！", id: id };
+  } catch (e) {
+    return { success: false, message: "新增失敗：" + e.toString() };
+  }
+}
+
+function toggleShoppingItemStatus(payload) {
+  try {
+    var id = payload.id;
+    var status = payload.status || "completed";
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("購物清單");
+    if (!sheet) return { success: false, message: "查無購物清單" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無品項" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) {
+        sheet.getRange(i + 2, 6).setValue(status);
+        return { success: true, message: "購物狀態已更新！" };
+      }
+    }
+    return { success: false, message: "找不到該品項" };
+  } catch (e) {
+    return { success: false, message: "更新失敗：" + e.toString() };
+  }
+}
+
+function deleteShoppingItem(payload) {
+  try {
+    var id = typeof payload === 'object' ? payload.id : payload;
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("購物清單");
+    if (!sheet) return { success: false, message: "查無購物清單" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無品項" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "已自購物清單移除！" };
+      }
+    }
+    return { success: false, message: "找不到該品項" };
+  } catch (e) {
+    return { success: false, message: "刪除失敗：" + e.toString() };
+  }
+}
+
+function clearDoneShoppingItems() {
+  try {
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("購物清單");
+    if (!sheet) return { success: false, message: "查無購物清單" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, message: "已清理完畢" };
+
+    var statuses = sheet.getRange(2, 6, lastRow - 1, 1).getValues();
+    for (var i = statuses.length - 1; i >= 0; i--) {
+      if (String(statuses[i][0]) === "completed" || String(statuses[i][0]) === "done") {
+        sheet.deleteRow(i + 2);
+      }
+    }
+    return { success: true, message: "已一鍵清理所有已完成品項！" };
+  } catch (e) {
+    return { success: false, message: "清理失敗：" + e.toString() };
+  }
+}
+
+// 9. 常用商店 API
+function getStoreData() {
+  try {
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("常用商店");
+    if (!sheet) return { success: true, stores: [] };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, stores: [] };
+
+    var values = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    var stores = [];
+    for (var i = 0; i < values.length; i++) {
+      if (values[i][0]) {
+        stores.push({ name: String(values[i][0]), note: String(values[i][1] || "") });
+      }
+    }
+    return { success: true, stores: stores };
+  } catch (e) {
+    return { success: false, message: e.toString(), stores: [] };
+  }
+}
+
+function addStoreItem(payload) {
+  try {
+    var name = payload.name;
+    var note = payload.note || "";
+    if (!name) return { success: false, message: "請輸入商店名稱" };
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("常用商店");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("常用商店");
+    }
+    sheet.appendRow([name, note]);
+    return { success: true, message: "已新增常用商店！" };
+  } catch (e) {
+    return { success: false, message: "新增失敗：" + e.toString() };
+  }
+}
+
+function deleteStoreItem(payload) {
+  try {
+    var name = typeof payload === 'object' ? payload.name : payload;
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("常用商店");
+    if (!sheet) return { success: false, message: "查無工作表" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無商店" };
+
+    var names = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < names.length; i++) {
+      if (String(names[i][0]) === String(name)) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "已刪除商店！" };
+      }
+    }
+    return { success: false, message: "查無此商店" };
+  } catch (e) {
+    return { success: false, message: "刪除失敗：" + e.toString() };
+  }
+}
+
+// 10. 旅遊模組 API
+function getTravelData() {
+  try {
+    var ss = getDbSpreadsheet();
+    if (!ss) return { success: false, trips: [], expenses: [], wishes: [] };
+
+    var tripsSheet = ss.getSheetByName("旅遊行程");
+    var expSheet = ss.getSheetByName("旅遊支出明細");
+    var wishSheet = ss.getSheetByName("旅遊心願清單");
+
+    var trips = [];
+    var expenses = [];
+    var wishes = [];
+
+    if (tripsSheet && tripsSheet.getLastRow() > 1) {
+      var tVals = tripsSheet.getRange(2, 1, tripsSheet.getLastRow() - 1, 13).getValues();
+      for (var i = 0; i < tVals.length; i++) {
+        var r = tVals[i];
+        if (!r[0]) continue;
+        var members = [];
+        try { members = JSON.parse(r[11]); } catch (e) { members = ["廖尹丞", "周沛緹"]; }
+        trips.push({
+          id: String(r[0]),
+          name: String(r[1] || ""),
+          destination: String(r[2] || ""),
+          icon: String(r[3] || "✈️"),
+          startDate: r[4] instanceof Date ? Utilities.formatDate(r[4], "GMT+8", "yyyy-MM-dd") : String(r[4] || ""),
+          endDate: r[5] instanceof Date ? Utilities.formatDate(r[5], "GMT+8", "yyyy-MM-dd") : String(r[5] || ""),
+          baseCurrency: String(r[6] || "JPY"),
+          exchangeRate: parseFloat(r[7]) || 0.22,
+          budgetTwd: parseFloat(r[8]) || 0,
+          status: String(r[9] || "planning"),
+          themeColor: String(r[10] || "indigo"),
+          members: members,
+          createdAt: String(r[12] || "")
+        });
+      }
+    }
+
+    if (expSheet && expSheet.getLastRow() > 1) {
+      var eVals = expSheet.getRange(2, 1, expSheet.getLastRow() - 1, 19).getValues();
+      for (var j = 0; j < eVals.length; j++) {
+        var er = eVals[j];
+        if (!er[0]) continue;
+        var splitMembers = [];
+        var memberSplitShares = {};
+        try { splitMembers = JSON.parse(er[11]); } catch (e) { splitMembers = []; }
+        try { memberSplitShares = JSON.parse(er[12]); } catch (e) { memberSplitShares = {}; }
+
+        expenses.push({
+          id: String(er[0]),
+          tripId: String(er[1] || ""),
+          date: er[2] instanceof Date ? Utilities.formatDate(er[2], "GMT+8", "yyyy-MM-dd") : String(er[2] || ""),
+          category: String(er[3] || "餐飲"),
+          title: String(er[4] || ""),
+          payer: String(er[5] || "廖尹丞"),
+          currency: String(er[6] || "JPY"),
+          amount: parseFloat(er[7]) || 0,
+          exchangeRate: parseFloat(er[8]) || 1,
+          amountTwd: parseFloat(er[9]) || 0,
+          splitMode: String(er[10] || "equal"),
+          splitMembers: splitMembers,
+          memberSplitShares: memberSplitShares,
+          debtor: String(er[13] || ""),
+          debtAmount: parseFloat(er[14]) || 0,
+          location: String(er[15] || ""),
+          note: String(er[16] || ""),
+          syncedToDailySplit: er[17] === true || er[17] === "true",
+          createdAt: String(er[18] || "")
+        });
+      }
+    }
+
+    if (wishSheet && wishSheet.getLastRow() > 1) {
+      var wVals = wishSheet.getRange(2, 1, wishSheet.getLastRow() - 1, 8).getValues();
+      for (var k = 0; k < wVals.length; k++) {
+        var wr = wVals[k];
+        if (!wr[0]) continue;
+        wishes.push({
+          id: String(wr[0]),
+          tripId: String(wr[1] || ""),
+          title: String(wr[2] || ""),
+          category: String(wr[3] || "景點"),
+          estimatedTwd: parseFloat(wr[4]) || 0,
+          proposedBy: String(wr[5] || "廖尹丞"),
+          status: String(wr[6] || "wish"),
+          note: String(wr[7] || "")
+        });
+      }
+    }
+
+    return { success: true, trips: trips, expenses: expenses, wishes: wishes };
+  } catch (e) {
+    return { success: false, message: e.toString(), trips: [], expenses: [], wishes: [] };
+  }
+}
+
+function saveTravelTrip(data) {
+  try {
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("旅遊行程");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("旅遊行程");
+    }
+    var id = data.id || "trip-" + Date.now();
+    var lastRow = sheet.getLastRow();
+    var foundRow = -1;
+
+    if (lastRow > 1) {
+      var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]) === String(id)) {
+          foundRow = i + 2;
+          break;
+        }
+      }
+    }
+
+    var rowVals = [
+      id,
+      data.name || "未命名行程",
+      data.destination || "",
+      data.icon || "✈️",
+      data.startDate || "",
+      data.endDate || "",
+      data.baseCurrency || "JPY",
+      parseFloat(data.exchangeRate) || 0.22,
+      parseFloat(data.budgetTwd) || 0,
+      data.status || "planning",
+      data.themeColor || "indigo",
+      JSON.stringify(data.members || ["廖尹丞", "周沛緹"]),
+      data.createdAt || formatAmPmTime(new Date())
+    ];
+
+    if (foundRow !== -1) {
+      sheet.getRange(foundRow, 1, 1, 13).setValues([rowVals]);
+    } else {
+      sheet.appendRow(rowVals);
+    }
+    return { success: true, message: "行程已儲存！", id: id };
+  } catch (e) {
+    return { success: false, message: "儲存失敗：" + e.toString() };
+  }
+}
+
+function deleteTravelTrip(payload) {
+  try {
+    var id = typeof payload === 'object' ? payload.id : payload;
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("旅遊行程");
+    if (!sheet) return { success: false, message: "查無行程工作表" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無行程" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "已刪除旅遊行程！" };
+      }
+    }
+    return { success: false, message: "查無此行程" };
+  } catch (e) {
+    return { success: false, message: "刪除失敗：" + e.toString() };
+  }
+}
+
+function addTravelExpense(data) {
+  try {
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("旅遊支出明細");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("旅遊支出明細");
+    }
+    var id = data.id || "travelexp-" + Date.now();
+    var newRow = [
+      id,
+      data.tripId || "",
+      data.date || Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd"),
+      data.category || "餐飲",
+      data.title || "支出項目",
+      data.payer || "廖尹丞",
+      data.currency || "JPY",
+      parseFloat(data.amount) || 0,
+      parseFloat(data.exchangeRate) || 1,
+      parseFloat(data.amountTwd) || 0,
+      data.splitMode || "equal",
+      JSON.stringify(data.splitMembers || []),
+      JSON.stringify(data.memberSplitShares || {}),
+      data.debtor || "",
+      parseFloat(data.debtAmount) || 0,
+      data.location || "",
+      data.note || "",
+      data.syncedToDailySplit === true,
+      data.createdAt || formatAmPmTime(new Date())
+    ];
+    sheet.appendRow(newRow);
+    return { success: true, message: "已新增旅遊支出！", id: id };
+  } catch (e) {
+    return { success: false, message: "新增支出失敗：" + e.toString() };
+  }
+}
+
+function addBatchTravelExpenses(payload) {
+  try {
+    var items = payload.items || [];
+    if (!items.length) return { success: true, count: 0 };
+    for (var i = 0; i < items.length; i++) {
+      addTravelExpense(items[i]);
+    }
+    return { success: true, count: items.length };
+  } catch (e) {
+    return { success: false, message: "批次新增失敗：" + e.toString() };
+  }
+}
+
+function deleteTravelExpense(payload) {
+  try {
+    var id = typeof payload === 'object' ? payload.id : payload;
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("旅遊支出明細");
+    if (!sheet) return { success: false, message: "查無工作表" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無紀錄" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "已刪除該筆支出紀錄！" };
+      }
+    }
+    return { success: false, message: "找不到該筆支出" };
+  } catch (e) {
+    return { success: false, message: "刪除失敗：" + e.toString() };
+  }
+}
+
+function addTravelWishItem(data) {
+  try {
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("旅遊心願清單");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("旅遊心願清單");
+    }
+    var id = data.id || "wish-" + Date.now();
+    var newRow = [
+      id,
+      data.tripId || "",
+      data.title || "心願項目",
+      data.category || "景點",
+      parseFloat(data.estimatedTwd) || 0,
+      data.proposedBy || "廖尹丞",
+      data.status || "wish",
+      data.note || ""
+    ];
+    sheet.appendRow(newRow);
+    return { success: true, message: "已加入心願清單！", id: id };
+  } catch (e) {
+    return { success: false, message: "新增失敗：" + e.toString() };
+  }
+}
+
+function toggleTravelWishStatus(payload) {
+  try {
+    var id = payload.id;
+    var status = payload.status || "fulfilled";
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("旅遊心願清單");
+    if (!sheet) return { success: false, message: "查無工作表" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無清單" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) {
+        sheet.getRange(i + 2, 7).setValue(status);
+        return { success: true, message: "心願狀態已更新！" };
+      }
+    }
+    return { success: false, message: "找不到該心願" };
+  } catch (e) {
+    return { success: false, message: "更新失敗：" + e.toString() };
+  }
+}
+
+function deleteTravelWishItem(payload) {
+  try {
+    var id = typeof payload === 'object' ? payload.id : payload;
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("旅遊心願清單");
+    if (!sheet) return { success: false, message: "查無工作表" };
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "查無清單" };
+
+    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(id)) {
+        sheet.deleteRow(i + 2);
+        return { success: true, message: "已自心願清單移除！" };
+      }
+    }
+    return { success: false, message: "找不到該心願" };
+  } catch (e) {
+    return { success: false, message: "刪除失敗：" + e.toString() };
+  }
+}
+`;

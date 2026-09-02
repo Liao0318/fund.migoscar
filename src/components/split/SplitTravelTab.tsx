@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { 
   Plane, 
   Plus, 
@@ -34,10 +35,19 @@ import {
   HelpCircle,
   Clock,
   RefreshCw,
-  Database
+  Database,
+  FileSpreadsheet,
+  Search,
+  SlidersHorizontal,
+  Download,
+  ExternalLink,
+  Receipt,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TravelTrip, TravelExpenseItem, TravelWishItem } from '../../types';
+import { TravelBatchImportModal } from './TravelBatchImportModal';
+import { TravelReceiptQuickModal } from './TravelReceiptQuickModal';
 
 interface SplitTravelTabProps {
   onConvertToSplit: (item: { itemName: string; totalAmount: number; payer: '廖' | '周' }) => void;
@@ -45,6 +55,8 @@ interface SplitTravelTabProps {
   gasWebUrl?: string;
   callGasApi?: (action: string, payload?: any) => Promise<any>;
   enqueueSyncItem?: (action: string, payload: any, desc: string) => void;
+  isDbConnected?: boolean;
+  onOpenGasDeploy?: () => void;
 }
 
 // 8 種旅程專屬主題底色配色方案
@@ -172,12 +184,62 @@ const CURRENCY_DEFAULTS: Record<string, { rate: number; symbol: string; label: s
   'HKD': { rate: 4.12, symbol: 'HK$', label: '港幣 (HKD)', name: '港幣' },
 };
 
+// 智慧品項名稱偵測消費類別
+export const detectTravelCategory = (name: string): TravelExpenseItem['category'] | null => {
+  if (!name) return null;
+  const lower = name.toLowerCase().trim();
+
+  // 1. 租車加油
+  if (/租車|加油|油錢|停車|過路費|etc|高速公路|toll|car rental|自駕|租機車|租車保險/.test(lower)) {
+    return '租車加油';
+  }
+
+  // 2. 機票交通
+  if (/機票|航班|機位|行李托運|地鐵|捷運|地鐵卡|交通卡|西瓜卡|suica|icoca|t-money|pasmo|八達通|公車|巴士|計程車|taxi|uber|grab|高鐵|新幹線|火車|特急|乘車券|車票|纜車|渡輪|船票|快線|接駁|機場快線|悠遊卡/.test(lower)) {
+    return '機票交通';
+  }
+
+  // 3. 住宿訂房
+  if (/飯店|酒店|民宿|住宿|旅館|青年旅館|hotel|hostel|airbnb|resort|房費|入住|渡假村|露營|溫泉飯店/.test(lower)) {
+    return '住宿訂房';
+  }
+
+  // 4. 門票景點
+  if (/門票|景點|樂園|迪士尼|環球影城|usj|海洋|水族館|動物園|博物館|美術館|展覽|展望台|觀景台|塔|宮|寺|神社|票券|入場券|門票訂位/.test(lower)) {
+    return '門票景點';
+  }
+
+  // 5. 體驗活動
+  if (/體驗|活動|按摩|spa|溫泉|滑雪|潛水|浮潛|跳傘|高空彈跳|和服|韓服|手作|diy|導覽|tour|一日遊|極光|泛舟|觀光巴士/.test(lower)) {
+    return '體驗活動';
+  }
+
+  // 6. 購物伴手禮
+  if (/伴手禮|藥妝|唐吉訶德|donki|免稅|duty free|買|採買|衣服|服飾|鞋|包包|飾品|紀念品|零食|超市|大創|daiso|bic camera|yodobashi|outlet|百貨|商場|代購|名產/.test(lower)) {
+    return '購物伴手禮';
+  }
+
+  // 7. 美食餐廳
+  if (/燒肉|烤肉|火鍋|壽司|拉麵|居酒屋|咖啡|cafe|coffee|下午茶|甜點|蛋糕|抹茶|冰淇淋|早餐|早午餐|午餐|晚餐|宵夜|食堂|餐廳|牛排|炸雞|啤酒|居酒|餐酒館|小吃|夜市|飲品|手搖|飲料|便當|美食|點心|披薩|漢堡|生魚片/.test(lower)) {
+    return '美食餐廳';
+  }
+
+  // 8. 其他雜支 / 網卡
+  if (/esim|sim|網卡|wifi|保險|漫遊|行李|寄放|寄存|寄物|手續費|換匯|小費|簽證/.test(lower)) {
+    return '其他雜支';
+  }
+
+  return null;
+};
+
 export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
   onConvertToSplit,
   showToast,
   gasWebUrl,
   callGasApi,
   enqueueSyncItem,
+  isDbConnected = true,
+  onOpenGasDeploy,
 }) => {
   // 1. 行程列表 (預設乾淨無假資料)
   const [trips, setTrips] = useState<TravelTrip[]>(() => {
@@ -304,6 +366,14 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
   // 狀態管理
   const [subTab, setSubTab] = useState<'expenses' | 'wishlist' | 'settlement'>('expenses');
   const [filterCategory, setFilterCategory] = useState<string>('ALL');
+  const [filterPayer, setFilterPayer] = useState<string>('ALL');
+  const [filterSplitPerson, setFilterSplitPerson] = useState<string>('ALL');
+  const [searchKeyword, setSearchKeyword] = useState<string>('');
+  const [selectedMemberDetail, setSelectedMemberDetail] = useState<string | null>(null);
+
+  // 批次匯入 & 快速記帳 Modal 狀態
+  const [isBatchImportOpen, setIsBatchImportOpen] = useState(false);
+  const [isReceiptQuickOpen, setIsReceiptQuickOpen] = useState(false);
 
   // 編輯 / 建立行程 Modal
   const [isTripModalOpen, setIsTripModalOpen] = useState(false);
@@ -321,15 +391,21 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
   const [tripFormMembers, setTripFormMembers] = useState<string[]>(['廖', '周']);
   const [newMemberInput, setNewMemberInput] = useState('');
 
-  // 新增支出 Modal
+  // 新增 / 編輯支出 Modal
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expCategory, setExpCategory] = useState<TravelExpenseItem['category']>('美食餐廳');
   const [expItemName, setExpItemName] = useState('');
   const [expPayer, setExpPayer] = useState<string>('廖');
   const [expCurrency, setExpCurrency] = useState<string>(activeTrip?.currency || 'JPY');
   const [expRate, setExpRate] = useState<string>(String(activeTrip?.exchangeRate || 0.215));
   const [expOriginalAmount, setExpOriginalAmount] = useState<string>('');
+  const [expUnitPrice, setExpUnitPrice] = useState<string>('');
+  const [expQuantity, setExpQuantity] = useState<string>('');
+  const [expDiscount, setExpDiscount] = useState<string>('');
+  const [expPaymentMethod, setExpPaymentMethod] = useState<string>('信用卡');
   const [expSplitMode, setExpSplitMode] = useState<TravelExpenseItem['splitMode']>('全體AA');
+  const [expSplitTarget, setExpSplitTarget] = useState<string>('全體');
   const [expParticipants, setExpParticipants] = useState<string[]>([]);
   const [expCustomSplits, setExpCustomSplits] = useState<Record<string, string>>({});
   const [expLocation, setExpLocation] = useState('');
@@ -425,6 +501,21 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     setIsTripModalOpen(true);
   };
 
+  // 旅程起訖日期防呆切換
+  const handleStartDateChange = (newStart: string) => {
+    setTripFormStartDate(newStart);
+    if (tripFormEndDate && newStart && tripFormEndDate < newStart) {
+      setTripFormEndDate(newStart);
+    }
+  };
+
+  const handleEndDateChange = (newEnd: string) => {
+    setTripFormEndDate(newEnd);
+    if (tripFormStartDate && newEnd && newEnd < tripFormStartDate) {
+      setTripFormStartDate(newEnd);
+    }
+  };
+
   // 新增自訂成員到行程表單
   const handleAddMemberToForm = () => {
     const trimmed = newMemberInput.trim();
@@ -457,6 +548,12 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     const rate = parseFloat(tripFormRate) || 1;
     const budget = tripFormHasBudget ? (parseFloat(tripFormBudget) || 0) : undefined;
 
+    let finalStart = tripFormStartDate || new Date().toISOString().split('T')[0];
+    let finalEnd = tripFormEndDate || finalStart;
+    if (finalStart && finalEnd && finalEnd < finalStart) {
+      finalEnd = finalStart;
+    }
+
     if (isEditingTrip && activeTrip) {
       // 編輯更新
       const targetTrip: TravelTrip = {
@@ -464,8 +561,8 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         title: tripFormTitle.trim(),
         destination: tripFormDestination.trim() || '自由行',
         coverEmoji: tripFormEmoji.trim() || '✈️',
-        startDate: tripFormStartDate,
-        endDate: tripFormEndDate,
+        startDate: finalStart,
+        endDate: finalEnd,
         currency: tripFormCurrency,
         exchangeRate: rate,
         budgetTWD: budget,
@@ -491,8 +588,8 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         title: tripFormTitle.trim(),
         destination: tripFormDestination.trim() || '自由行',
         coverEmoji: tripFormEmoji.trim() || '✈️',
-        startDate: tripFormStartDate || new Date().toISOString().split('T')[0],
-        endDate: tripFormEndDate || new Date().toISOString().split('T')[0],
+        startDate: finalStart,
+        endDate: finalEnd,
         currency: tripFormCurrency,
         exchangeRate: rate,
         budgetTWD: budget,
@@ -562,13 +659,19 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
       showToast('請先選擇行程', 'error');
       return;
     }
+    setEditingExpenseId(null);
     setExpCategory('美食餐廳');
     setExpItemName('');
     setExpPayer(tripMembers[0] || '廖');
     setExpCurrency(activeTrip.currency || 'JPY');
     setExpRate(String(activeTrip.exchangeRate || 0.215));
     setExpOriginalAmount('');
+    setExpUnitPrice('');
+    setExpQuantity('');
+    setExpDiscount('');
+    setExpPaymentMethod('信用卡');
     setExpSplitMode('全體AA');
+    setExpSplitTarget('全體');
     setExpParticipants([...tripMembers]);
     setExpCustomSplits({});
     setExpLocation('');
@@ -576,12 +679,50 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     setIsAddExpenseOpen(true);
   };
 
-  // 提交新增支出
+  // 開啟編輯支出彈窗
+  const handleOpenEditExpenseModal = (targetExp: TravelExpenseItem) => {
+    if (!activeTrip) return;
+    setEditingExpenseId(targetExp.id);
+    setExpCategory(targetExp.category || '美食餐廳');
+    setExpItemName(targetExp.itemName || '');
+    setExpPayer(targetExp.payer || tripMembers[0] || '廖');
+    setExpCurrency(targetExp.originalCurrency || activeTrip.currency || 'JPY');
+    setExpRate(String(targetExp.exchangeRate || activeTrip.exchangeRate || 1));
+    setExpOriginalAmount(String(targetExp.originalAmount || ''));
+    setExpUnitPrice(targetExp.unitPrice !== undefined ? String(targetExp.unitPrice) : '');
+    setExpQuantity(targetExp.quantity !== undefined ? String(targetExp.quantity) : '');
+    setExpDiscount(targetExp.discount !== undefined ? String(targetExp.discount) : '');
+    setExpPaymentMethod(targetExp.paymentMethod || '信用卡');
+    setExpSplitMode(targetExp.splitMode || '全體AA');
+    setExpSplitTarget(targetExp.splitTarget || '全體');
+    setExpParticipants(targetExp.participants && targetExp.participants.length > 0 ? [...targetExp.participants] : [...tripMembers]);
+    const custMap: Record<string, string> = {};
+    if (targetExp.memberSplits) {
+      Object.entries(targetExp.memberSplits).forEach(([m, v]) => {
+        custMap[m] = String(v);
+      });
+    }
+    setExpCustomSplits(custMap);
+    setExpLocation(targetExp.location || '');
+    setExpNote(targetExp.note || '');
+    setIsAddExpenseOpen(true);
+  };
+
+  // 提交新增 / 編輯支出
   const handleAddExpense = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTrip) return;
 
-    const origAmt = parseFloat(expOriginalAmount);
+    let origAmt = parseFloat(expOriginalAmount);
+    // 若無輸入總額，但有輸入單價與數量，自動計算總額
+    const uPrice = parseFloat(expUnitPrice);
+    const qty = parseFloat(expQuantity);
+    const disc = parseFloat(expDiscount) || 0;
+    if ((isNaN(origAmt) || origAmt <= 0) && !isNaN(uPrice) && uPrice > 0) {
+      const q = isNaN(qty) || qty <= 0 ? 1 : qty;
+      origAmt = Math.max(0, uPrice * q - disc);
+    }
+
     if (isNaN(origAmt) || origAmt <= 0) {
       showToast('請輸入有效金額', 'error');
       return;
@@ -598,20 +739,33 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     const participants = expParticipants.length > 0 ? expParticipants : tripMembers;
     const memberSplits: Record<string, number> = {};
 
+    tripMembers.forEach(m => { memberSplits[m] = 0; });
+
     if (expPayer === '共同基金') {
       // 共同基金支出，不計入個別代墊負債
       tripMembers.forEach(m => { memberSplits[m] = 0; });
+    } else if (expSplitMode === '個人自付') {
+      // 個人 100% 自付
+      const targetPerson = expSplitTarget && expSplitTarget !== '全體' ? expSplitTarget : (expPayer !== '共同基金' ? expPayer : tripMembers[0]);
+      memberSplits[targetPerson] = totalTWD;
     } else if (expSplitMode === '全體AA' || expSplitMode === 'AA平分') {
       const share = Math.round(totalTWD / (tripMembers.length || 1));
       tripMembers.forEach(m => { memberSplits[m] = share; });
     } else if (expSplitMode === '參與者AA') {
-      const share = Math.round(totalTWD / (participants.length || 1));
-      participants.forEach(m => { memberSplits[m] = share; });
+      if (participants.length === 1) {
+        // 若參與者AA僅選取1人，100% 由該成員負擔（等同個人自付/全額代墊）
+        const singleTarget = participants[0];
+        memberSplits[singleTarget] = totalTWD;
+      } else {
+        const share = Math.round(totalTWD / (participants.length || 1));
+        participants.forEach(m => { memberSplits[m] = share; });
+      }
     } else if (expSplitMode === '全額代墊') {
       // 指定參與者全部分擔（扣除 payer 自己）
       const nonPayers = participants.filter(p => p !== expPayer);
-      const share = Math.round(totalTWD / (nonPayers.length || 1));
-      nonPayers.forEach(m => { memberSplits[m] = share; });
+      const targetGroup = nonPayers.length > 0 ? nonPayers : participants;
+      const share = Math.round(totalTWD / (targetGroup.length || 1));
+      targetGroup.forEach(m => { memberSplits[m] = share; });
     } else if (expSplitMode === '自訂金額') {
       participants.forEach(m => {
         memberSplits[m] = parseFloat(expCustomSplits[m] || '0') || 0;
@@ -622,30 +776,33 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     let debtor = 'none';
     let debtorAmtTWD = 0;
     if (expPayer !== '共同基金') {
-      const otherMembers = tripMembers.filter(m => m !== expPayer);
-      if (otherMembers.length === 1) {
-        debtor = otherMembers[0];
-        debtorAmtTWD = memberSplits[debtor] || Math.round(totalTWD / 2);
-      } else {
+      const nonPayers = Object.entries(memberSplits).filter(([m, val]) => m !== expPayer && val > 0);
+      if (nonPayers.length === 1) {
+        debtor = nonPayers[0][0];
+        debtorAmtTWD = nonPayers[0][1];
+      } else if (nonPayers.length > 1) {
         debtor = '多位成員';
-        debtorAmtTWD = Object.entries(memberSplits)
-          .filter(([m]) => m !== expPayer)
-          .reduce((sum, [, val]) => sum + val, 0);
+        debtorAmtTWD = nonPayers.reduce((sum, [, val]) => sum + val, 0);
       }
     }
 
-    const newExpense: TravelExpenseItem = {
-      id: 'exp-' + Date.now(),
+    const expenseItemData: TravelExpenseItem = {
+      id: editingExpenseId || ('exp-' + Date.now()),
       tripId: activeTrip.id,
       date: new Date().toISOString().split('T')[0],
       category: expCategory,
       itemName: expItemName.trim(),
+      unitPrice: !isNaN(uPrice) && uPrice > 0 ? uPrice : undefined,
+      quantity: !isNaN(qty) && qty > 0 ? qty : undefined,
+      discount: !isNaN(disc) && disc > 0 ? disc : undefined,
       payer: expPayer,
+      paymentMethod: expPaymentMethod || '信用卡',
       originalCurrency: expCurrency,
       originalAmount: origAmt,
       exchangeRate: rate,
       totalAmountTWD: totalTWD,
       splitMode: expSplitMode,
+      splitTarget: expSplitMode === '個人自付' ? expSplitTarget : undefined,
       participants,
       memberSplits,
       debtor,
@@ -656,16 +813,86 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
       createdAt: new Date().toISOString().split('T')[0]
     };
 
-    const updated = [newExpense, ...expenses];
-    saveExpenses(updated);
+    let updatedList: TravelExpenseItem[];
+    if (editingExpenseId) {
+      updatedList = expenses.map(e => e.id === editingExpenseId ? expenseItemData : e);
+      showToast(`已更新旅費：${expenseItemData.itemName}（NT$ ${(Number(totalTWD) || 0).toLocaleString()}）`, 'success');
+    } else {
+      updatedList = [expenseItemData, ...expenses];
+      showToast(`已新增旅費：${expenseItemData.itemName}（NT$ ${(Number(totalTWD) || 0).toLocaleString()}）`, 'success');
+    }
+
+    saveExpenses(updatedList);
     setIsAddExpenseOpen(false);
-    showToast(`已新增旅費：${newExpense.itemName}（NT$ ${(Number(totalTWD) || 0).toLocaleString()}）`, 'success');
+    setEditingExpenseId(null);
 
     if (callGasApi) {
-      callGasApi('addTravelExpense', newExpense).then(res => {
+      callGasApi('addTravelExpense', expenseItemData).then(res => {
         if (res?.success) {
           fetchTravelDataFromGas(true);
         }
+      }).catch(() => {});
+    }
+  };
+
+  // 批次匯入多筆支出 (支援 Excel 貼上)
+  const handleImportExpenses = (newExpenses: TravelExpenseItem[]) => {
+    if (!activeTrip || newExpenses.length === 0) return;
+    const updated = [...newExpenses, ...expenses];
+    saveExpenses(updated);
+    setIsBatchImportOpen(false);
+
+    const totalImportedTWD = newExpenses.reduce((sum, item) => sum + (Number(item.totalAmountTWD) || 0), 0);
+    showToast(`🎉 成功匯入 ${newExpenses.length} 筆旅費支出（總額 NT$ ${(Number(totalImportedTWD) || 0).toLocaleString()}）！`, 'success');
+
+    if (callGasApi) {
+      callGasApi('addBatchTravelExpenses', { items: newExpenses }).then(res => {
+        if (res?.success) {
+          fetchTravelDataFromGas(true);
+        }
+      }).catch(err => {
+        console.error('Batch import GAS error:', err);
+      });
+    }
+  };
+
+  // 連續記帳/收據多品項錄入
+  const handleAddQuickExpenses = (newExpenses: TravelExpenseItem[]) => {
+    if (!activeTrip || newExpenses.length === 0) return;
+    const updated = [...newExpenses, ...expenses];
+    saveExpenses(updated);
+    setIsReceiptQuickOpen(false);
+
+    const totalTWD = newExpenses.reduce((sum, item) => sum + (Number(item.totalAmountTWD) || 0), 0);
+    showToast(`🛒 成功記錄 ${newExpenses.length} 個品項（總額 NT$ ${(Number(totalTWD) || 0).toLocaleString()}）！`, 'success');
+
+    if (callGasApi) {
+      callGasApi('addBatchTravelExpenses', { items: newExpenses }).then(res => {
+        if (res?.success) {
+          fetchTravelDataFromGas(true);
+        }
+      }).catch(err => {
+        console.error('Quick expenses GAS error:', err);
+      });
+    }
+  };
+
+  // 自動同步新發現的同行成員
+  const handleAddTripMembers = (newMembers: string[]) => {
+    if (!activeTrip || newMembers.length === 0) return;
+    const existing = activeTrip.members || ['廖', '周'];
+    const merged = Array.from(new Set([...existing, ...newMembers]));
+    const updatedTrip: TravelTrip = {
+      ...activeTrip,
+      members: merged
+    };
+    const updatedTrips = trips.map(t => t.id === activeTrip.id ? updatedTrip : t);
+    saveTrips(updatedTrips);
+    showToast(`已為本行程新增同行成員：${newMembers.join('、')}`, 'info');
+
+    if (callGasApi) {
+      callGasApi('saveTravelTrip', updatedTrip).then(res => {
+        if (res?.success) fetchTravelDataFromGas(true);
       }).catch(() => {});
     }
   };
@@ -697,40 +924,86 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     });
   };
 
-  // 多成員結算核心演算法（支援任意多人）
+  // 多成員結算核心演算法（支援任意多人、個人專屬自付、店家統計與個人明細）
   const tripSummary = useMemo(() => {
     let totalTWD = 0;
     const memberPaid: Record<string, number> = {};
     const memberShare: Record<string, number> = {};
+    const memberPersonalAmounts: Record<string, number> = {};
+    const memberSharedAmounts: Record<string, number> = {};
+    const memberPersonalItems: Record<string, TravelExpenseItem[]> = {};
+    const memberSharedItems: Record<string, { item: TravelExpenseItem; share: number }[]> = {};
+    const memberPaidItems: Record<string, TravelExpenseItem[]> = {};
     const categoryBreakdown: Record<string, number> = {};
+    const locationBreakdown: Record<string, { totalTWD: number; count: number; items: string[] }> = {};
 
     tripMembers.forEach(m => {
       memberPaid[m] = 0;
       memberShare[m] = 0;
+      memberPersonalAmounts[m] = 0;
+      memberSharedAmounts[m] = 0;
+      memberPersonalItems[m] = [];
+      memberSharedItems[m] = [];
+      memberPaidItems[m] = [];
     });
 
     currentTripExpenses.forEach(exp => {
-      const amt = exp.totalAmountTWD;
+      const amt = Number(exp.totalAmountTWD) || 0;
       totalTWD += amt;
 
       // 類別累計
       categoryBreakdown[exp.category] = (categoryBreakdown[exp.category] || 0) + amt;
 
+      // 地點累計
+      const loc = exp.location?.trim() || '未標註地點';
+      if (!locationBreakdown[loc]) {
+        locationBreakdown[loc] = { totalTWD: 0, count: 0, items: [] };
+      }
+      locationBreakdown[loc].totalTWD += amt;
+      locationBreakdown[loc].count += 1;
+      if (!locationBreakdown[loc].items.includes(exp.itemName)) {
+        locationBreakdown[loc].items.push(exp.itemName);
+      }
+
       // 付款人
       if (exp.payer !== '共同基金') {
         memberPaid[exp.payer] = (memberPaid[exp.payer] || 0) + amt;
+        if (memberPaidItems[exp.payer]) {
+          memberPaidItems[exp.payer].push(exp);
+        }
       }
 
-      // 分攤
-      if (exp.memberSplits) {
+      // 分攤統計
+      if (exp.splitMode === '個人自付' && exp.splitTarget && exp.splitTarget !== '全體') {
+        const target = exp.splitTarget;
+        memberShare[target] = (memberShare[target] || 0) + amt;
+        memberPersonalAmounts[target] = (memberPersonalAmounts[target] || 0) + amt;
+        if (memberPersonalItems[target]) {
+          memberPersonalItems[target].push(exp);
+        }
+      } else if (exp.memberSplits && Object.keys(exp.memberSplits).length > 0) {
         Object.entries(exp.memberSplits).forEach(([m, shareAmt]) => {
-          memberShare[m] = (memberShare[m] || 0) + (Number(shareAmt) || 0);
+          const s = Number(shareAmt) || 0;
+          memberShare[m] = (memberShare[m] || 0) + s;
+          if (s > 0) {
+            // 判斷是否為唯一負擔者（個人自付）
+            const nonZeroSplits = Object.values(exp.memberSplits || {}).filter(v => (Number(v) || 0) > 0);
+            if (nonZeroSplits.length === 1) {
+              memberPersonalAmounts[m] = (memberPersonalAmounts[m] || 0) + s;
+              if (memberPersonalItems[m]) memberPersonalItems[m].push(exp);
+            } else {
+              memberSharedAmounts[m] = (memberSharedAmounts[m] || 0) + s;
+              if (memberSharedItems[m]) memberSharedItems[m].push({ item: exp, share: s });
+            }
+          }
         });
       } else {
         // 舊資料相容：全體 AA
         const perShare = Math.round(amt / (tripMembers.length || 1));
         tripMembers.forEach(m => {
           memberShare[m] = (memberShare[m] || 0) + perShare;
+          memberSharedAmounts[m] = (memberSharedAmounts[m] || 0) + perShare;
+          if (memberSharedItems[m]) memberSharedItems[m].push({ item: exp, share: perShare });
         });
       }
     });
@@ -814,6 +1087,12 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
       perPersonAverage,
       memberPaid,
       memberShare,
+      memberPersonalAmounts,
+      memberSharedAmounts,
+      memberPersonalItems,
+      memberSharedItems,
+      memberPaidItems,
+      locationBreakdown,
       netBalances,
       transactions,
       coupleResultText,
@@ -918,7 +1197,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     setIsAddExpenseOpen(true);
   };
 
-  // 一鍵複製旅行帳單
+  // 一鍵複製完整旅行對帳單 (Line / 通訊群組友善排版)
   const handleCopyBillSummary = () => {
     if (!activeTrip) return;
     const lines = [
@@ -927,13 +1206,20 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
       `👥 出遊成員：${tripMembers.join('、')}`,
       `💰 總旅費支出：NT$ ${(Number(tripSummary.totalTWD) || 0).toLocaleString()} 元 (人均 NT$ ${(Number(tripSummary.perPersonAverage) || 0).toLocaleString()})`,
       `------------------------`,
-      `💳 各成員先代墊金額：`,
-      ...tripMembers.map(m => `• ${m} 先付：NT$ ${(Number(tripSummary.memberPaid[m]) || 0).toLocaleString()} (實應負擔 NT$ ${(Number(tripSummary.memberShare[m]) || 0).toLocaleString()})`),
-      `------------------------`,
-      `🎯 結清平帳還款清單：`,
+      `🎯 最終平帳轉帳清單（誰該還誰）：`,
       ...(tripSummary.transactions.length > 0 
         ? tripSummary.transactions.map(t => `👉 ${t.from} 應支付給 ${t.to}：NT$ ${(Number(t.amount) || 0).toLocaleString()}`)
         : ['✨ 所有成員分攤皆已完全平衡，無須轉帳！']),
+      `------------------------`,
+      `💳 各成員收支明細：`,
+      ...tripMembers.map(m => {
+        const paid = Number(tripSummary.memberPaid[m]) || 0;
+        const share = Number(tripSummary.memberShare[m]) || 0;
+        const personal = Number(tripSummary.memberPersonalAmounts[m]) || 0;
+        const shared = Number(tripSummary.memberSharedAmounts[m]) || 0;
+        const net = Number(tripSummary.netBalances[m]) || 0;
+        return `• ${m}：先付 $${paid.toLocaleString()} | 應負擔 $${share.toLocaleString()} (個人專屬 $${personal.toLocaleString()} + 均攤 $${shared.toLocaleString()}) ➔ 結算：${net >= 0 ? `應收回 +$${net.toLocaleString()}` : `應支付 -$${Math.abs(net).toLocaleString()}`}`;
+      }),
       `------------------------`,
       `📝 類別開銷明細：`,
       ...Object.entries(tripSummary.categoryBreakdown).map(([cat, amt]) => `• ${cat}：NT$ ${(Number(amt) || 0).toLocaleString()} (${Math.round(((Number(amt) || 0) / (tripSummary.totalTWD || 1)) * 100)}%)`),
@@ -941,7 +1227,147 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     ];
 
     navigator.clipboard.writeText(lines.join('\n'));
-    showToast('📋 已複製完整旅行對帳單！可直接貼至 Telegram / 通訊群組', 'success');
+    showToast('📋 已複製完整旅行對帳單！可直接貼至 LINE / 通訊群組', 'success');
+  };
+
+  // 一鍵下載所有旅費支出為標準 Excel 試算表 (.xlsx 活頁簿，不亂碼、排版精確)
+  const handleDownloadExcelXLSX = () => {
+    if (!activeTrip || currentTripExpenses.length === 0) {
+      showToast('目前尚無支出資料可匯出', 'info');
+      return;
+    }
+
+    try {
+      const cur = activeTrip.currency || 'KRW';
+      const headers = [
+        '時間戳記',
+        '購物地點',
+        '品項',
+        `單價(${cur})`,
+        '數量',
+        `小計(${cur})`,
+        '備註/折扣',
+        '款項支付方式',
+        '代墊人',
+        '分帳對象(就是誰要還給代墊人)'
+      ];
+
+      const rows = currentTripExpenses.map(exp => {
+        let splitTargetText = '全體AA';
+        if (exp.splitMode === '個人自付') {
+          splitTargetText = exp.splitTarget || '個人自付';
+        } else if (exp.splitMode === '全額代墊') {
+          const target = (exp.participants || []).filter(p => p !== exp.payer)[0] || exp.splitTarget || '全額代墊';
+          splitTargetText = target;
+        } else if (exp.splitMode === '全體AA' || exp.splitMode === 'AA平分') {
+          splitTargetText = '全體AA';
+        } else if (exp.splitMode === '參與者AA') {
+          if (exp.participants && exp.participants.length === 1) {
+            splitTargetText = exp.participants[0];
+          } else if (exp.participants && exp.participants.length > 0) {
+            splitTargetText = exp.participants.join('+');
+          } else {
+            splitTargetText = '全體AA';
+          }
+        }
+
+        return [
+          exp.date || '',
+          exp.location || '',
+          exp.itemName || '',
+          exp.unitPrice !== undefined ? exp.unitPrice : (exp.originalAmount || 0),
+          exp.quantity !== undefined ? exp.quantity : 1,
+          exp.originalAmount || 0,
+          exp.note || '',
+          exp.paymentMethod || '信用卡',
+          exp.payer || '',
+          splitTargetText
+        ];
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws['!cols'] = [
+        { wch: 18 }, // 時間戳記
+        { wch: 22 }, // 購物地點
+        { wch: 32 }, // 品項
+        { wch: 14 }, // 單價
+        { wch: 8 },  // 數量
+        { wch: 14 }, // 小計
+        { wch: 16 }, // 備註/折扣
+        { wch: 14 }, // 款項支付方式
+        { wch: 12 }, // 代墊人
+        { wch: 22 }  // 分帳對象
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '旅費支出明細');
+
+      const fileName = `旅費支出明細_${activeTrip.title || '旅程'}_${cur}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      showToast(`📥 已成功下載 Excel 檔案「${fileName}」！`, 'success');
+    } catch (err) {
+      console.error('Export XLSX error:', err);
+      showToast('匯出 Excel 檔案失敗，請改用複製表格', 'error');
+    }
+  };
+
+  // 一鍵複製所有旅費支出為 Excel 試算表格式 (Tab 分隔，可直接貼上試算表，精準對齊 10 欄)
+  const handleCopyExcelData = () => {
+    if (!activeTrip || currentTripExpenses.length === 0) {
+      showToast('目前尚無支出資料可匯出', 'info');
+      return;
+    }
+
+    const cur = activeTrip.currency || 'KRW';
+    const headers = [
+      '時間戳記',
+      '購物地點',
+      '品項',
+      `單價(${cur})`,
+      '數量',
+      `小計(${cur})`,
+      '備註/折扣',
+      '款項支付方式',
+      '代墊人',
+      '分帳對象(就是誰要還給代墊人)'
+    ];
+
+    const rows = currentTripExpenses.map(exp => {
+      let splitTargetText = '全體AA';
+      if (exp.splitMode === '個人自付') {
+        splitTargetText = exp.splitTarget || '個人自付';
+      } else if (exp.splitMode === '全額代墊') {
+        const target = (exp.participants || []).filter(p => p !== exp.payer)[0] || exp.splitTarget || '全額代墊';
+        splitTargetText = target;
+      } else if (exp.splitMode === '全體AA' || exp.splitMode === 'AA平分') {
+        splitTargetText = '全體AA';
+      } else if (exp.splitMode === '參與者AA') {
+        if (exp.participants && exp.participants.length === 1) {
+          splitTargetText = exp.participants[0];
+        } else if (exp.participants && exp.participants.length > 0) {
+          splitTargetText = exp.participants.join('+');
+        } else {
+          splitTargetText = '全體AA';
+        }
+      }
+
+      return [
+        exp.date || '',
+        exp.location || '',
+        exp.itemName || '',
+        exp.unitPrice !== undefined ? exp.unitPrice : (exp.originalAmount || 0),
+        exp.quantity !== undefined ? exp.quantity : 1,
+        exp.originalAmount || 0,
+        exp.note || '',
+        exp.paymentMethod || '信用卡',
+        exp.payer || '',
+        splitTargetText
+      ].join('\t');
+    });
+
+    const tsvContent = [headers.join('\t'), ...rows].join('\n');
+    navigator.clipboard.writeText(tsvContent);
+    showToast('📥 已複製 10 欄標準 Excel 格式表格！可直接在 Google 試算表或 Excel 中按下 Ctrl+V 貼上', 'success');
   };
 
   // 一鍵將旅費分帳轉入日常代墊借還
@@ -960,17 +1386,75 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     showToast(`🎉 已成功將旅行分帳 NT$ ${(Number(tripSummary.coupleNetAmount) || 0).toLocaleString()} 匯入日常代墊！`, 'success');
   };
 
-  // 支出分類篩選
+  // 支出分類與多條件篩選
   const filteredExpenses = useMemo(() => {
-    if (filterCategory === 'ALL') return currentTripExpenses;
-    return currentTripExpenses.filter(e => e.category === filterCategory);
-  }, [currentTripExpenses, filterCategory]);
+    return currentTripExpenses.filter(e => {
+      // 類別篩選
+      if (filterCategory !== 'ALL' && e.category !== filterCategory) return false;
+      // 代墊人篩選
+      if (filterPayer !== 'ALL' && e.payer !== filterPayer) return false;
+      // 分帳對象篩選
+      if (filterSplitPerson !== 'ALL') {
+        if (filterSplitPerson === '全體AA') {
+          if (e.splitMode !== '全體AA' && e.splitMode !== 'AA平分') return false;
+        } else if (filterSplitPerson === '個人自付') {
+          if (e.splitMode !== '個人自付') return false;
+        } else {
+          // 指定成員：或是他是個人自付對象、或是 memberSplits 中有他
+          const hasMemberSplit = e.memberSplits && (e.memberSplits[filterSplitPerson] || 0) > 0;
+          const isTarget = e.splitTarget === filterSplitPerson;
+          if (!hasMemberSplit && !isTarget) return false;
+        }
+      }
+      // 關鍵字搜尋
+      if (searchKeyword.trim()) {
+        const kw = searchKeyword.trim().toLowerCase();
+        const matchName = e.itemName.toLowerCase().includes(kw);
+        const matchLoc = (e.location || '').toLowerCase().includes(kw);
+        const matchNote = (e.note || '').toLowerCase().includes(kw);
+        const matchPayer = (e.payer || '').toLowerCase().includes(kw);
+        const matchTarget = (e.splitTarget || '').toLowerCase().includes(kw);
+        if (!matchName && !matchLoc && !matchNote && !matchPayer && !matchTarget) return false;
+      }
+      return true;
+    });
+  }, [currentTripExpenses, filterCategory, filterPayer, filterSplitPerson, searchKeyword]);
+
+  if (!isDbConnected) {
+    return (
+      <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
+        <div className="bg-white/85 backdrop-blur-md rounded-3xl p-8 sm:p-12 border border-[#E8E2D5] shadow-2xs text-center space-y-4 my-2">
+          <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-900 flex items-center justify-center mx-auto shadow-inner">
+            <Database className="w-8 h-8 text-amber-700" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg sm:text-2xl font-black text-[#3E3A36]">尚未連線至資料庫</h3>
+            <p className="text-xs sm:text-sm text-[#7A7366] leading-relaxed max-w-md mx-auto font-normal">
+              尚未登錄 Google 試算表 Web App API 金鑰，無法讀取旅遊分帳與行程專案。請先設定連線金鑰以同步雲端數據。
+            </p>
+          </div>
+          {onOpenGasDeploy && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onOpenGasDeploy}
+                className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
+              >
+                <Key className="w-4 h-4" />
+                <span>設定連線金鑰與同步</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // 若完全沒有任何旅程時的乾淨空白預設頁
   if (!activeTrip || trips.length === 0) {
     return (
-      <div className="max-w-4xl mx-auto pb-12 font-sans space-y-6">
-        <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8 sm:p-12 border border-[#E8E4D9] text-center shadow-xs space-y-4">
+      <div className="max-w-4xl mx-auto pb-4 sm:pb-6 font-sans space-y-4 sm:space-y-6">
+        <div className="bg-white/80 backdrop-blur-md rounded-3xl p-6 sm:p-10 border border-[#E8E4D9] text-center shadow-xs space-y-4">
           <div className="w-16 h-16 rounded-3xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto text-3xl shadow-inner">
             ✈️
           </div>
@@ -1117,7 +1601,8 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                           <input
                             type="date"
                             value={tripFormStartDate}
-                            onChange={(e) => setTripFormStartDate(e.target.value)}
+                            max={tripFormEndDate || undefined}
+                            onChange={(e) => handleStartDateChange(e.target.value)}
                             className="w-full p-2 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl focus:outline-none focus:border-rose-500"
                           />
                         </div>
@@ -1126,7 +1611,8 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                           <input
                             type="date"
                             value={tripFormEndDate}
-                            onChange={(e) => setTripFormEndDate(e.target.value)}
+                            min={tripFormStartDate || undefined}
+                            onChange={(e) => handleEndDateChange(e.target.value)}
                             className="w-full p-2 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl focus:outline-none focus:border-rose-500"
                           />
                         </div>
@@ -1166,11 +1652,11 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                       </div>
                     </div>
 
-                    {/* 旅程詳情框框底色主題 */}
+                    {/* 旅程主題 */}
                     <div className="space-y-1.5">
                       <label className="font-bold text-[#5C564E] flex items-center gap-1">
                         <Palette className="w-3.5 h-3.5 text-rose-600" />
-                        <span>自訂旅程詳情框框底色主題</span>
+                        <span>自訂旅程主題</span>
                       </label>
                       <div className="grid grid-cols-4 gap-2">
                         {Object.values(TRIP_THEMES).map(theme => (
@@ -1273,76 +1759,73 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-12 font-sans">
+    <div className="space-y-3.5 sm:space-y-5 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
       {/* 1. 頂部旅行專案橫幅 (支援自訂底色主題、重新命名、自訂時間、成員標籤) */}
-      <div className={`bg-gradient-to-r ${currentTheme.gradient} text-white rounded-3xl p-5 sm:p-7 shadow-xl relative overflow-hidden transition-all duration-300`}>
+      <div className={`bg-gradient-to-r ${currentTheme.gradient} text-white rounded-3xl p-4 sm:p-6 shadow-xl relative overflow-hidden transition-all duration-300`}>
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-white/15 via-transparent to-transparent pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-2.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-[11px] font-bold text-white flex items-center gap-1 border border-white/20">
-                <Palmtree className="w-3.5 h-3.5" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3.5 sm:gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <span className="px-2.5 py-0.5 sm:py-1 rounded-full bg-white/20 backdrop-blur-md text-[10px] sm:text-[11px] font-bold text-white flex items-center gap-1 border border-white/20">
+                <Palmtree className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 <span>旅遊分帳專案</span>
               </span>
-              <span className="px-2.5 py-1 rounded-full bg-black/25 text-[11px] font-semibold text-white/90 border border-white/10 flex items-center gap-1">
-                <Users className="w-3.5 h-3.5" />
+              <span className="px-2.5 py-0.5 sm:py-1 rounded-full bg-black/25 text-[10px] sm:text-[11px] font-semibold text-white/90 border border-white/10 flex items-center gap-1">
+                <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 <span>{tripMembers.length} 位成員 ({tripMembers.join('、')})</span>
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-white/20 text-[11px] font-bold text-white border border-white/20 flex items-center gap-1">
-                <Palette className="w-3.5 h-3.5" />
-                <span>{currentTheme.name}</span>
               </span>
             </div>
 
             {/* 行程名稱與目的地 */}
-            <div className="flex items-center gap-3">
-              <div className="text-3xl sm:text-4xl shrink-0 p-1 bg-white/10 rounded-2xl backdrop-blur-xs">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="text-2.5xl sm:text-3xl shrink-0 p-1 bg-white/10 rounded-2xl backdrop-blur-xs">
                 {activeTrip?.coverEmoji || '✈️'}
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl sm:text-2xl font-black tracking-tight drop-shadow-xs">
+                  <h1 className="text-lg sm:text-2xl font-black tracking-tight drop-shadow-xs leading-snug">
                     {activeTrip?.title || '尚未選擇行程'}
                   </h1>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-white/80 pt-1 flex-wrap font-medium">
+                {/* 日期、地點、匯率 (緊湊窄行高設計) */}
+                <div className="flex items-center gap-x-2 gap-y-0.5 text-[11px] sm:text-xs text-white/85 pt-0.5 flex-wrap font-medium leading-tight">
                   <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-white/90" />
+                    <Calendar className="w-3 h-3 text-white/90 shrink-0" />
                     <span>{activeTrip?.startDate} ~ {activeTrip?.endDate}</span>
                   </span>
-                  <span>•</span>
+                  <span className="opacity-60">•</span>
                   <span className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-white/90" />
+                    <MapPin className="w-3 h-3 text-white/90 shrink-0" />
                     <span>{activeTrip?.destination}</span>
                   </span>
-                  <span>•</span>
-                  <span>外幣：{activeTrip?.currency} (匯率 {activeTrip?.exchangeRate})</span>
+                  <span className="opacity-60">•</span>
+                  <span>外幣：{activeTrip?.currency} ({activeTrip?.exchangeRate})</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 右側操作區：切換行程、同步試算表、編輯行程設定、建立新行程 */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* 試算表同步按鈕 */}
+          {/* 右側操作區：純符號輕量按鈕組 (同步、切換、設定、新增) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap self-start sm:self-auto shrink-0">
+            {/* 試算表同步按鈕 (純符號) */}
             <button
               type="button"
               onClick={() => fetchTravelDataFromGas(false)}
               disabled={isGasLoading}
-              className="px-3 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold border border-white/30 backdrop-blur-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+              className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-md transition-all flex items-center justify-center cursor-pointer active:scale-95 shrink-0 shadow-2xs"
               title="與 Google 試算表同步"
+              aria-label="與 Google 試算表同步"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isGasLoading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isGasLoading ? '同步中' : '同步'}</span>
             </button>
 
-            {/* 行程下拉選單 */}
-            <div className="relative">
+            {/* 行程下拉選單 (小框緊湊版) */}
+            <div className="relative shrink-0">
               <select
                 value={activeTripId}
                 onChange={(e) => setActiveTripId(e.target.value)}
-                className="appearance-none bg-white/20 hover:bg-white/30 border border-white/30 text-white font-bold text-xs py-2.5 pl-3 pr-8 rounded-xl backdrop-blur-md cursor-pointer transition-colors focus:outline-none"
+                className="appearance-none bg-white/20 hover:bg-white/30 border border-white/30 text-white font-bold text-xs h-8 sm:h-8.5 pl-2.5 pr-7 rounded-xl backdrop-blur-md cursor-pointer transition-colors focus:outline-none"
               >
                 {trips.map(t => (
                   <option key={t.id} value={t.id} className="text-[#3E3A36] bg-white">
@@ -1350,28 +1833,29 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                   </option>
                 ))}
               </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-white/80" />
+              <ChevronDown className="w-3.5 h-3.5 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-white/80" />
             </div>
 
-            {/* 編輯當前行程 (改名、調日期、改底色、加成員) */}
+            {/* 編輯當前行程 (純符號按鈕) */}
             <button
               type="button"
               onClick={handleOpenEditTripModal}
-              className="px-3 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold border border-white/30 backdrop-blur-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
-              title="編輯行程名稱、時間、主題底色與成員名單"
+              className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-md transition-all flex items-center justify-center cursor-pointer active:scale-95 shrink-0 shadow-2xs"
+              title="行程設定（編輯名稱、時間、主題、成員）"
+              aria-label="行程設定"
             >
-              <Settings2 className="w-4 h-4" />
-              <span>設定</span>
+              <Settings2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
-            {/* 建立新行程 */}
+            {/* 建立新行程 (純符號按鈕) */}
             <button
               type="button"
               onClick={handleOpenCreateTripModal}
-              className="px-3.5 py-2.5 rounded-xl bg-white text-[#3E3A36] hover:bg-white/90 text-xs font-black shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+              className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl bg-white text-[#3E3A36] hover:bg-white/90 shadow-md transition-all flex items-center justify-center cursor-pointer active:scale-95 shrink-0"
+              title="建立新旅程專案"
+              aria-label="建立新旅程專案"
             >
               <Plus className="w-4 h-4 text-[#3E3A36]" />
-              <span>新行程</span>
             </button>
           </div>
         </div>
@@ -1459,7 +1943,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                 type="button"
                 onClick={handleCopyBillSummary}
                 className={`text-[11px] ${currentTheme.textAccent} hover:underline flex items-center gap-0.5 font-bold cursor-pointer`}
-                title="複製旅費清單至 Telegram"
+                title="複製旅費對帳清單"
               >
                 <Copy className="w-3.5 h-3.5" />
                 <span>複製帳單</span>
@@ -1550,52 +2034,192 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
       {/* 4. Tab 1: 支出流水與明細 */}
       {subTab === 'expenses' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/70 backdrop-blur-md p-3.5 rounded-2xl border border-[#E8E4D9]">
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+          {/* 上方功能工具列：記一筆、快速收據、Excel 匯入、下載 Excel、複製試算表 (純符號輕量按鈕組) */}
+          <div className="bg-white/80 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-[#E8E4D9] space-y-2.5 shadow-2xs">
+            <div className="flex items-center justify-between gap-2">
+              {/* 左側操作：記一筆、快速收據、Excel 匯入 */}
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap">
+                {/* 記一筆旅費 */}
+                <button
+                  type="button"
+                  onClick={handleOpenAddExpenseModal}
+                  className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white shadow-2xs transition-all cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
+                  title="記一筆旅費"
+                  aria-label="記一筆旅費"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+
+                {/* 快速收據記帳 */}
+                <button
+                  type="button"
+                  onClick={() => setIsReceiptQuickOpen(true)}
+                  className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white shadow-2xs transition-all cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
+                  title="快速收據記帳（單張收據連續記錄多品項與個人自付）"
+                  aria-label="快速收據記帳"
+                >
+                  <Receipt className="w-4 h-4" />
+                </button>
+
+                {/* Excel 貼上匯入 */}
+                <button
+                  type="button"
+                  onClick={() => setIsBatchImportOpen(true)}
+                  className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white shadow-2xs transition-all cursor-pointer flex items-center justify-center active:scale-95 shrink-0"
+                  title="Excel 貼上匯入（直接複製試算表整批貼上）"
+                  aria-label="Excel 貼上匯入"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* 右側操作：下載 Excel、複製試算表 */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {/* 下載 Excel (.xlsx) */}
+                <button
+                  type="button"
+                  onClick={handleDownloadExcelXLSX}
+                  className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 transition-all cursor-pointer flex items-center justify-center active:scale-95 shadow-2xs shrink-0"
+                  title="下載標準 Excel 活頁簿 (.xlsx)"
+                  aria-label="下載 Excel (.xlsx)"
+                >
+                  <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+
+                {/* 複製試算表格式 */}
+                <button
+                  type="button"
+                  onClick={handleCopyExcelData}
+                  className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-xl bg-[#FAF8F5] hover:bg-[#F0ECE1] border border-[#DDD8CC] text-[#5C564E] transition-all cursor-pointer flex items-center justify-center active:scale-95 shadow-2xs shrink-0"
+                  title="複製全部明細為試算表文字格式 (可直接貼至 Excel / Google 試算表)"
+                  aria-label="複製明細"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 篩選與搜尋列 */}
+            <div className="pt-2 border-t border-[#F0ECE1] flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+              {/* 搜尋關鍵字 */}
+              <div className="relative flex-1 max-w-xs">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#A09A8F]" />
+                <input
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  placeholder="搜尋品項、地點、備註或付款人..."
+                  className="w-full pl-8 pr-7 py-1.5 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl text-xs focus:outline-none focus:border-rose-500 font-medium"
+                />
+                {searchKeyword && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchKeyword('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[#A09A8F] hover:text-[#3E3A36]"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* 代墊人 & 分帳篩選 */}
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] text-[#8C8475] font-bold">代墊：</span>
+                  <select
+                    value={filterPayer}
+                    onChange={(e) => setFilterPayer(e.target.value)}
+                    className="p-1.5 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl font-bold text-xs cursor-pointer focus:outline-none"
+                  >
+                    <option value="ALL">全部成員</option>
+                    {tripMembers.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                    <option value="共同基金">共同公費</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px] text-[#8C8475] font-bold">分帳：</span>
+                  <select
+                    value={filterSplitPerson}
+                    onChange={(e) => setFilterSplitPerson(e.target.value)}
+                    className="p-1.5 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl font-bold text-xs cursor-pointer focus:outline-none"
+                  >
+                    <option value="ALL">全部模式</option>
+                    <option value="全體AA">全體AA</option>
+                    <option value="個人自付">個人自付</option>
+                    {tripMembers.map(m => (
+                      <option key={m} value={m}>含 {m} 的分帳</option>
+                    ))}
+                  </select>
+                </div>
+
+                {(filterCategory !== 'ALL' || filterPayer !== 'ALL' || filterSplitPerson !== 'ALL' || searchKeyword) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterCategory('ALL');
+                      setFilterPayer('ALL');
+                      setFilterSplitPerson('ALL');
+                      setSearchKeyword('');
+                    }}
+                    className="text-[11px] text-rose-600 hover:underline font-bold cursor-pointer"
+                  >
+                    重設篩選
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 類別標籤列 */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
               <button
                 type="button"
                 onClick={() => setFilterCategory('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                className={`px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                   filterCategory === 'ALL'
                     ? 'bg-rose-600 text-white shadow-xs'
-                    : 'bg-[#F2EFE9] text-[#7A7366] hover:bg-[#EAE5DC]'
+                    : 'bg-[#FAF8F5] text-[#7A7366] hover:bg-[#EAE5DC] border border-[#E2DDD2]'
                 }`}
               >
-                全部類別
+                全部類別 ({currentTripExpenses.length})
               </button>
-              {Object.keys(CATEGORY_CONFIG).map(cat => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setFilterCategory(cat)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
-                    filterCategory === cat
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'bg-[#F2EFE9] text-[#7A7366] hover:bg-[#EAE5DC]'
-                  }`}
-                >
-                  <span>{cat}</span>
-                </button>
-              ))}
+              {Object.keys(CATEGORY_CONFIG).map(cat => {
+                const count = currentTripExpenses.filter(e => e.category === cat).length;
+                if (count === 0 && filterCategory !== cat) return null;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setFilterCategory(cat)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                      filterCategory === cat
+                        ? 'bg-rose-600 text-white shadow-xs'
+                        : 'bg-[#FAF8F5] text-[#7A7366] hover:bg-[#EAE5DC] border border-[#E2DDD2]'
+                    }`}
+                  >
+                    <span>{cat}</span>
+                    <span className="text-[10px] opacity-75">({count})</span>
+                  </button>
+                );
+              })}
             </div>
-
-            <button
-              type="button"
-              onClick={handleOpenAddExpenseModal}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white text-xs font-bold shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5 shrink-0 active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span>記一筆旅費</span>
-            </button>
           </div>
 
           {/* 支出列表 */}
           {filteredExpenses.length === 0 ? (
             <div className="p-12 text-center bg-white/60 rounded-3xl border border-dashed border-[#DDD8CD] space-y-3">
               <div className="text-4xl">🧳</div>
-              <h3 className="text-sm font-bold text-[#5C564E]">目前本行程尚無支出記錄</h3>
-              <p className="text-xs text-[#8C8475] max-w-sm mx-auto">
-                點擊上方「記一筆旅費」開始記錄機票、飯店、美食或景點開銷，支援任何成員先代墊付款！
+              <h3 className="text-sm font-bold text-[#5C564E]">
+                {searchKeyword || filterCategory !== 'ALL' || filterPayer !== 'ALL' || filterSplitPerson !== 'ALL'
+                  ? '找不到符合條件的支出記錄'
+                  : '目前本行程尚無支出記錄'}
+              </h3>
+              <p className="text-xs text-[#8C8475] max-w-md mx-auto">
+                {searchKeyword || filterCategory !== 'ALL'
+                  ? '請嘗試切換篩選條件或清除關鍵字'
+                  : '點擊上方「記一筆旅費」、「快速收據記帳」或「Excel 貼上匯入」開始記錄你的旅行品項！'}
               </p>
             </div>
           ) : (
@@ -1604,38 +2228,93 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                 const conf = CATEGORY_CONFIG[exp.category] || CATEGORY_CONFIG['其他雜支'];
                 const Icon = conf.icon;
 
+                // 判斷是否為單人負擔（包含個人自付、全額代墊、或參與者AA只勾選1人）
+                const isSingleTarget = 
+                  exp.splitMode === '個人自付' ||
+                  exp.splitMode === '全額代墊' ||
+                  (exp.splitMode === '參與者AA' && (exp.participants || []).length === 1);
+
+                let targetPerson = '';
+                if (exp.splitMode === '個人自付') {
+                  targetPerson = exp.splitTarget || exp.payer;
+                } else if (exp.splitMode === '全額代墊') {
+                  targetPerson = (exp.participants || []).filter(p => p !== exp.payer)[0] || exp.splitTarget || exp.debtor || '對方';
+                } else if (exp.splitMode === '參與者AA' && (exp.participants || []).length === 1) {
+                  targetPerson = exp.participants![0];
+                }
+
+                const isPersonal = isSingleTarget && targetPerson === exp.payer;
+
+                let splitBadgeLabel = '';
+                let splitBadgeStyle = '';
+
+                if (isSingleTarget && targetPerson) {
+                  if (targetPerson === exp.payer) {
+                    splitBadgeLabel = `👤 ${targetPerson} 個人自付`;
+                    splitBadgeStyle = 'bg-purple-50 text-purple-700 border-purple-200';
+                  } else {
+                    splitBadgeLabel = `👤 ${targetPerson} 全額代墊`;
+                    splitBadgeStyle = 'bg-amber-50 text-amber-800 border-amber-300';
+                  }
+                } else if (
+                  exp.splitMode === '全體AA' || 
+                  exp.splitMode === 'AA平分' || 
+                  (exp.splitMode === '參與者AA' && (exp.participants || []).length >= tripMembers.length)
+                ) {
+                  splitBadgeLabel = '👥 全體AA';
+                  splitBadgeStyle = 'bg-sky-50 text-sky-700 border-sky-200';
+                } else if (exp.splitMode === '參與者AA') {
+                  splitBadgeLabel = `🎯 ${(exp.participants || []).join('、')} AA`;
+                  splitBadgeStyle = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                } else {
+                  splitBadgeLabel = exp.splitMode;
+                  splitBadgeStyle = 'bg-stone-50 text-stone-700 border-stone-200';
+                }
+
                 return (
                   <motion.div
                     key={exp.id}
                     layout
-                    initial={{ opacity: 0, y: 8 }}
+                    initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] shadow-2xs hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 group"
+                    className="bg-white rounded-xl p-3 sm:p-4 border border-[#E8E4D9] shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 group"
                   >
-                    <div className="flex items-start gap-3.5">
-                      <div className={`w-10 h-10 rounded-2xl ${conf.bg} ${conf.border} border flex items-center justify-center shrink-0 mt-0.5`}>
-                        <Icon className={`w-5 h-5 ${conf.color}`} />
+                    <div className="flex items-start gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+                      <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl ${conf.bg} ${conf.border} border flex items-center justify-center shrink-0 mt-0.5`}>
+                        <Icon className={`w-4 h-4 ${conf.color}`} />
                       </div>
 
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-extrabold text-sm text-[#3E3A36]">
                             {exp.itemName}
                           </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-amber-50 text-amber-800 border border-amber-200">
+
+                          {/* 單價與數量標籤 */}
+                          {exp.unitPrice !== undefined && exp.unitPrice > 0 && exp.quantity !== undefined && exp.quantity > 1 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-stone-100 text-[#5C564E] font-mono">
+                              ${exp.unitPrice} × {exp.quantity}
+                            </span>
+                          )}
+
+                          {/* 先出代墊人 */}
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold bg-amber-50 text-amber-800 border border-amber-200">
                             💳 {exp.payer} 先出
+                            {exp.paymentMethod && exp.paymentMethod !== '信用卡' && ` (${exp.paymentMethod})`}
                           </span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#F2EEE6] text-[#7A7366]">
-                            {exp.splitMode}
+
+                          {/* 分帳模式標籤 (單人時統一標示為全額代墊/個人自付) */}
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold border ${splitBadgeStyle}`}>
+                            {splitBadgeLabel}
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-3 text-[11px] text-[#8C8475] flex-wrap">
+                        <div className="flex items-center gap-2 text-[11px] text-[#8C8475] flex-wrap">
                           <span>📅 {exp.date}</span>
                           {exp.location && (
-                            <span className="flex items-center gap-0.5">
-                              <MapPin className="w-3 h-3" />
+                            <span className="flex items-center gap-0.5 text-[#5C564E] font-medium">
+                              <MapPin className="w-3 h-3 text-rose-500" />
                               <span>{exp.location}</span>
                             </span>
                           )}
@@ -1644,36 +2323,49 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                               (原幣: {CURRENCY_DEFAULTS[exp.originalCurrency]?.symbol || ''} {(Number(exp.originalAmount) || 0).toLocaleString()} {exp.originalCurrency} @ {exp.exchangeRate})
                             </span>
                           )}
+                          {exp.discount !== undefined && exp.discount > 0 && (
+                            <span className="text-emerald-700 font-bold">
+                              (折扣: -{exp.discount})
+                            </span>
+                          )}
                         </div>
 
                         {exp.note && (
-                          <p className="text-xs text-[#7A7366] bg-[#FAF8F5] px-2.5 py-1 rounded-lg inline-block">
+                          <p className="text-xs text-[#7A7366] bg-[#FAF8F5] px-2 py-0.5 rounded-lg inline-block">
                             💡 {exp.note}
                           </p>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex sm:flex-col items-center sm:items-end justify-between border-t sm:border-t-0 pt-2 sm:pt-0 border-[#F2ECE1] shrink-0 gap-1">
-                      <div className="text-right">
-                        <div className="text-base sm:text-lg font-black text-[#3E3A36]">
+                    <div className="flex items-center sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-2 sm:pt-0 border-[#F2ECE1]/70 shrink-0 gap-1 sm:gap-0.5">
+                      <div className="text-left sm:text-right">
+                        <div className="text-sm sm:text-base font-black text-[#3E3A36]">
                           NT$ {(Number(exp.totalAmountTWD) || 0).toLocaleString()}
                         </div>
-                        {exp.debtorAmountTWD > 0 && (
-                          <div className="text-[11px] font-bold text-rose-700">
+                        {exp.debtorAmountTWD > 0 && !isPersonal && (
+                          <div className="text-[10px] sm:text-[11px] font-bold text-rose-700">
                             其他成員分攤 NT$ {(Number(exp.debtorAmountTWD) || 0).toLocaleString()}
                           </div>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 pt-1">
+                      <div className="flex items-center gap-1 sm:pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditExpenseModal(exp)}
+                          className="p-1 rounded-lg text-[#8C8475] hover:text-sky-700 hover:bg-sky-50 transition-colors cursor-pointer"
+                          title="編輯此筆支出"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => promptDeleteExpense(exp.id)}
-                          className="p-1.5 rounded-lg text-[#A09A8F] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          className="p-1 rounded-lg text-[#A09A8F] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                           title="刪除此筆支出"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -1819,21 +2511,24 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         );
       })()}
 
-      {/* 6. Tab 3: 多成員結算清單 & 類別佔比 */}
+      {/* 6. Tab 3: 多成員智慧結算、個人帳目穿透 & 地點店家統計 */}
       {subTab === 'settlement' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* 多人結算還款明細 */}
-            <div className="bg-white rounded-2xl p-5 border border-[#E8E4D9] shadow-2xs space-y-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* 多人結算還款明細 (誰該還誰) */}
+            <div className="bg-white rounded-2xl p-5 border border-[#E8E4D9] shadow-2xs space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-[#4A4641] flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>各成員平帳還款清單</span>
-                </h4>
+                <div>
+                  <h4 className="text-sm font-extrabold text-[#3E3A36] flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>智慧平帳清單（誰該償還給誰）</span>
+                  </h4>
+                  <p className="text-[11px] text-[#8C8475] mt-0.5">系統自動扣抵個人自付與代墊差額後的最小轉帳次數</p>
+                </div>
                 <button
                   type="button"
                   onClick={handleCopyBillSummary}
-                  className="text-xs font-bold text-rose-700 hover:underline flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   <span>複製明細</span>
@@ -1843,48 +2538,151 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
               {tripSummary.transactions.length > 0 ? (
                 <div className="space-y-2.5">
                   {tripSummary.transactions.map((t, idx) => (
-                    <div key={idx} className="p-3 bg-gradient-to-r from-[#FAF8F5] to-rose-50/50 rounded-xl border border-[#EAE5DA] flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="w-6 h-6 rounded-full bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-[10px]">
+                    <div key={idx} className="p-3.5 bg-gradient-to-r from-[#FAF8F5] to-rose-50/50 rounded-2xl border border-[#EAE5DA] flex items-center justify-between shadow-2xs">
+                      <div className="flex items-center gap-2.5 text-xs">
+                        <span className="w-7 h-7 rounded-xl bg-rose-100 text-rose-700 font-black flex items-center justify-center text-xs">
                           {idx + 1}
                         </span>
                         <div>
-                          <span className="font-extrabold text-[#3E3A36]">{t.from}</span>
-                          <span className="text-[#8C8475] mx-1.5">應返還給</span>
-                          <span className="font-extrabold text-sky-800">{t.to}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-extrabold text-sm text-[#3E3A36]">{t.from}</span>
+                            <span className="text-[11px] text-[#8C8475]">應轉帳償還</span>
+                            <span className="font-extrabold text-sm text-sky-800">{t.to}</span>
+                          </div>
+                          <span className="text-[10px] text-[#A09A8F]">已扣減代墊先付款與自付項目</span>
                         </div>
                       </div>
-                      <div className="text-sm font-black text-rose-700">
+                      <div className="text-base font-black text-rose-700 font-mono">
                         NT$ {(Number(t.amount) || 0).toLocaleString()}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="p-6 text-center text-xs text-[#8C8475] bg-[#FAF8F5] rounded-xl">
-                  ✨ 全員分攤已完全平衡！
+                <div className="p-8 text-center text-xs text-[#8C8475] bg-[#FAF8F5] rounded-2xl space-y-1">
+                  <div className="text-2xl">✨</div>
+                  <div className="font-bold text-[#5C564E]">本趟旅費全員分攤已完全平衡！</div>
+                  <div>無須再進行任何平帳轉帳</div>
                 </div>
               )}
 
-              {/* 各成員墊款與應付統計 */}
-              <div className="pt-3 border-t border-[#F0ECE1] space-y-2">
-                <div className="text-[11px] font-bold text-[#7A7366]">成員收支結餘表：</div>
-                <div className="space-y-1.5">
+              {/* 各成員墊款、個人自付與應負擔總覽卡片 (可點擊穿透查看個人明細) */}
+              <div className="pt-3 border-t border-[#F0ECE1] space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold text-[#5C564E]">成員分帳總覽（點擊可展開專屬品項明細）：</div>
+                  <span className="text-[10px] text-[#A09A8F]">點選成員切換穿透</span>
+                </div>
+
+                <div className="space-y-2">
                   {tripMembers.map(m => {
                     const paid = Number(tripSummary.memberPaid?.[m]) || 0;
                     const share = Number(tripSummary.memberShare?.[m]) || 0;
+                    const personal = Number(tripSummary.memberPersonalAmounts?.[m]) || 0;
+                    const shared = Number(tripSummary.memberSharedAmounts?.[m]) || 0;
                     const net = Number(tripSummary.netBalances?.[m]) || 0;
+                    const isSelected = selectedMemberDetail === m;
 
                     return (
-                      <div key={m} className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-stone-50">
-                        <span className="font-bold text-[#3E3A36]">{m}</span>
-                        <div className="flex items-center gap-3 text-[11px]">
-                          <span className="text-[#8C8475]">先墊 ${(Number(paid) || 0).toLocaleString()}</span>
-                          <span className="text-[#8C8475]">應付 ${(Number(share) || 0).toLocaleString()}</span>
-                          <span className={`font-black ${net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                            {net >= 0 ? `應收 +$${(Number(net) || 0).toLocaleString()}` : `應付 -$${(Number(Math.abs(net)) || 0).toLocaleString()}`}
-                          </span>
+                      <div
+                        key={m}
+                        className={`rounded-2xl border transition-all cursor-pointer overflow-hidden ${
+                          isSelected
+                            ? 'border-sky-500 bg-sky-50/40 ring-1 ring-sky-500'
+                            : 'border-[#EAE5DA] bg-[#FAF8F5] hover:bg-white'
+                        }`}
+                        onClick={() => setSelectedMemberDetail(isSelected ? null : m)}
+                      >
+                        <div className="p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-8 h-8 rounded-xl font-bold flex items-center justify-center text-xs ${
+                              isSelected ? 'bg-sky-600 text-white' : 'bg-white border border-[#DDD8CC] text-[#3E3A36]'
+                            }`}>
+                              {m}
+                            </span>
+                            <div>
+                              <div className="font-extrabold text-xs text-[#3E3A36] flex items-center gap-1.5">
+                                <span>{m}</span>
+                                <span className="text-[10px] text-[#8C8475] font-normal">
+                                  (自付 ${personal.toLocaleString()} + 均攤 ${shared.toLocaleString()})
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-[#8C8475]">
+                                先墊付 ${paid.toLocaleString()} • 實應分擔 ${share.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className={`text-xs font-black ${net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                              {net >= 0 ? `應收回 +$${net.toLocaleString()}` : `應支付 -$${Math.abs(net).toLocaleString()}`}
+                            </div>
+                            <span className="text-[10px] text-sky-700 font-bold">
+                              {isSelected ? '收合 ▲' : '查看明細 ▼'}
+                            </span>
+                          </div>
                         </div>
+
+                        {/* 展開之個人穿透品項明細清單 */}
+                        {isSelected && (
+                          <div className="p-3 bg-white border-t border-[#EAE5DA] space-y-3 text-xs">
+                            {/* 個人 100% 自付品項 */}
+                            <div className="space-y-1.5">
+                              <div className="font-bold text-purple-800 text-[11px] flex items-center gap-1">
+                                <span>👤 {m} 的個人專屬自付品項 ({tripSummary.memberPersonalItems[m]?.length || 0} 筆，小計 NT$ {personal.toLocaleString()})：</span>
+                              </div>
+                              {(tripSummary.memberPersonalItems[m]?.length || 0) > 0 ? (
+                                <div className="space-y-1 pl-2">
+                                  {tripSummary.memberPersonalItems[m]?.map((item, i) => (
+                                    <div key={i} className="flex items-center justify-between text-[11px] text-[#5C564E] py-0.5 border-b border-dashed border-[#F0ECE1]">
+                                      <span>• {item.itemName} {item.location ? `(@${item.location})` : ''}</span>
+                                      <span className="font-bold text-[#3E3A36]">NT$ {(Number(item.totalAmountTWD) || 0).toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-[#A09A8F] pl-2">無個人單獨自付品項</div>
+                              )}
+                            </div>
+
+                            {/* 參與之共同分攤品項 */}
+                            <div className="space-y-1.5 pt-1 border-t border-[#F0ECE1]">
+                              <div className="font-bold text-sky-800 text-[11px] flex items-center gap-1">
+                                <span>👥 {m} 參與的共同均攤品項 (小計應付 NT$ {shared.toLocaleString()})：</span>
+                              </div>
+                              {(tripSummary.memberSharedItems[m]?.length || 0) > 0 ? (
+                                <div className="space-y-1 pl-2 max-h-36 overflow-y-auto">
+                                  {tripSummary.memberSharedItems[m]?.map((sh, i) => (
+                                    <div key={i} className="flex items-center justify-between text-[11px] text-[#5C564E] py-0.5 border-b border-dashed border-[#F0ECE1]">
+                                      <span>• {sh.item.itemName} (總額 ${(Number(sh.item.totalAmountTWD) || 0).toLocaleString()})</span>
+                                      <span className="font-bold text-sky-700">分攤 NT$ {sh.share.toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-[#A09A8F] pl-2">無共同分攤品項</div>
+                              )}
+                            </div>
+
+                            {/* 該成員先出錢代墊之品項 */}
+                            <div className="space-y-1.5 pt-1 border-t border-[#F0ECE1]">
+                              <div className="font-bold text-amber-800 text-[11px] flex items-center gap-1">
+                                <span>💳 由 {m} 先墊付的品項 ({tripSummary.memberPaidItems[m]?.length || 0} 筆，代墊總額 NT$ {paid.toLocaleString()})：</span>
+                              </div>
+                              {(tripSummary.memberPaidItems[m]?.length || 0) > 0 ? (
+                                <div className="space-y-1 pl-2 max-h-36 overflow-y-auto">
+                                  {tripSummary.memberPaidItems[m]?.map((item, i) => (
+                                    <div key={i} className="flex items-center justify-between text-[11px] text-[#5C564E] py-0.5 border-b border-dashed border-[#F0ECE1]">
+                                      <span>• {item.itemName}</span>
+                                      <span className="font-bold text-amber-800">NT$ {(Number(item.totalAmountTWD) || 0).toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-[#A09A8F] pl-2">未代墊任何款項</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1892,35 +2690,75 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
               </div>
             </div>
 
-            {/* 類別開銷佔比分析 */}
-            <div className="bg-white rounded-2xl p-5 border border-[#E8E4D9] shadow-2xs space-y-3">
-              <h4 className="text-xs font-bold text-[#4A4641] flex items-center gap-1.5">
-                <PieChart className="w-4 h-4 text-rose-600" />
-                <span>各類別開銷佔比</span>
-              </h4>
+            {/* 右側：購物地點統計 & 類別開銷分析 */}
+            <div className="space-y-4">
+              {/* 地點/店家消費統計 */}
+              <div className="bg-white rounded-2xl p-5 border border-[#E8E4D9] shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-[#4A4641] flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-rose-600" />
+                    <span>各景點/店家開銷統計</span>
+                  </h4>
+                  <span className="text-[10px] text-[#8C8475]">共 {Object.keys(tripSummary.locationBreakdown).length} 個地點</span>
+                </div>
 
-              <div className="space-y-2.5">
-                {Object.entries(tripSummary.categoryBreakdown || {}).map(([cat, amtVal]) => {
-                  const amt = Number(amtVal) || 0;
-                  const percent = Math.round((amt / (tripSummary.totalTWD || 1)) * 100);
-                  const conf = CATEGORY_CONFIG[cat] || CATEGORY_CONFIG['其他雜支'];
-                  return (
-                    <div key={cat} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-[#5C564E]">{cat}</span>
-                        <span className="font-bold text-[#3E3A36]">
-                          NT$ {(Number(amt) || 0).toLocaleString()} ({percent}%)
-                        </span>
+                <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-none">
+                  {Object.entries(tripSummary.locationBreakdown).length === 0 ? (
+                    <div className="text-xs text-[#8C8475] text-center py-4">記帳時填寫地點即可自動在此統計</div>
+                  ) : (
+                    Object.entries(tripSummary.locationBreakdown)
+                      .sort(([, a], [, b]) => b.totalTWD - a.totalTWD)
+                      .map(([loc, stat]) => (
+                        <div key={loc} className="p-2.5 rounded-xl bg-[#FAF8F5] border border-[#EAE5DA] flex items-center justify-between text-xs">
+                          <div>
+                            <div className="font-bold text-[#3E3A36] flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-rose-500" />
+                              <span>{loc}</span>
+                              <span className="text-[10px] text-[#8C8475]">({stat.count} 個品項)</span>
+                            </div>
+                            <div className="text-[10px] text-[#8C8475] truncate max-w-xs">
+                              {stat.items.slice(0, 3).join('、')} {stat.items.length > 3 ? '...' : ''}
+                            </div>
+                          </div>
+                          <div className="font-extrabold text-[#3E3A36]">
+                            NT$ {stat.totalTWD.toLocaleString()}
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </div>
+              </div>
+
+              {/* 類別開銷佔比分析 */}
+              <div className="bg-white rounded-2xl p-5 border border-[#E8E4D9] shadow-2xs space-y-3">
+                <h4 className="text-xs font-bold text-[#4A4641] flex items-center gap-1.5">
+                  <PieChart className="w-4 h-4 text-rose-600" />
+                  <span>各類別開銷佔比</span>
+                </h4>
+
+                <div className="space-y-2.5">
+                  {Object.entries(tripSummary.categoryBreakdown || {}).map(([cat, amtVal]) => {
+                    const amt = Number(amtVal) || 0;
+                    const percent = Math.round((amt / (tripSummary.totalTWD || 1)) * 100);
+                    const conf = CATEGORY_CONFIG[cat] || CATEGORY_CONFIG['其他雜支'];
+                    return (
+                      <div key={cat} className="space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-[#5C564E]">{cat}</span>
+                          <span className="font-bold text-[#3E3A36]">
+                            NT$ {(Number(amt) || 0).toLocaleString()} ({percent}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-[#F2EEE6] overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-rose-500 to-rose-600 rounded-full"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full h-2 rounded-full bg-[#F2EEE6] overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-rose-500 to-rose-600 rounded-full"
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -2040,7 +2878,8 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                       <input
                         type="date"
                         value={tripFormStartDate}
-                        onChange={(e) => setTripFormStartDate(e.target.value)}
+                        max={tripFormEndDate || undefined}
+                        onChange={(e) => handleStartDateChange(e.target.value)}
                         className="w-full p-2 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl focus:outline-none focus:border-rose-500"
                       />
                     </div>
@@ -2049,7 +2888,8 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                       <input
                         type="date"
                         value={tripFormEndDate}
-                        onChange={(e) => setTripFormEndDate(e.target.value)}
+                        min={tripFormStartDate || undefined}
+                        onChange={(e) => handleEndDateChange(e.target.value)}
                         className="w-full p-2 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl focus:outline-none focus:border-rose-500"
                       />
                     </div>
@@ -2089,11 +2929,11 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                   </div>
                 </div>
 
-                {/* 旅程詳情框框底色主題 (8 種配色方案) */}
+                {/* 旅程主題 */}
                 <div className="space-y-1.5">
                   <label className="font-bold text-[#5C564E] flex items-center gap-1">
                     <Palette className="w-3.5 h-3.5 text-rose-600" />
-                    <span>自訂旅程詳情框框底色主題</span>
+                    <span>自訂旅程主題</span>
                   </label>
                   <div className="grid grid-cols-4 gap-2">
                     {Object.values(TRIP_THEMES).map(theme => (
@@ -2208,7 +3048,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 8. 新增旅費支出 Modal (支援選擇任意成員為出資人，以及參與分攤者清單) */}
+      {/* 8. 新增/編輯旅費支出 Modal (支援自訂單價數量、個人專屬自付、指定分攤者等) */}
       <AnimatePresence>
         {isAddExpenseOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
@@ -2221,11 +3061,14 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
               <div className="flex items-center justify-between p-5 sm:px-6 pb-3 border-b border-[#F0ECE1] shrink-0 bg-white">
                 <h3 className="font-black text-base text-[#3E3A36] flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-rose-600" />
-                  <span>記一筆旅費支出</span>
+                  <span>{editingExpenseId ? '編輯旅費支出' : '記一筆旅費支出'}</span>
                 </h3>
                 <button
                   type="button"
-                  onClick={() => setIsAddExpenseOpen(false)}
+                  onClick={() => {
+                    setIsAddExpenseOpen(false);
+                    setEditingExpenseId(null);
+                  }}
                   className="p-1 rounded-full text-[#A09A8F] hover:text-[#3E3A36] cursor-pointer"
                 >
                   <X className="w-5 h-5" />
@@ -2234,9 +3077,71 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
 
               <form onSubmit={handleAddExpense} className="flex-1 flex flex-col min-h-0 overflow-hidden text-xs">
                 <div className="p-5 sm:p-6 flex-1 overflow-y-auto space-y-3.5">
-                  {/* 支出類別 */}
+                  {/* 1. 品項名稱 & 快捷標籤 (置頂) */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-[#5C564E]">品項名稱 <span className="text-rose-500">*</span></label>
+                      <span className="text-[10px] text-[#8C8475]">可輸入或點選常用標籤</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={expItemName}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setExpItemName(val);
+                          const detected = detectTravelCategory(val);
+                          if (detected) setExpCategory(detected);
+                        }}
+                        placeholder="例：敘敘苑燒肉、新宿飯店住宿、唐吉訶德採買"
+                        className="w-full p-2.5 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl font-bold text-[#3E3A36] focus:outline-none focus:border-rose-500"
+                        required
+                      />
+                      {expItemName && (
+                        <button
+                          type="button"
+                          onClick={() => setExpItemName('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] bg-[#EFECE3] hover:bg-[#E3DFC2] text-[#7A7469] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                        >
+                          清除
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 旅遊常用標籤 */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] text-[#A09A8F] font-bold">常用：</span>
+                      {['機票訂位', '飯店住宿', '景點門票', '居酒屋燒肉', '超商點心', '藥妝採買', '伴手禮', '交通卡', '租車加油', '網卡/eSIM'].map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => {
+                            setExpItemName(tag);
+                            const detected = detectTravelCategory(tag);
+                            if (detected) setExpCategory(detected);
+                          }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer active:scale-95 ${
+                            expItemName === tag
+                              ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
+                              : 'bg-white hover:bg-rose-50 text-[#6E6659] border-[#E0DCD3]'
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. 消費類別 (智慧偵測自動切換，亦可手動點選) */}
                   <div className="space-y-1">
-                    <label className="font-bold text-[#5C564E]">消費類別</label>
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-[#5C564E]">消費類別</label>
+                      {detectTravelCategory(expItemName) && (
+                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                          ✨ 智慧偵測：{detectTravelCategory(expItemName)}
+                        </span>
+                      )}
+                    </div>
                     <div className="grid grid-cols-4 gap-1.5">
                       {Object.keys(CATEGORY_CONFIG).map(cat => {
                         const conf = CATEGORY_CONFIG[cat];
@@ -2258,52 +3163,6 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                           </button>
                         );
                       })}
-                    </div>
-                  </div>
-
-                  {/* 品項名稱 & 快捷標籤 */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-[#5C564E]">品項名稱 <span className="text-rose-500">*</span></label>
-                      <span className="text-[10px] text-[#8C8475]">點選常用標籤快速填入</span>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={expItemName}
-                        onChange={(e) => setExpItemName(e.target.value)}
-                        placeholder="例：敘敘苑燒肉、新宿飯店住宿、唐吉訶德採買"
-                        className="w-full p-2.5 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl font-bold text-[#3E3A36] focus:outline-none focus:border-rose-500"
-                        required
-                      />
-                      {expItemName && (
-                        <button
-                          type="button"
-                          onClick={() => setExpItemName('')}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] bg-[#EFECE3] hover:bg-[#E3DFC2] text-[#7A7469] px-1.5 py-0.5 rounded cursor-pointer transition-colors"
-                        >
-                          清除
-                        </button>
-                      )}
-                    </div>
-
-                    {/* 旅遊常用標籤 */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                      <span className="text-[10px] text-[#A09A8F] font-bold">常用：</span>
-                      {['機票訂位', '飯店住宿', '景點門票', '居酒屋燒肉', '超商點心', '藥妝採買', '伴手禮', '交通西瓜卡', '租車加油', '網卡/eSIM'].map((tag) => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => setExpItemName(tag)}
-                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer active:scale-95 ${
-                            expItemName === tag
-                              ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
-                              : 'bg-white hover:bg-rose-50 text-[#6E6659] border-[#E0DCD3]'
-                          }`}
-                        >
-                          {tag}
-                        </button>
-                      ))}
                     </div>
                   </div>
 
@@ -2339,6 +3198,27 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                       >
                         🏦 共同公費
                       </button>
+                    </div>
+                  </div>
+
+                  {/* 支付方式 */}
+                  <div className="space-y-1">
+                    <label className="font-bold text-[#5C564E]">付款方式</label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {['信用卡', '現金', '交通卡', '行動支付'].map(method => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setExpPaymentMethod(method)}
+                          className={`p-1.5 rounded-xl border text-center font-bold text-[11px] cursor-pointer ${
+                            expPaymentMethod === method
+                              ? 'bg-stone-800 text-white border-stone-800'
+                              : 'bg-[#FAF8F5] border-[#E2DDD2] text-[#7A7366] hover:bg-white'
+                          }`}
+                        >
+                          {method}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
@@ -2455,31 +3335,133 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                     </button>
                   </div>
 
-                  {/* 分攤方式 */}
-                  <div className="space-y-1">
-                    <label className="font-bold text-[#5C564E]">分攤模式</label>
+                  {/* 單價、數量與折扣 (可選填) */}
+                  <div className="p-3 bg-[#FAF8F5] rounded-2xl border border-[#E8E4D9] space-y-2">
+                    <div className="text-[11px] font-bold text-[#5C564E]">單價與數量明細 (選填)：</div>
                     <div className="grid grid-cols-3 gap-2">
-                      {(['全體AA', '參與者AA', '全額代墊'] as const).map(mode => (
+                      <div>
+                        <span className="text-[10px] text-[#8C8475] block mb-0.5">單價 ({expCurrency})</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={expUnitPrice}
+                          onChange={(e) => {
+                            const up = e.target.value;
+                            setExpUnitPrice(up);
+                            if (up && expQuantity) {
+                              const total = (parseFloat(up) || 0) * (parseInt(expQuantity) || 1) - (parseFloat(expDiscount) || 0);
+                              if (total > 0) setExpOriginalAmount(String(total));
+                            }
+                          }}
+                          placeholder="例：500"
+                          className="w-full p-2 bg-white border border-[#DDD8CC] rounded-xl text-xs"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[#8C8475] block mb-0.5">數量</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={expQuantity}
+                          onChange={(e) => {
+                            const q = e.target.value;
+                            setExpQuantity(q);
+                            if (expUnitPrice && q) {
+                              const total = (parseFloat(expUnitPrice) || 0) * (parseInt(q) || 1) - (parseFloat(expDiscount) || 0);
+                              if (total > 0) setExpOriginalAmount(String(total));
+                            }
+                          }}
+                          placeholder="1"
+                          className="w-full p-2 bg-white border border-[#DDD8CC] rounded-xl text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[#8C8475] block mb-0.5">折扣扣減 ({expCurrency})</span>
+                        <input
+                          type="number"
+                          step="any"
+                          value={expDiscount}
+                          onChange={(e) => {
+                            const d = e.target.value;
+                            setExpDiscount(d);
+                            if (expUnitPrice && expQuantity) {
+                              const total = (parseFloat(expUnitPrice) || 0) * (parseInt(expQuantity) || 1) - (parseFloat(d) || 0);
+                              if (total > 0) setExpOriginalAmount(String(total));
+                            }
+                          }}
+                          placeholder="0"
+                          className="w-full p-2 bg-white border border-[#DDD8CC] rounded-xl text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 分攤方式：全體AA、個人自付、參與者AA */}
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-[#5C564E]">分攤模式</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['全體AA', '個人自付', '參與者AA'] as const).map(mode => (
                         <button
                           key={mode}
                           type="button"
                           onClick={() => setExpSplitMode(mode)}
-                          className={`p-2 rounded-xl border text-center font-bold text-xs cursor-pointer ${
+                          className={`p-2 rounded-xl border text-center font-bold text-xs cursor-pointer transition-all ${
                             expSplitMode === mode
-                              ? 'bg-rose-50 border-rose-500 text-rose-800'
-                              : 'bg-[#FAF8F5] border-[#E2DDD2] text-[#7A7366]'
+                              ? 'bg-rose-50 border-rose-500 text-rose-800 shadow-2xs'
+                              : 'bg-[#FAF8F5] border-[#E2DDD2] text-[#7A7366] hover:bg-white'
                           }`}
                         >
-                          {mode}
+                          {mode === '全體AA' ? '👥 全體AA' : mode === '個人自付' ? '👤 個人自付' : '🎯 參與者AA'}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  {/* 參與分攤成員勾選 (當多於 2 人時非常實用) */}
+                  {/* 個人自付時選擇歸屬成員 */}
+                  {expSplitMode === '個人自付' && (
+                    <div className="p-3 bg-purple-50/50 rounded-2xl border border-purple-200 space-y-1.5">
+                      <label className="font-bold text-purple-900 text-xs flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-purple-600" />
+                        <span>此品項由誰 100% 個人自付？</span>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {tripMembers.map(m => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setExpSplitTarget(m)}
+                            className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all cursor-pointer ${
+                              expSplitTarget === m
+                                ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                : 'bg-white border-[#DDD8CC] text-[#5C564E] hover:bg-purple-50'
+                            }`}
+                          >
+                            👤 {m} 自付
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-purple-700">
+                        * 他人代墊此筆款項後，結算時將自動全額計入該成員的償還帳目。
+                      </p>
+                    </div>
+                  )}
+
+                  {/* 參與分攤成員勾選 (當為參與者AA時) */}
                   {expSplitMode === '參與者AA' && (
-                    <div className="p-3 bg-[#FAF8F5] rounded-xl border border-[#E2DDD2] space-y-1.5">
-                      <label className="font-bold text-[#5C564E]">選擇共同分攤之成員：</label>
+                    <div className="p-3 bg-[#FAF8F5] rounded-xl border border-[#E2DDD2] space-y-2">
+                      <div className="flex items-center justify-between flex-wrap gap-1">
+                        <label className="font-bold text-[#5C564E] text-xs">選擇共同分攤之成員：</label>
+                        {expParticipants.length === 1 && (
+                          <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-300">
+                            💡 僅選 1 人：視同「{expParticipants[0] === expPayer ? `${expParticipants[0]} 個人自付` : `${expParticipants[0]} 全額代墊`}」
+                          </span>
+                        )}
+                        {expParticipants.length === tripMembers.length && (
+                          <span className="text-[11px] font-bold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-300">
+                            💡 全員已選取：等同「全體AA」
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {tripMembers.map(m => {
                           const isChecked = expParticipants.includes(m);
@@ -2506,6 +3488,11 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                           );
                         })}
                       </div>
+                      {expParticipants.length === 1 && (
+                        <p className="text-[10px] text-amber-800 font-medium">
+                          * 系統將自動由 <b>{expParticipants[0]}</b> 100% 負擔{expParticipants[0] !== expPayer ? `，並在結算時列為由 ${expParticipants[0]} 全額償還給 ${expPayer}` : '，不影響他人帳目'}。
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -2518,7 +3505,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                         value={expLocation}
                         onChange={(e) => setExpLocation(e.target.value)}
                         placeholder="例：銀座、成田機場"
-                        className="w-full p-2 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl"
+                        className="w-full p-2 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl font-medium"
                       />
                     </div>
                     <div className="space-y-1">
@@ -2528,7 +3515,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                         value={expNote}
                         onChange={(e) => setExpNote(e.target.value)}
                         placeholder="例：刷卡含 1.5% 回饋"
-                        className="w-full p-2 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl"
+                        className="w-full p-2 bg-[#FAF8F5] border border-[#E2DDD2] rounded-xl font-medium"
                       />
                     </div>
                   </div>
@@ -2538,7 +3525,10 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                 <div className="p-4 sm:px-6 border-t border-[#F0ECE1] bg-white shrink-0 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsAddExpenseOpen(false)}
+                    onClick={() => {
+                      setIsAddExpenseOpen(false);
+                      setEditingExpenseId(null);
+                    }}
                     className="flex-1 py-2.5 rounded-xl border border-[#DDD8CC] text-[#7A7366] font-bold hover:bg-[#FAF8F5] cursor-pointer"
                   >
                     取消
@@ -2547,7 +3537,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                     type="submit"
                     className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white font-bold shadow-md cursor-pointer active:scale-95"
                   >
-                    確認儲存
+                    {editingExpenseId ? '儲存修改' : '確認儲存'}
                   </button>
                 </div>
               </form>
@@ -2735,7 +3725,32 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 刪除確認彈窗 (Custom Confirmation Modal - 安全相容 iFrame 沙盒) */}
+      {/* 10. 批次 Excel 貼上匯入 Modal */}
+      {activeTrip && (
+        <TravelBatchImportModal
+          isOpen={isBatchImportOpen}
+          onClose={() => setIsBatchImportOpen(false)}
+          activeTrip={activeTrip}
+          tripMembers={tripMembers}
+          onAddTripMembers={handleAddTripMembers}
+          onImportExpenses={handleImportExpenses}
+          showToast={showToast}
+        />
+      )}
+
+      {/* 11. 快速連續收據記帳 Modal */}
+      {activeTrip && (
+        <TravelReceiptQuickModal
+          isOpen={isReceiptQuickOpen}
+          onClose={() => setIsReceiptQuickOpen(false)}
+          activeTrip={activeTrip}
+          tripMembers={tripMembers}
+          onAddExpenses={handleAddQuickExpenses}
+          showToast={showToast}
+        />
+      )}
+
+      {/* 12. 刪除確認彈窗 (Custom Confirmation Modal - 安全相容 iFrame 沙盒) */}
       <AnimatePresence>
         {deleteConfirmState?.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">

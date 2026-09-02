@@ -3,9 +3,14 @@ import React from 'react';
 interface BrandLogoProps {
   className?: string;
   size?: number;
+  transparent?: boolean;
 }
 
-export const BrandLogo: React.FC<BrandLogoProps> = ({ className = "w-9 h-9 sm:w-10 sm:h-10", size }) => {
+export const BrandLogo: React.FC<BrandLogoProps> = ({ 
+  className = "w-9 h-9 sm:w-10 sm:h-10", 
+  size,
+  transparent = false 
+}) => {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -39,7 +44,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({ className = "w-9 h-9 sm:w-
         </linearGradient>
 
         {/* Google Red / Pink Gradient (情侶愛心) */}
-        <linearGradient id="bl-coupleHeart" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id="bl-coupleHeart" x1="0%" x2="100%" y1="0%" y2="100%">
           <stop offset="0%" stopColor="#FF6B8B" />
           <stop offset="100%" stopColor="#EA4335" />
         </linearGradient>
@@ -51,8 +56,10 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({ className = "w-9 h-9 sm:w-
         </linearGradient>
       </defs>
 
-      {/* 背景圓角 App Icon 底圖 */}
-      <rect x="32" y="32" width="448" height="448" rx="100" fill="url(#bl-bgGlow)" filter="url(#bl-google-shadow)" />
+      {/* 背景圓角 App Icon 底圖 (transparent 為 true 時去背) */}
+      {!transparent && (
+        <rect x="32" y="32" width="448" height="448" rx="100" fill="url(#bl-bgGlow)" filter="url(#bl-google-shadow)" />
+      )}
 
       {/* 1. 記帳系統主卡片 (Google Blue 矩形與數據圖表) */}
       <g filter="url(#bl-google-shadow)">

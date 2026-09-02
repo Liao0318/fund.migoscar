@@ -11,7 +11,7 @@ interface NotificationDropdownProps {
   onMarkAllRead: () => void;
   onMarkRead: (id: string) => void;
   onDelete: (id: string) => void;
-  onOpenTelegramSettings: () => void;
+  onOpenNotifySettings: () => void;
 }
 
 export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
@@ -21,7 +21,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
   onMarkAllRead,
   onMarkRead,
   onDelete,
-  onOpenTelegramSettings
+  onOpenNotifySettings
 }) => {
   const safeNotifications = notifications || [];
   const unreadCount = safeNotifications.filter(n => !n.read).length;
@@ -117,18 +117,18 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
                   )}
                 </div>
 
-                {/* 底部功能按鈕：自訂 Telegram 通知開關 */}
+                {/* 底部功能按鈕：自訂 App 內建通知開關 */}
                 <div className="p-2.5 bg-[#FAF8F3] border-t border-[#EEEDE3] flex items-center justify-between">
                   <button
                     type="button"
                     onClick={() => {
                       setIsOpen(false);
-                      onOpenTelegramSettings();
+                      onOpenNotifySettings();
                     }}
                     className="w-full py-1.5 px-3 bg-white hover:bg-[#F2EFE7] text-[#4A4641] text-[11px] font-bold rounded-xl border border-[#E0DCD3] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                   >
-                    <Sliders className="w-3.5 h-3.5 text-sky-600" />
-                    <span>設定各項 Telegram 推播開關</span>
+                    <Sliders className="w-3.5 h-3.5 text-rose-600" />
+                    <span>App 內建通知與智慧指令設定</span>
                   </button>
                 </div>
               </motion.div>

@@ -12,7 +12,9 @@ import {
   ArrowRightLeft,
   X,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Database,
+  Key
 } from 'lucide-react';
 import { SplitRecordItem } from '../../types';
 import { exportSplitRecordsToCSV } from '../../utils/exportCsv';
@@ -21,12 +23,16 @@ interface SplitHistoryTabProps {
   items: SplitRecordItem[];
   onDeleteItem: (id: string) => void;
   onOpenAdd: () => void;
+  isDbConnected?: boolean;
+  onOpenGasDeploy?: () => void;
 }
 
 export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
   items = [],
   onDeleteItem,
   onOpenAdd,
+  isDbConnected = true,
+  onOpenGasDeploy,
 }) => {
   const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'unsettled' | 'settled'>('ALL');
@@ -36,6 +42,36 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
   const [searchKeyword, setSearchKeyword] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  if (!isDbConnected) {
+    return (
+      <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
+        <div className="bg-white/85 backdrop-blur-md rounded-3xl p-8 sm:p-12 border border-[#E8E2D5] shadow-2xs text-center space-y-4 my-2">
+          <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-900 flex items-center justify-center mx-auto shadow-inner">
+            <Database className="w-8 h-8 text-amber-700" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg sm:text-2xl font-black text-[#3E3A36]">尚未連線至資料庫</h3>
+            <p className="text-xs sm:text-sm text-[#7A7366] leading-relaxed max-w-md mx-auto font-normal">
+              尚未登錄 Google 試算表 Web App API 金鑰，無法載入歷史代墊明細。請先設定連線金鑰以同步雲端帳目。
+            </p>
+          </div>
+          {onOpenGasDeploy && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onOpenGasDeploy}
+                className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
+              >
+                <Key className="w-4 h-4" />
+                <span>設定連線金鑰與同步</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const filteredItems = safeItems
     .filter((item) => {
@@ -107,7 +143,7 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
   const hasActiveFilters = filterStatus !== 'ALL' || filterPayer !== 'ALL' || filterDebtor !== 'ALL' || searchKeyword || startDate || endDate;
 
   return (
-    <div className="space-y-5 max-w-4xl mx-auto pb-12 font-sans">
+    <div className="space-y-4 sm:space-y-5 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
       {/* 頂部標題與統計 */}
       <div className="bg-white/70 backdrop-blur-md p-4 sm:px-6 sm:py-5 rounded-2xl border border-[#E9E5DC] shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>

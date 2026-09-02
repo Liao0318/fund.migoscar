@@ -1,6 +1,7 @@
 import React from 'react';
-import { BellRing, Database, RefreshCw, Smartphone } from 'lucide-react';
+import { BellRing, Database, Key, RefreshCw, Smartphone, Terminal, User, Crown, Heart } from 'lucide-react';
 import { BrandLogo } from './BrandLogo.tsx';
+import { AuthUser } from '../../types';
 
 interface HeaderProps {
   isOnline: boolean;
@@ -9,12 +10,17 @@ interface HeaderProps {
   appMode: 'fund' | 'split';
   setAppMode: (mode: 'fund' | 'split') => void;
   unsettledSplitCount: number;
-  onOpenTelegramSettings: () => void;
+  onOpenNotifySettings: () => void;
   onOpenTravelCalculator: () => void;
   pendingQueueCount?: number;
   onOpenDataBackup?: () => void;
   onFlushQueue?: () => void;
   onOpenPwaInstall?: () => void;
+  currentUser?: AuthUser | null;
+  onOpenUserProfile?: () => void;
+  onOpenGasDeploy?: () => void;
+  isSandboxMode?: boolean;
+  gasWebUrl?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,26 +30,56 @@ export const Header: React.FC<HeaderProps> = ({
   appMode,
   setAppMode,
   unsettledSplitCount,
-  onOpenTelegramSettings,
+  onOpenNotifySettings,
   onOpenTravelCalculator,
   pendingQueueCount = 0,
   onOpenDataBackup,
   onFlushQueue,
-  onOpenPwaInstall
+  onOpenPwaInstall,
+  currentUser,
+  onOpenUserProfile,
+  onOpenGasDeploy,
+  isSandboxMode = false,
+  gasWebUrl = ''
 }) => {
   return (
     <header className="fixed top-0 left-0 right-0 z-40 w-full font-sans bg-[#FAF9F5]/90 backdrop-blur-xl border-b border-[#EAE6DC]/80 shadow-[0_4px_20px_rgba(62,58,54,0.04)]">
       <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2 sm:py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-4">
-        <div className="flex items-center space-x-3 w-full sm:w-auto">
-          <BrandLogo className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 select-none drop-shadow-2xs rounded-xl" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-[#3E3A36] flex items-center gap-1">
-                伴伴記<span className="text-rose-500 text-sm sm:text-base">❤️</span>
-              </h1>
+        <div className="flex items-center justify-between sm:justify-start space-x-3 w-full sm:w-auto">
+          <div className="flex items-center space-x-2.5 sm:space-x-3">
+            <BrandLogo className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 select-none drop-shadow-2xs rounded-xl" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-[#3E3A36]">
+                  伴伴記<span className="text-rose-500 text-sm sm:text-base">❤️</span>
+                </h1>
+                {isSandboxMode && (
+                  <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300 flex items-center gap-0.5">
+                    <Terminal className="w-2.5 h-2.5" />
+                    <span>測試沙盒</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] sm:text-xs text-[#8C8475] font-light truncate">公積金與代墊記帳</p>
             </div>
-            <p className="text-[10px] sm:text-xs text-[#8C8475] font-light truncate">公積金與代墊記帳</p>
           </div>
+
+          {/* 手機版右上角使用者按鈕 */}
+          {currentUser && onOpenUserProfile && (
+            <button
+              type="button"
+              onClick={onOpenUserProfile}
+              className="sm:hidden flex items-center gap-1.5 px-2 py-1 bg-white hover:bg-[#FAF8F3] border border-[#E6E0D2] rounded-xl shadow-2xs text-xs font-bold text-[#3E3A36] cursor-pointer"
+            >
+              <div className={`w-5 h-5 rounded-lg ${
+                currentUser.userRole === 'partner' || currentUser.role === '周' ? 'bg-rose-500' : 'bg-amber-600'
+              } text-white text-[10px] flex items-center justify-center font-black relative`}>
+                {currentUser.role || (currentUser.userRole === 'partner' ? '周' : '廖')}
+              </div>
+              <span className="text-[11px] truncate max-w-[60px]">{currentUser.name}</span>
+              <span className="text-[10px]">{currentUser.userRole === 'partner' ? '💖' : '👑'}</span>
+            </button>
+          )}
         </div>
 
         {/* 頂部功能區：維持精準單列排版 (No-Wrap) */}
@@ -100,15 +136,32 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* 快捷圖示按鈕組：在小手機維持同一列緊湊佈局 */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            {/* 💬 Telegram 通知開關 Quick Action (圖示版) */}
+            {/* 🔑 試算表連線金鑰 Quick Action */}
+            {onOpenGasDeploy && (
+              <button
+                type="button"
+                onClick={onOpenGasDeploy}
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95 ${
+                  gasWebUrl
+                    ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+                }`}
+                title={gasWebUrl ? 'Google 試算表連線金鑰已綁定 (點擊管理)' : '尚未綁定 Google 試算表金鑰 (點此綁定同步)'}
+                aria-label="連線金鑰設定"
+              >
+                <Key className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700" />
+              </button>
+            )}
+
+            {/* 🔔 App 內建通知與智慧指令 Quick Action (圖示版) */}
             <button
               type="button"
-              onClick={onOpenTelegramSettings}
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200/90 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
-              title="自訂各項 Telegram 即時推播開關"
-              aria-label="Telegram 通知設定"
+              onClick={onOpenNotifySettings}
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-900 border border-rose-200/90 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0 active:scale-95"
+              title="App 內建通知提醒與智慧快捷記帳指令"
+              aria-label="App 通知設定"
             >
-              <BellRing className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-600" />
+              <BellRing className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-600" />
             </button>
 
             {/* ✈️ 即時匯率 / 出國換算 Quick Action (圖示版) */}
@@ -145,6 +198,24 @@ export const Header: React.FC<HeaderProps> = ({
                 aria-label="安裝至桌面"
               >
                 <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-600" />
+              </button>
+            )}
+
+            {/* 👤 桌面版使用者帳戶入口 */}
+            {currentUser && onOpenUserProfile && (
+              <button
+                type="button"
+                onClick={onOpenUserProfile}
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-[#FAF8F3] border border-[#E6E0D2] rounded-xl shadow-2xs text-xs font-bold text-[#3E3A36] cursor-pointer transition-all active:scale-95 shrink-0"
+                title={`已登入 Google 帳號: ${currentUser.email}【${currentUser.userRole === 'partner' ? '伴侶身分' : '主管理員'}】 (點擊管理帳戶與金鑰)`}
+              >
+                <div className={`w-5 h-5 rounded-lg ${
+                  currentUser.userRole === 'partner' || currentUser.role === '周' ? 'bg-rose-500' : 'bg-amber-600'
+                } text-white text-[10px] flex items-center justify-center font-black`}>
+                  {currentUser.role || (currentUser.userRole === 'partner' ? '周' : '廖')}
+                </div>
+                <span className="truncate max-w-[80px]">{currentUser.name}</span>
+                <span className="text-[11px]">{currentUser.userRole === 'partner' ? '💖' : '👑'}</span>
               </button>
             )}
           </div>

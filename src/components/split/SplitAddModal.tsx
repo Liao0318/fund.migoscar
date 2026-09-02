@@ -14,6 +14,12 @@ import { SplitRecordItem } from '../../types';
 interface SplitAddModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialData?: {
+    payer?: '廖' | '周';
+    itemName?: string;
+    totalAmount?: number | string;
+    note?: string;
+  };
   onAddSplit?: (data: {
     payer: '廖' | '周';
     itemName: string;
@@ -36,16 +42,26 @@ interface SplitAddModalProps {
 export const SplitAddModal: React.FC<SplitAddModalProps> = ({
   isOpen,
   onClose,
+  initialData,
   onAddSplit,
   onSubmit,
   showToast,
 }) => {
-  const [payer, setPayer] = useState<'廖' | '周'>('廖');
-  const [itemName, setItemName] = useState('');
-  const [totalAmount, setTotalAmount] = useState('');
+  const [payer, setPayer] = useState<'廖' | '周'>(initialData?.payer || '廖');
+  const [itemName, setItemName] = useState(initialData?.itemName || '');
+  const [totalAmount, setTotalAmount] = useState(initialData?.totalAmount ? String(initialData.totalAmount) : '');
   const [splitMode, setSplitMode] = useState<'AA平分' | '全額代付' | '自訂金額'>('AA平分');
   const [customOweAmount, setCustomOweAmount] = useState('');
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(initialData?.note || '');
+
+  React.useEffect(() => {
+    if (isOpen && initialData) {
+      if (initialData.payer) setPayer(initialData.payer);
+      if (initialData.itemName !== undefined) setItemName(initialData.itemName);
+      if (initialData.totalAmount !== undefined) setTotalAmount(String(initialData.totalAmount || ''));
+      if (initialData.note !== undefined) setNote(initialData.note);
+    }
+  }, [isOpen, initialData]);
 
   const quickTags = ['晚餐火鍋', '午餐便當', '飲料咖啡', '全聯採買', '好市多', '叫外送', '生活用品', '超商', '計程車資', '電影約會'];
 

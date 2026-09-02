@@ -12,7 +12,9 @@ import {
   HelpCircle,
   FileCheck,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Database,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SplitRecordItem, SplitSummary } from '../../types';
@@ -22,6 +24,8 @@ interface SplitSettlementTabProps {
   items: SplitRecordItem[];
   onOpenSettleModal: () => void;
   isLoading: boolean;
+  isDbConnected?: boolean;
+  onOpenGasDeploy?: () => void;
 }
 
 const DEFAULT_SPLIT_SUMMARY: SplitSummary = {
@@ -39,6 +43,8 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
   items = [],
   onOpenSettleModal,
   isLoading,
+  isDbConnected = true,
+  onOpenGasDeploy,
 }) => {
   const safeSummary: SplitSummary = summary || DEFAULT_SPLIT_SUMMARY;
   const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
@@ -46,8 +52,38 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
   const settledItems = safeItems.filter(i => i && i.status === '已結清');
   const [showSettledList, setShowSettledList] = useState(false);
 
+  if (!isDbConnected) {
+    return (
+      <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
+        <div className="bg-white/85 backdrop-blur-md rounded-3xl p-8 sm:p-12 border border-[#E8E2D5] shadow-2xs text-center space-y-4 my-2">
+          <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-900 flex items-center justify-center mx-auto shadow-inner">
+            <Database className="w-8 h-8 text-amber-700" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg sm:text-2xl font-black text-[#3E3A36]">尚未連線至資料庫</h3>
+            <p className="text-xs sm:text-sm text-[#7A7366] leading-relaxed max-w-md mx-auto font-normal">
+              尚未登錄 Google 試算表 Web App API 金鑰，無法進行代墊對帳與相抵結算。請先設定連線金鑰以同步雲端數據。
+            </p>
+          </div>
+          {onOpenGasDeploy && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onOpenGasDeploy}
+                className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
+              >
+                <Key className="w-4 h-4" />
+                <span>設定連線金鑰與同步</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-12 font-sans">
+    <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
       {/* 頂部橫幅 */}
       <div className="bg-gradient-to-r from-[#4A4641] to-[#36322E] text-white rounded-3xl p-5 sm:p-7 shadow-md relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-white/10 via-transparent to-transparent pointer-events-none" />
@@ -57,7 +93,7 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
               代墊對帳中心
             </h2>
             <p className="text-[#C5BFB5] text-xs sm:text-sm mt-1 max-w-lg leading-relaxed font-light">
-              雙方代墊自動互抵結算，確認結清後可自動推播 Telegram 伴伴記群組通知。
+              雙方代墊自動互抵結算，確認結清後將自動記錄核銷並發送 App 內建通知。
             </p>
           </div>
 

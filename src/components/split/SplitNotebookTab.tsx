@@ -12,7 +12,9 @@ import {
   Layers, 
   Store,
   Clock,
-  ArrowUpRight
+  ArrowUpRight,
+  Database,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -31,48 +33,64 @@ export interface SplitWishItem {
 interface SplitNotebookTabProps {
   onConvertToSplit: (item: { itemName: string; totalAmount: number; payer: '廖' | '周' }) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  isDbConnected?: boolean;
+  onOpenGasDeploy?: () => void;
 }
 
 export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
   onConvertToSplit,
   showToast,
+  isDbConnected = true,
+  onOpenGasDeploy,
 }) => {
   const [wishlist, setWishlist] = useState<SplitWishItem[]>(() => {
     try {
+      const isDbConfigured = Boolean(localStorage.getItem('muji_gas_web_url') || (typeof window !== 'undefined' && (window as any).google?.script?.run));
+      const isSandbox = localStorage.getItem('banban_is_sandbox_mode') === 'true';
+      if (!isDbConfigured && !isSandbox) {
+        return [];
+      }
       const saved = localStorage.getItem('banban_split_wishlist');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {}
-    return [
-      {
-        id: 'wish-1',
-        requester: '周',
-        itemName: '無印良品 溫和卸妝油 200ml',
-        store: 'MUJI 無印良品',
-        estimatedPrice: 280,
-        deadline: '這週休假前',
-        note: '如果有經過再順便買～',
-        status: '待代買',
-        createdAt: '2026-08-20'
-      },
-      {
-        id: 'wish-2',
-        requester: '廖',
-        itemName: '深焙義式咖啡豆 (半磅)',
-        store: '路易莎或星巴克',
-        estimatedPrice: 350,
-        deadline: '無期限',
-        note: '家裡咖啡豆快喝完了',
-        status: '待代買',
-        createdAt: '2026-08-21'
-      }
-    ];
+    return [];
   });
 
   const [filterRequester, setFilterRequester] = useState<'ALL' | '廖' | '周'>('ALL');
   const [filterStatus, setFilterStatus] = useState<'ALL' | '待代買' | '已買好'>('待代買');
+
+  if (!isDbConnected) {
+    return (
+      <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
+        <div className="bg-white/85 backdrop-blur-md rounded-3xl p-8 sm:p-12 border border-[#E8E2D5] shadow-2xs text-center space-y-4 my-2">
+          <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-900 flex items-center justify-center mx-auto shadow-inner">
+            <Database className="w-8 h-8 text-amber-700" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-lg sm:text-2xl font-black text-[#3E3A36]">尚未連線至資料庫</h3>
+            <p className="text-xs sm:text-sm text-[#7A7366] leading-relaxed max-w-md mx-auto font-normal">
+              尚未登錄 Google 試算表 Web App API 金鑰，無法讀取代買清單與記事。請先設定連線金鑰以同步雲端數據。
+            </p>
+          </div>
+          {onOpenGasDeploy && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onOpenGasDeploy}
+                className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
+              >
+                <Key className="w-4 h-4" />
+                <span>設定連線金鑰與同步</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // 新增 Modal
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -185,7 +203,7 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
   });
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-12 font-sans">
+    <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
       {/* 橫幅 Banner */}
       <div className="bg-gradient-to-r from-rose-800 to-rose-900 text-rose-50 rounded-3xl p-5 sm:p-7 shadow-md relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-rose-400/20 via-transparent to-transparent pointer-events-none" />

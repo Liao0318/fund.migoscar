@@ -49,7 +49,9 @@ import {
   AlertCircle,
   Plane,
   Palmtree,
-  Download
+  Download,
+  Database,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportFundRecordsToCSV } from './utils/exportCsv';
@@ -66,17 +68,20 @@ import { Header } from './components/common/Header';
 import { FloatingDock } from './components/common/FloatingDock';
 import { CustomConfirmModal } from './components/common/CustomConfirmModal';
 import { SmartAlertModal } from './components/modals/SmartAlertModal';
-import { SyncAlertModal } from './components/modals/SyncAlertModal';
+import { GoogleAuthPortal } from './components/auth/GoogleAuthPortal';
+import { UserProfileModal } from './components/auth/UserProfileModal';
 import { AddRecordModal } from './components/modals/AddRecordModal';
 import { AddShoppingModal } from './components/modals/AddShoppingModal';
 import { ManageStoresModal } from './components/modals/ManageStoresModal';
 import { ClearDoneConfirmModal } from './components/modals/ClearDoneConfirmModal';
 import { ShoppingDetailModal } from './components/modals/ShoppingDetailModal';
 import { CurrencyCalculatorModal } from './components/modals/CurrencyCalculatorModal';
-import { TelegramSettingsModal } from './components/modals/TelegramSettingsModal';
+import { AppNotificationModal } from './components/modals/AppNotificationModal';
 import { GasDeployModal } from './components/modals/GasDeployModal';
 import { DataBackupModal } from './components/modals/DataBackupModal';
 import { PwaInstallModal } from './components/modals/PwaInstallModal';
+import { FloatingChatButton } from './components/chat/FloatingChatButton';
+import { ChatAssistantDrawer } from './components/chat/ChatAssistantDrawer';
 import { 
   PendingSyncItem, 
   getPendingQueue, 
@@ -84,7 +89,25 @@ import {
   processSyncQueue, 
   subscribeSyncStatus 
 } from './services/syncQueue';
-import { SplitRecordItem, SplitSummary } from './types';
+import { 
+  SplitRecordItem, 
+  SplitSummary, 
+  AppNotifySettings, 
+  SmartCommandResult, 
+  AuthUser,
+  PartnerInviteData,
+  CoupleBindingInfo
+} from './types';
+import { 
+  generateRandomInviteCode,
+  saveActiveInviteCode,
+  getActiveInviteCode,
+  getPartnerBindingInfo,
+  savePartnerBindingInfo,
+  removePartnerBinding,
+  createShareableInviteCard
+} from './utils/partnerInvite';
+
 
 // 定義購物記事資料型態
 export interface ShoppingItem {
@@ -373,6 +396,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'history' | 'settlement' | 'notebook'>('home');
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isFloatingBarDismissed, setIsFloatingBarDismissed] = useState(false);
+  const [isChatAssistantOpen, setIsChatAssistantOpen] = useState(false);
 
   // 監聽網址 Hash 路由 (支援 #/split 或 #split 自動跳轉代墊分頁)
   useEffect(() => {
@@ -425,6 +449,12 @@ export default function App() {
 
   const [isSplitLoading, setIsSplitLoading] = useState(false);
   const [isSplitAddOpen, setIsSplitAddOpen] = useState(false);
+  const [splitAddInitialData, setSplitAddInitialData] = useState<{
+    payer?: '廖' | '周';
+    itemName?: string;
+    totalAmount?: number | string;
+    note?: string;
+  } | undefined>(undefined);
   const [isSplitSettleModalOpen, setIsSplitSettleModalOpen] = useState(false);
 
   const calculateLocalSplitSummary = (currentItems: SplitRecordItem[]) => {
@@ -528,7 +558,180 @@ export default function App() {
   const [sortOrder, setSortOrder] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc'); // 新增：歷史帳目排序方式
   const [reconciledMonths, setReconciledMonths] = useState<string[]>([]); // 新增：已核銷月份
   const [settlementMonth, setSettlementMonth] = useState<string>(''); // 新增：結算頁面選擇的對帳月份
-  const [isSyncAlertOpen, setIsSyncAlertOpen] = useState(false);
+  
+  // Google 帳戶登入與開發人員沙盒狀態
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('banban_auth_user');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
+  });
+
+  const [isSandboxMode, setIsSandboxMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('banban_is_sandbox_mode') === 'true';
+    } catch (e) {}
+    return false;
+  });
+
+  const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
+
+  // 💌 伴侶邀請代碼與情侶雙向綁定狀態
+  const [currentInviteCode, setCurrentInviteCode] = useState<string>(() => {
+    return getActiveInviteCode()?.inviteCode || generateRandomInviteCode();
+  });
+  const [partnerBindingInfo, setPartnerBindingInfo] = useState<CoupleBindingInfo | null>(() => {
+    return getPartnerBindingInfo();
+  });
+
+  const handleGenerateNewInviteCode = () => {
+    const newCode = generateRandomInviteCode();
+    setCurrentInviteCode(newCode);
+    if (currentUser) {
+      saveActiveInviteCode({
+        inviteCode: newCode,
+        adminEmail: currentUser.email,
+        adminName: currentUser.name,
+        gasWebUrl: gasWebUrl,
+        deploySheetUrl: deploySheetUrl,
+        createdAt: new Date().toISOString()
+      });
+    }
+    showToast(`已為伴侶隨機產生專屬邀請碼：${newCode}`, 'success');
+  };
+
+  const handleCopyInviteShare = () => {
+    const activeInvite = getActiveInviteCode() || {
+      inviteCode: currentInviteCode,
+      adminEmail: currentUser?.email || 'admin@gmail.com',
+      adminName: currentUser?.name || '主管理員',
+      gasWebUrl: gasWebUrl,
+      deploySheetUrl: deploySheetUrl,
+      createdAt: new Date().toISOString()
+    };
+    const cardText = createShareableInviteCard(activeInvite);
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(cardText);
+      showToast('💌 已複製伴侶邀請函與專屬加入連結！', 'success');
+    }
+  };
+
+  const handleUnbindPartner = () => {
+    removePartnerBinding();
+    setPartnerBindingInfo(null);
+    if (currentUser?.userRole === 'partner') {
+      handleLogout();
+      showToast('已解除伴侶帳本綁定，請重新輸入邀請碼登入', 'info');
+    } else {
+      showToast('已重設伴侶綁定紀錄，可重新派發邀請碼給伴侶', 'info');
+    }
+  };
+
+  const handleGoogleLogin = (user: AuthUser, partnerInvite?: PartnerInviteData | null) => {
+    setCurrentUser(user);
+    setIsSandboxMode(false);
+
+    // 若為伴侶模式登入且帶有邀請資訊，自動繼承管理員的 GAS Web App API 與試算表網址
+    if (user.userRole === 'partner') {
+      const activeGas = partnerInvite?.gasWebUrl || localStorage.getItem('muji_gas_web_url') || gasWebUrl || '';
+      const activeSheet = partnerInvite?.deploySheetUrl || localStorage.getItem('muji_deploy_sheet_url') || deploySheetUrl || '';
+      
+      if (partnerInvite?.gasWebUrl) {
+        setGasWebUrl(partnerInvite.gasWebUrl);
+        try { localStorage.setItem('muji_gas_web_url', partnerInvite.gasWebUrl); } catch (e) {}
+      }
+      if (partnerInvite?.deploySheetUrl) {
+        setDeploySheetUrl(partnerInvite.deploySheetUrl);
+        try { localStorage.setItem('muji_deploy_sheet_url', partnerInvite.deploySheetUrl); } catch (e) {}
+      }
+
+      const bindingData: CoupleBindingInfo = {
+        adminEmail: user.adminEmail || partnerInvite?.adminEmail || 'admin@gmail.com',
+        adminName: user.adminName || partnerInvite?.adminName || '主管理員',
+        partnerEmail: user.email,
+        partnerName: user.name,
+        inviteCode: user.inviteCode || currentInviteCode,
+        gasWebUrl: activeGas,
+        deploySheetUrl: activeSheet,
+        boundAt: new Date().toISOString()
+      };
+      savePartnerBindingInfo(bindingData);
+      setPartnerBindingInfo(bindingData);
+      showToast(`💖 歡迎 ${user.name}！已成功綁定伴侶帳本 (${user.adminName || '管理員'})`, 'success');
+    } else {
+      // 管理員登入：註冊邀請代碼
+      saveActiveInviteCode({
+        inviteCode: currentInviteCode,
+        adminEmail: user.email,
+        adminName: user.name,
+        gasWebUrl: gasWebUrl,
+        deploySheetUrl: deploySheetUrl,
+        createdAt: new Date().toISOString()
+      });
+      showToast(`👑 歡迎回來，${user.name} (主管理員)！`, 'success');
+
+      // 若尚未設定 Google Apps Script Web App API 網址，自動提示連線金鑰設定
+      const existingGas = localStorage.getItem('muji_gas_web_url') || gasWebUrl;
+      if (!existingGas) {
+        setTimeout(() => {
+          setIsDeployModalOpen(true);
+          showToast('⚡ 提醒：請設定 Google 試算表連線金鑰以啟用雙向雲端同步', 'info');
+        }, 800);
+      }
+    }
+
+    try {
+      localStorage.setItem('banban_auth_user', JSON.stringify(user));
+      localStorage.setItem('banban_is_sandbox_mode', 'false');
+    } catch (e) {}
+  };
+
+
+  const handleEnterDevSandbox = () => {
+    const devUser: AuthUser = {
+      id: 'dev-sandbox-user',
+      name: '開發測試者',
+      email: 'dev.sandbox@local.test',
+      role: 'admin',
+      isDevSandbox: true,
+      loginTime: new Date().toISOString()
+    };
+    setCurrentUser(devUser);
+    setIsSandboxMode(true);
+    try {
+      localStorage.setItem('banban_auth_user', JSON.stringify(devUser));
+      localStorage.setItem('banban_is_sandbox_mode', 'true');
+    } catch (e) {}
+    showToast('🧪 已切換為「開發人員測試沙盒模式」', 'info');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setIsSandboxMode(false);
+    try {
+      localStorage.removeItem('banban_auth_user');
+      localStorage.removeItem('banban_is_sandbox_mode');
+    } catch (e) {}
+    showToast('已登出 Google 帳戶', 'info');
+  };
+
+  const handleSwitchAccount = () => {
+    setCurrentUser(null);
+    setIsSandboxMode(false);
+    try {
+      localStorage.removeItem('banban_auth_user');
+      localStorage.removeItem('banban_is_sandbox_mode');
+    } catch (e) {}
+  };
+
+  const handleToggleSandboxMode = (enabled: boolean) => {
+    setIsSandboxMode(enabled);
+    try {
+      localStorage.setItem('banban_is_sandbox_mode', enabled ? 'true' : 'false');
+    } catch (e) {}
+    showToast(enabled ? '已切換為「開發人員沙盒測試模式」' : '已關閉沙盒模式，切換為「正式連線模式」', 'info');
+  };
   
   // ------------------- 即時匯率與出國幣值換算狀態 -------------------
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>(() => {
@@ -566,8 +769,54 @@ export default function App() {
   const [gasWebUrl, setGasWebUrl] = useState(() => localStorage.getItem('muji_gas_web_url') || '');
   const [isSyncingGas, setIsSyncingGas] = useState(false);
 
+  const isDbConnected = Boolean(
+    (gasWebUrl && gasWebUrl.trim().startsWith('http')) ||
+    (typeof window !== 'undefined' && (window as any).google?.script?.run) ||
+    isSandboxMode
+  );
+
+  const renderDbUnconnectedState = (
+    title = "尚未連線至資料庫",
+    desc = "尚未登錄 Google 試算表 Web App API 金鑰，無法讀取資料庫。請先設定連線金鑰以同步雲端數據。"
+  ) => (
+    <motion.div
+      key="unconnected-state"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -12 }}
+      className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans"
+    >
+      <div className="bg-white/85 backdrop-blur-md rounded-3xl p-8 sm:p-12 border border-[#E8E2D5] shadow-2xs text-center space-y-4 my-2">
+        <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-900 flex items-center justify-center mx-auto shadow-inner">
+          <Database className="w-8 h-8 text-amber-700" />
+        </div>
+        <div className="space-y-2">
+          <h3 className="text-lg sm:text-2xl font-black text-[#3E3A36]">{title}</h3>
+          <p className="text-xs sm:text-sm text-[#7A7366] leading-relaxed max-w-md mx-auto font-normal">
+            {desc}
+          </p>
+        </div>
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setIsDeployModalOpen(true)}
+            className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
+          >
+            <Key className="w-4 h-4" />
+            <span>設定連線金鑰與同步</span>
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+
   // ------------------- Google Apps Script / Web App API 整合核心 -------------------
   const callGasApi = async (action: string, payload?: any): Promise<any> => {
+    // 若處於開發人員沙盒模式，不對外部 GAS 進行網路呼叫，直接回傳本地回退旗標
+    if (isSandboxMode) {
+      return { success: false, isLocalFallback: true, isSandbox: true };
+    }
+
     // 1. 原生 Google Apps Script iframe 環境
     if (typeof window !== 'undefined' && (window as any).google?.script?.run) {
       return new Promise((resolve) => {
@@ -890,6 +1139,8 @@ export default function App() {
         note: data.note || ''
       }, `新增代墊：${newItem.itemName} ($${newItem.totalAmount})`);
     }
+
+    return newItem;
   };
 
   const handleDeleteSplitRecord = (id: string) => {
@@ -955,27 +1206,18 @@ export default function App() {
 
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
   const [deploySheetUrl, setDeploySheetUrl] = useState(() => localStorage.getItem('muji_sheet_url') || '');
-  const [deployTelegramToken, setDeployTelegramToken] = useState(() => localStorage.getItem('banban_telegram_token') || '8940545345:AAGTJSX-EgRpbCGPfufxGhxEJTzAOvMw5I4');
-  const [deployTelegramChatId, setDeployTelegramChatId] = useState(() => localStorage.getItem('banban_telegram_chat_id') || '-5312205991');
   const [activeDeployCodeTab, setActiveDeployCodeTab] = useState<'codeGs' | 'indexHtml' | 'splitHtml'>('codeGs');
   const [copiedCodeType, setCopiedCodeType] = useState<'codeGs' | 'indexHtml' | 'splitHtml' | null>(null);
 
   const saveDeployConfig = () => {
     const cleanSheet = deploySheetUrl.trim();
-    const cleanToken = deployTelegramToken.trim();
-    const cleanChatId = deployTelegramChatId.trim();
     const cleanGas = gasWebUrl.trim();
 
     localStorage.setItem('muji_sheet_url', cleanSheet);
-    localStorage.setItem('banban_telegram_token', cleanToken);
-    localStorage.setItem('banban_telegram_chat_id', cleanChatId);
     localStorage.setItem('muji_gas_web_url', cleanGas);
 
     if (cleanSheet) {
       callGasApi('saveSpreadsheetId', { spreadsheetId: cleanSheet, url: cleanSheet });
-    }
-    if (cleanToken || cleanChatId) {
-      callGasApi('saveTelegramCredentials', { token: cleanToken, chatId: cleanChatId });
     }
 
     showToast('連線設定與 Web App API URL 已儲存！正嘗試即時連線...', 'success');
@@ -992,20 +1234,6 @@ export default function App() {
     if (sheetId.includes('docs.google.com/spreadsheets')) {
       const match = sheetId.match(/\/d\/([a-zA-Z0-9_\-]+)/);
       if (match && match[1]) sheetId = match[1];
-    }
-
-    if (deployTelegramToken.trim()) {
-      code = code.replace(
-        'var HARDCODED_TELEGRAM_TOKEN = "8940545345:AAGTJSX-EgRpbCGPfufxGhxEJTzAOvMw5I4";',
-        `var HARDCODED_TELEGRAM_TOKEN = "${deployTelegramToken.trim()}";`
-      );
-    }
-
-    if (deployTelegramChatId.trim()) {
-      code = code.replace(
-        'var HARDCODED_TELEGRAM_CHAT_ID = "-5312205991";',
-        `var HARDCODED_TELEGRAM_CHAT_ID = "${deployTelegramChatId.trim()}";`
-      );
     }
 
     if (sheetId) {
@@ -1223,10 +1451,9 @@ export default function App() {
     };
   }, []);
 
-  // ------------------- Telegram 通知狀態與設定 -------------------
-  const [isTelegramSettingsModalOpen, setIsTelegramSettingsModalOpen] = useState(false);
-  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
-  const [telegramNotifySettings, setTelegramNotifySettings] = useState({
+  // ------------------- App 內建即時通知與設定 -------------------
+  const [isAppNotifyModalOpen, setIsAppNotifyModalOpen] = useState(false);
+  const [appNotifySettings, setAppNotifySettings] = useState<AppNotifySettings>({
     notifyOnAdd: true,
     notifyOnIncome: true,
     notifyOnEdit: true,
@@ -1421,67 +1648,35 @@ export default function App() {
   };
 
   useEffect(() => {
-    // 載入 Telegram 通知自訂設定
-    const savedTelegramSettings = localStorage.getItem('banban_telegram_notify_settings');
-    if (savedTelegramSettings) {
+    // 載入 App 內建通知設定
+    const savedNotifySettings = localStorage.getItem('banban_app_notify_settings');
+    if (savedNotifySettings) {
       try {
-        const parsed = JSON.parse(savedTelegramSettings);
-        setTelegramNotifySettings(prev => ({ ...prev, ...parsed }));
+        const parsed = JSON.parse(savedNotifySettings);
+        setAppNotifySettings(prev => ({ ...prev, ...parsed }));
       } catch (e) {}
-    }
-
-    if (typeof (window as any).google !== 'undefined' && (window as any).google.script && (window as any).google.script.run) {
-      try {
-        (window as any).google.script.run
-          .withSuccessHandler((res: any) => {
-            if (res && res.success && res.settings) {
-              setTelegramNotifySettings(prev => ({ ...prev, ...res.settings }));
-            }
-          })
-          .getLineNotifySettings();
-      } catch (e) {
-        console.warn("Failed to get Telegram Notify config from GAS:", e);
-      }
-    } else if (gasWebUrl) {
-      callGasApi('getLineNotifySettings').then(res => {
-        if (res && res.success && res.settings) {
-          setTelegramNotifySettings(prev => ({ ...prev, ...res.settings }));
-        }
-      });
     }
 
     fetchShoppingData();
   }, [gasWebUrl]);
 
-  const saveTelegramNotifySettings = (newSettings: typeof telegramNotifySettings) => {
-    setTelegramNotifySettings(newSettings);
+  const saveAppNotifySettings = (newSettings: AppNotifySettings) => {
+    setAppNotifySettings(newSettings);
     try {
-      localStorage.setItem('banban_telegram_notify_settings', JSON.stringify(newSettings));
+      localStorage.setItem('banban_app_notify_settings', JSON.stringify(newSettings));
     } catch (e) {}
-
-    if (gasWebUrl) {
-      callGasApi('saveTelegramNotifySettings', { settings: newSettings });
-      return;
-    }
-
-    if (typeof (window as any).google !== 'undefined' && (window as any).google.script && (window as any).google.script.run) {
-      (window as any).google.script.run
-        .withSuccessHandler(() => {})
-        .withFailureHandler(() => {})
-        .saveLineNotifySettings(newSettings);
-    }
   };
 
-  const toggleTelegramNotifySetting = (key: keyof typeof telegramNotifySettings) => {
+  const toggleAppNotifySetting = (key: keyof AppNotifySettings) => {
     const updated = {
-      ...telegramNotifySettings,
-      [key]: !telegramNotifySettings[key]
+      ...appNotifySettings,
+      [key]: !appNotifySettings[key]
     };
-    saveTelegramNotifySettings(updated);
+    saveAppNotifySettings(updated);
   };
 
-  const setAllTelegramNotifySettings = (enableAll: boolean) => {
-    const updated = {
+  const setAllAppNotifySettings = (enableAll: boolean) => {
+    const updated: AppNotifySettings = {
       notifyOnAdd: enableAll,
       notifyOnIncome: enableAll,
       notifyOnEdit: enableAll,
@@ -1492,55 +1687,379 @@ export default function App() {
       notifyOnShoppingComplete: enableAll,
       notifyOnShoppingDelete: enableAll
     };
-    saveTelegramNotifySettings(updated);
-    showToast(enableAll ? '已一鍵開啟所有 Telegram 即時推播項目！' : '已一鍵關閉所有 Telegram 即時推播項目！', 'info');
+    saveAppNotifySettings(updated);
+    showToast(enableAll ? '已開啟所有 App 內建即時通知項目！' : '已關閉所有 App 內建即時通知項目！', 'info');
   };
 
-  const handleTestTelegramNotify = async () => {
-    setIsTestingTelegram(true);
+  const handleTestInAppNotify = () => {
+    addNotificationAndSave(
+      '🌸 伴伴記即時通知測試',
+      '這是一則 App 內建即時通知！當您記帳、代墊、結算或新增購物清單時，都會立即在此收到通知。',
+      'system'
+    );
+    showToast('🔔 已發送測試通知至通知中心！', 'success');
+  };
 
-    if (gasWebUrl) {
+  const handleUndoCommandItem = async (actionData?: { id?: string | number; type: 'income' | 'expense' | 'shopping' }): Promise<boolean> => {
+    if (!actionData || !actionData.id) {
+      showToast('此項目無法復原或未找到對應識別碼', 'info');
+      return false;
+    }
+    const { id, type } = actionData;
+    if (type === 'income') {
+      const target = records.find(r => String(r.id) === String(id));
+      const updated = records.filter(r => String(r.id) !== String(id));
+      setRecords(updated);
+      saveRecordsToLocal(updated);
+      if (gasWebUrl) {
+        callGasApi('deleteRecord', { id });
+      }
+      showToast(`已撤回/刪除公積金存入紀錄「${target?.item || ''}」`, 'success');
+      return true;
+    } else if (type === 'expense') {
+      const target = splitItems.find(i => String(i.id) === String(id));
+      const updated = splitItems.filter(i => String(i.id) !== String(id));
+      setSplitItems(updated);
+      calculateLocalSplitSummary(updated);
       try {
-        const res = await callGasApi('testTelegramNotify', { 
-          token: deployTelegramToken.trim(), 
-          chatId: deployTelegramChatId.trim() 
-        });
-        setIsTestingTelegram(false);
-        if (res && res.success) {
-          showToast(res.message || '🎉 Telegram 測試卡片訊息發送成功！請檢查群組。', 'success');
-        } else {
-          showToast(res ? res.message : '測試發送失敗，請確認 Token 與 Chat ID 是否有效', 'error');
+        localStorage.setItem('banban_split_records', JSON.stringify(updated));
+      } catch (e) {}
+      if (gasWebUrl) {
+        callGasApi('deleteSplitRecord', { id });
+      }
+      showToast(`已撤回/刪除代墊紀錄「${target?.itemName || ''}」`, 'success');
+      return true;
+    } else if (type === 'shopping') {
+      const target = shoppingItems.find(i => String(i.id) === String(id));
+      const updated = shoppingItems.filter(i => String(i.id) !== String(id));
+      setShoppingItems(updated);
+      try {
+        localStorage.setItem('muji_shopping_items_cache', JSON.stringify(updated));
+      } catch (e) {}
+      if (gasWebUrl) {
+        callGasApi('deleteShoppingItem', { id });
+      }
+      showToast(`已撤回/移除購物清單品項「${target?.item || ''}」`, 'success');
+      return true;
+    }
+    return false;
+  };
+
+  const handleExecuteSmartCommand = async (command: string): Promise<SmartCommandResult> => {
+    let text = command.trim();
+    if (!text) {
+      return {
+        success: false,
+        type: 'error',
+        replyText: '請輸入或說出記帳指令（例如：廖 1200 晚餐、存 10000 薪資、需要買 鮮奶 全聯）'
+      };
+    }
+
+    // 清理常見語音贅字與標點符號
+    text = text.replace(/[，。！？、,!?;]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    // 0. 查看今日即時通知
+    if (/^(通知|今日通知|查通知|查看通知|訊息|即時通知|最新通知)$/i.test(text)) {
+      if (notifications.length === 0) {
+        return {
+          success: true,
+          type: 'notification',
+          replyText: '🔔 **今日即時通知中心**\n\n今日尚無任何即時通知紀錄。\n（系統會在每日午夜自動歸檔重置）'
+        };
+      }
+      const unreadCount = notifications.filter(n => !n.read).length;
+      const listText = notifications.slice(0, 6).map((n, idx) => {
+        let icon = '🔔';
+        if (n.type === 'expense') icon = '💳';
+        else if (n.type === 'income') icon = '💰';
+        else if (n.type === 'settle') icon = '⚖️';
+        else if (n.type === 'delete') icon = '🗑️';
+        else if (n.type === 'system') icon = '🛒';
+        return `${idx + 1}. ${icon} [${formatAmPmTime(n.time)}] **${n.title}**\n   ${n.desc}`;
+      }).join('\n\n');
+
+      return {
+        success: true,
+        type: 'notification',
+        replyText: `🔔 **今日即時通知（共 ${notifications.length} 則，${unreadCount} 則未讀）**\n\n${listText}`
+      };
+    }
+
+    // 0. 今日通知快速指令
+    if (/^(今日通知|通知|查看通知|查通知|訊息)$/i.test(text)) {
+      const unreadCount = notifications.filter(n => !n.read).length;
+      const recentNotifs = notifications.slice(0, 5);
+      
+      return {
+        success: true,
+        type: 'notification',
+        replyText: `🔔 **今日即時通知（共 ${notifications.length} 則，${unreadCount} 則未讀）**`,
+        cardData: {
+          categoryBadge: '🔔 今日即時通知摘要',
+          tagPill: `${unreadCount} 則未讀`,
+          highlightTitle: '今日累積通知',
+          highlightValue: `共 ${notifications.length} 則`,
+          highlightSub: unreadCount > 0 ? `有 ${unreadCount} 則新訊息待關注` : '所有通知皆已即時同步',
+          items: recentNotifs.length > 0 ? recentNotifs.map(n => ({
+            label: n.title,
+            value: n.desc
+          })) : [
+            { label: '通知狀態', value: '今日尚無新推播通知' }
+          ],
+          footerNote: '💡 點擊上方推播開關可自由調整通知項目'
         }
-        return;
-      } catch (err: any) {
-        setIsTestingTelegram(false);
-        showToast('測試失敗：' + err.toString(), 'error');
-        return;
+      };
+    }
+
+    // 1. 即時查帳 / 狀態查詢
+    if (/^(查|查詢|查帳|查代墊|誰欠誰|結算|結餘|餘額|現況|狀況)$/i.test(text)) {
+      const summaryMsg = splitSummary.summaryText || '目前雙方已結清，無待還款款項';
+      showToast(`📊 ${summaryMsg}`, 'info');
+
+      // 計算公積金最新結存
+      const curIncome = records.filter(r => r.type === '收入-固定公積金').reduce((s, r) => s + r.amount, 0);
+      const curDisbursed = records.filter(r => r.type.includes('支出') && isMonthReconciled(r.month, reconciledMonths)).reduce((s, r) => s + r.amount, 0);
+      const curPending = records.filter(r => r.type.includes('支出') && !isMonthReconciled(r.month, reconciledMonths)).reduce((s, r) => s + r.amount, 0);
+      const curBalance = curIncome - curDisbursed;
+      const curQuota = curBalance - curPending;
+
+      return {
+        success: true,
+        type: 'query',
+        replyText: `📊 **即時對帳與帳務摘要**\n\n• **代墊結算**：${summaryMsg}\n• **待核銷筆數**：共 ${splitSummary.unsettledCount} 筆\n• **公積金結餘**：NT$ ${curBalance.toLocaleString()} 元\n• **當月預計銷帳前額度**：NT$ ${curQuota.toLocaleString()} 元`,
+        cardData: {
+          categoryBadge: '📊 即時對帳摘要',
+          tagPill: '即時結算',
+          highlightTitle: '代墊結算現況',
+          highlightValue: summaryMsg,
+          highlightSub: `待核銷代墊共 ${splitSummary.unsettledCount} 筆`,
+          items: [
+            { label: '待核銷筆數', value: `共 ${splitSummary.unsettledCount} 筆` },
+            { label: '公積金總結餘', value: `NT$ ${curBalance.toLocaleString()} 元`, isHighlight: true },
+            { label: '當月預估銷帳前剩餘', value: `NT$ ${curQuota.toLocaleString()} 元` }
+          ],
+          footerNote: '💡 可隨時至「代墊分頁」查看明細或進行一鍵清帳平帳。'
+        }
+      };
+    }
+
+    // 數字正規化（支援「一萬」、「五千」等口語中文數字）
+    let normalized = text
+      .replace(/(\d+),(\d+)/g, '$1$2')
+      .replace(/一萬/g, '10000')
+      .replace(/兩萬/g, '20000')
+      .replace(/三萬/g, '30000')
+      .replace(/五千/g, '5000')
+      .replace(/三千/g, '3000')
+      .replace(/兩千/g, '2000')
+      .replace(/一千/g, '1000')
+      .replace(/五百/g, '500')
+      .replace(/兩百/g, '200')
+      .replace(/一百/g, '100');
+
+    // 2. 存入公積金 / 固定收入 (例如: "存 10000 薪資", "廖 存 5000", "存入公積金 3000")
+    const incMatch = normalized.match(/^(?:存入|存|公積金|入帳|轉入|收入)\s*(廖|周|尹丞|沛緹)?\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i) ||
+                     normalized.match(/^(廖|周|尹丞|沛緹)\s*(?:存入|存|入帳)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i) ||
+                     normalized.match(/^(廖|周|尹丞|沛緹)?(?:存入|存)\s*([0-9\.]+)\s*(?:元|塊)?\s*(.*)$/i);
+    if (incMatch) {
+      const payerKey = incMatch[1] || '廖';
+      const amt = parseFloat(incMatch[2]) || 0;
+      const desc = incMatch[3]?.trim() || '公積金存入';
+      const payerName = (payerKey === '周' || payerKey === '沛緹') ? '周沛緹' : '廖尹丞';
+
+      if (amt > 0) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const monthStr = todayStr.substring(0, 7);
+        const recordData: RecordItem = {
+          id: Date.now(),
+          month: monthStr,
+          date: todayStr,
+          item: desc,
+          payer: payerName,
+          amount: amt,
+          type: '收入-固定公積金',
+          timestamp: formatAmPmTime(new Date())
+        };
+        const updated = [recordData, ...records];
+        setRecords(updated);
+        saveRecordsToLocal(updated);
+        if (gasWebUrl) {
+          callGasApi('addRecord', recordData);
+        }
+        addNotificationAndSave(
+          '💰 公積金存入成功',
+          `${payerName} 存入「${desc}」NT$ ${amt.toLocaleString()} 元`,
+          'income',
+          true // skipChatPush: true (避免在聊天室重複推播，由指令回傳精美卡片)
+        );
+        showToast(`已成功記錄公積金存入 NT$ ${amt.toLocaleString()}`, 'success');
+        const curIncome = updated.filter(r => r.type === '收入-固定公積金').reduce((s, r) => s + r.amount, 0);
+        const curDisbursed = updated.filter(r => r.type.includes('支出') && isMonthReconciled(r.month, reconciledMonths)).reduce((s, r) => s + r.amount, 0);
+        const newBalance = curIncome - curDisbursed;
+        return {
+          success: true,
+          type: 'income',
+          data: { id: recordData.id, type: 'income' },
+          replyText: `💰 **公積金存入成功！**\n\n• **存入者**：${payerName}\n• **用途項目**：${desc}\n• **存入金額**：NT$ ${amt.toLocaleString()} 元\n• **公積金最新總結餘**：NT$ ${newBalance.toLocaleString()} 元`,
+          cardData: {
+            categoryBadge: '💰 公積金存入成功',
+            tagPill: '已入帳',
+            highlightTitle: desc,
+            highlightValue: `+ NT$ ${amt.toLocaleString()}`,
+            highlightSub: `存入者：${payerName}`,
+            items: [
+              { label: '存入者', value: payerName },
+              { label: '款項用途', value: desc },
+              { label: '公積金總結餘', value: `NT$ ${newBalance.toLocaleString()} 元`, isHighlight: true }
+            ],
+            footerNote: '✨ 已自動同步至收支明細看板與 Google 試算表。'
+          }
+        };
       }
     }
 
-    if (typeof (window as any).google !== 'undefined' && (window as any).google.script && (window as any).google.script.run) {
-      (window as any).google.script.run
-        .withSuccessHandler((res: any) => {
-          setIsTestingTelegram(false);
-          if (res && res.success) {
-            showToast(res.message, 'success');
-          } else {
-            showToast(res ? res.message : '測試發送失敗', 'error');
+    // 3. 代墊支出指令 (例如: "廖 1200 晚餐", "周 85 飲料", "廖代墊晚餐1200", "周買了珍奶85元")
+    const expMatch = normalized.match(/^(廖|周|尹丞|沛緹)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i) ||
+                     normalized.match(/^(廖|周|尹丞|沛緹)\s*(?:代墊了|代墊|付了|付|買了|買)\s*(.*?)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?$/i) ||
+                     normalized.match(/^(廖|周|尹丞|沛緹)\s*(?:代墊了|代墊|付了|付|買了|買)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i) ||
+                     normalized.match(/^(?:代墊|支出)\s*(廖|周|尹丞|沛緹)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i);
+    if (expMatch) {
+      let payerKey = expMatch[1];
+      let amt = 0;
+      let desc = '';
+
+      if (/^\d+(\.\d+)?$/.test(expMatch[2])) {
+        amt = parseFloat(expMatch[2]);
+        desc = expMatch[3]?.trim() || '日常代墊';
+      } else {
+        desc = expMatch[2]?.trim() || '日常代墊';
+        amt = parseFloat(expMatch[3]) || 0;
+      }
+
+      const payer: '廖' | '周' = (payerKey === '周' || payerKey === '沛緹') ? '周' : '廖';
+      const debtorAmt = Math.round(amt / 2);
+
+      if (amt > 0) {
+        const createdSplit = await handleAddSplitRecord({
+          payer: payer,
+          splitMode: 'AA平分',
+          itemName: desc,
+          totalAmount: amt,
+          customOweAmount: debtorAmt,
+          note: 'App 智慧指令快捷建立'
+        });
+        const payerDisp = payer === '廖' ? '廖廖' : '周周';
+        const otherDisp = payer === '廖' ? '周周' : '廖廖';
+        addNotificationAndSave(
+          '💳 代墊記帳成功',
+          `${payerDisp} 代墊「${desc}」NT$ ${amt.toLocaleString()}（對方應返還 $${debtorAmt.toLocaleString()}）`,
+          'expense',
+          true // skipChatPush: true
+        );
+        return {
+          success: true,
+          type: 'expense',
+          data: { id: createdSplit?.id, type: 'expense' },
+          replyText: `💳 **代墊記帳成功！**\n\n• **代墊人**：${payerDisp}\n• **消費項目**：${desc}\n• **總金額**：NT$ ${amt.toLocaleString()} 元\n• **分帳模式**：AA 平分（${otherDisp} 應返還 $${debtorAmt.toLocaleString()}）`,
+          cardData: {
+            categoryBadge: '💳 代墊記帳成功',
+            tagPill: 'AA 平分',
+            highlightTitle: desc,
+            highlightValue: `NT$ ${amt.toLocaleString()}`,
+            highlightSub: `${payerDisp} 先墊付 • ${otherDisp} 應返還 NT$ ${debtorAmt.toLocaleString()}`,
+            items: [
+              { label: '代墊人', value: payerDisp },
+              { label: '分攤模式', value: `AA 平分（各半）` },
+              { label: '應返還款', value: `NT$ ${debtorAmt.toLocaleString()} 元`, isHighlight: true },
+              { label: '最新對帳現況', value: splitSummary.summaryText || '已更新代墊看板' }
+            ],
+            footerNote: '✨ 已自動記錄至代墊分頁與對帳看板。'
           }
-        })
-        .withFailureHandler((err: any) => {
-          setIsTestingTelegram(false);
-          showToast('測試失敗：' + err.toString(), 'error');
-        })
-        .testTelegramNotify(deployTelegramToken.trim(), deployTelegramChatId.trim());
-    } else {
-      // Sandbox Simulator
-      setTimeout(() => {
-        setIsTestingTelegram(false);
-        showToast('🔔 [沙盒模擬] Telegram 測試卡片發送成功！若連線至正式 GAS，Telegram 群組將即時收到通知！', 'success');
-      }, 700);
+        };
+      }
     }
+
+    // 4. 購物清單指令 (例如: "買 全聯 鮮奶" or "想要 PS5" or "需要買 衛生紙")
+    if (/^(買|需要買|需要|想要買|想要|觀望)/.test(text)) {
+      let category: '需要買' | '想要買' = '需要買';
+      let clean = text;
+      if (/^(想要買|想要|觀望)/.test(text)) {
+        category = '想要買';
+        clean = text.replace(/^(想要買|想要|觀望)\s*/, '');
+      } else {
+        clean = text.replace(/^(買|需要買|需要)\s*/, '');
+      }
+
+      const parts = clean.split(/[\s，,]+/);
+      let storeName = shoppingStores[0] || '菜市場';
+      let itemName = parts[0] || '';
+
+      if (parts.length >= 2) {
+        if (shoppingStores.includes(parts[0])) {
+          storeName = parts[0];
+          itemName = parts.slice(1).join(' ');
+        } else {
+          itemName = parts[0];
+          storeName = parts[1];
+        }
+      }
+
+      if (itemName) {
+        const newItem: ShoppingItem = {
+          id: 'shop-' + Date.now(),
+          category: category,
+          item: itemName,
+          store: storeName,
+          deadline: '儘快',
+          status: '待購買',
+          creator: '廖尹丞',
+          createdTime: formatAmPmTime(new Date()),
+          note: 'App 智慧指令快捷新增'
+        };
+        const updated = [newItem, ...shoppingItems];
+        setShoppingItems(updated);
+        try {
+          localStorage.setItem('muji_shopping_items_cache', JSON.stringify(updated));
+        } catch (e) {}
+        addNotificationAndSave(
+          '🛒 購物清單新增',
+          `[${category}] ${itemName}（地點：${storeName}）`,
+          'system',
+          true // skipChatPush: true
+        );
+        showToast(`已加入購物清單：${itemName}`, 'success');
+        if (gasWebUrl) {
+          callGasApi('addShoppingItem', newItem);
+        }
+        return {
+          success: true,
+          type: 'shopping',
+          data: { id: newItem.id, type: 'shopping' },
+          replyText: `🛒 **已成功加入購物清單！**\n\n• **清單類別**：[${category}]\n• **購買品項**：${itemName}\n• **預計地點**：${storeName}`,
+          cardData: {
+            categoryBadge: '🛒 購物清單已新增',
+            tagPill: `[${category}]`,
+            highlightTitle: itemName,
+            highlightValue: storeName,
+            highlightSub: `採購時限：儘快 • 狀態：待購買`,
+            items: [
+              { label: '清單類別', value: category },
+              { label: '欲購品項', value: itemName },
+              { label: '預計採購地點', value: storeName },
+              { label: '當前狀態', value: '待購買（可至購物記事勾選）' }
+            ],
+            footerNote: '✨ 已同步至雙方共享的購物記事清單。'
+          }
+        };
+      }
+    }
+
+    showToast('未能辨識指令格式，請參考小秘書範例', 'error');
+    return {
+      success: false,
+      type: 'error',
+      replyText: '⚠️ **未能辨識指令格式**\n\n您可以直接輸入或說出：\n• **「廖 1200 晚餐」** 👉 記錄廖廖代墊\n• **「周 85 珍奶」** 👉 記錄周周代墊\n• **「存 10000 薪資」** 👉 記錄公積金存入\n• **「需要買 鮮奶 全聯」** 👉 加入購物清單\n• **「查代墊」** 👉 查看最新欠款對帳\n• **「今日通知」** 👉 檢視今日即時通知'
+    };
   };
 // ------------------- 自訂雙鍵對話確認 Modal -------------------
   const [customConfirmState, setCustomConfirmState] = useState<{
@@ -1554,7 +2073,7 @@ export default function App() {
   } | null>(null);
 
   const handleSyncClick = () => {
-    setIsSyncAlertOpen(true);
+    setIsDeployModalOpen(true);
   };
 
   const backfillNotificationsFromRecords = (ledgerRecords: RecordItem[]) => {
@@ -1631,52 +2150,65 @@ export default function App() {
   // 初始化與本機 LocalStorage 綁定
   useEffect(() => {
     // 1. 載入對帳流水帳紀錄
+    const isDbConfigured = Boolean(localStorage.getItem('muji_gas_web_url') || (typeof window !== 'undefined' && (window as any).google?.script?.run));
+    const isSandbox = localStorage.getItem('banban_is_sandbox_mode') === 'true';
+
     const saved = localStorage.getItem('muji_ledger_data');
     let loadedRecords: RecordItem[] = [];
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // 防呆與舊資料遷移：確保每條紀錄都有 date
-        const migrated = parsed.map((r: any) => {
-          let mStr = String(r.month || '').trim();
-          if (!/^\d{4}-\d{2}$/.test(mStr)) {
-            if (/^\d{4}-\d{2}-\d{2}$/.test(mStr)) {
-              mStr = mStr.substring(0, 7);
-            } else {
-              const d = new Date(mStr);
-              if (!isNaN(d.getTime())) {
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                mStr = `${year}-${month}`;
+        if (Array.isArray(parsed)) {
+          // 防呆與舊資料遷移：確保每條紀錄都有 date
+          const migrated = parsed.map((r: any) => {
+            let mStr = String(r.month || '').trim();
+            if (!/^\d{4}-\d{2}$/.test(mStr)) {
+              if (/^\d{4}-\d{2}-\d{2}$/.test(mStr)) {
+                mStr = mStr.substring(0, 7);
+              } else {
+                const d = new Date(mStr);
+                if (!isNaN(d.getTime())) {
+                  const year = d.getFullYear();
+                  const month = String(d.getMonth() + 1).padStart(2, '0');
+                  mStr = `${year}-${month}`;
+                }
               }
             }
-          }
-          return {
-            ...r,
-            month: mStr,
-            date: r.date || `${mStr}-01`
-          };
-        });
-        loadedRecords = migrated;
-        setRecords(migrated);
-        
-        // 預設結算對帳月份為最新一筆的月份
-        if (migrated.length > 0) {
-          const uniqueMonths = Array.from(new Set(migrated.map((r: any) => r.month))).sort((a: any, b: any) => b.localeCompare(a));
-          if (uniqueMonths.length > 0) {
-            setSettlementMonth(uniqueMonths[0] as string);
+            return {
+              ...r,
+              month: mStr,
+              date: r.date || `${mStr}-01`
+            };
+          });
+          loadedRecords = migrated;
+          setRecords(migrated);
+          
+          // 預設結算對帳月份為最新一筆的月份
+          if (migrated.length > 0) {
+            const uniqueMonths = Array.from(new Set(migrated.map((r: any) => r.month))).sort((a: any, b: any) => b.localeCompare(a));
+            if (uniqueMonths.length > 0) {
+              setSettlementMonth(uniqueMonths[0] as string);
+            }
           }
         }
       } catch (err) {
-        loadedRecords = INITIAL_RECORDS;
-        setRecords(INITIAL_RECORDS);
-        setSettlementMonth('2026-06');
+        if (isSandbox) {
+          loadedRecords = INITIAL_RECORDS;
+          setRecords(INITIAL_RECORDS);
+          setSettlementMonth('2026-06');
+        } else {
+          setRecords([]);
+          setSettlementMonth('');
+        }
       }
-    } else {
+    } else if (isSandbox) {
       loadedRecords = INITIAL_RECORDS;
       setRecords(INITIAL_RECORDS);
       setSettlementMonth('2026-06');
       localStorage.setItem('muji_ledger_data', JSON.stringify(INITIAL_RECORDS));
+    } else {
+      setRecords([]);
+      setSettlementMonth('');
     }
 
     // 2. 載入已核銷月份
@@ -1760,7 +2292,7 @@ export default function App() {
 
   // 🧪 本機沙盒測試：模擬另一半記帳即時背景推播
   useEffect(() => {
-    if (!notifyEnabled || !isAppLoaded) return;
+    if (!notifyEnabled || !isAppLoaded || !isSandboxMode) return;
     
     const intervalOfSim = setInterval(() => {
       // 15% 機率模擬另一半寫入新代墊項目
@@ -1803,7 +2335,12 @@ export default function App() {
     return () => clearInterval(intervalOfSim);
   }, [notifyEnabled, isAppLoaded]);
 
-  const addNotificationAndSave = (title: string, desc: string, type: 'expense' | 'income' | 'system' | 'delete' | 'settle') => {
+  const addNotificationAndSave = (
+    title: string,
+    desc: string,
+    type: 'expense' | 'income' | 'system' | 'delete' | 'settle',
+    skipChatPush: boolean = false
+  ) => {
     if (!notifyEnabled && type !== 'system') return;
     if (type === 'expense' || type === 'income') {
       if (!notifySettings.notifyOnAdd) return;
@@ -1819,22 +2356,51 @@ export default function App() {
     const pad = (n: number) => String(n).padStart(2, '0');
     const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
+    const newNotif: AppNotification = {
+      id: 'notif-' + Date.now() + Math.random().toString(36).substring(2, 7),
+      title,
+      desc,
+      time: timeStr,
+      read: false,
+      type,
+      timestamp: Date.now()
+    };
+
     setNotifications(prev => {
-      const newNotif: AppNotification = {
-        id: 'notif-' + Date.now() + Math.random().toString(36).substring(2, 7),
-        title,
-        desc,
-        time: timeStr,
-        read: false,
-        type,
-        timestamp: Date.now()
-      };
       // 僅保留今日通知 + 新增的通知
       const todayPrev = prev.filter(n => isTodayNotification(n.timestamp || n.time));
       const updated = [newNotif, ...todayPrev];
-      localStorage.setItem('muji_notifications', JSON.stringify(updated));
+      try {
+        localStorage.setItem('muji_notifications', JSON.stringify(updated));
+      } catch (e) {}
       return updated;
     });
+
+    // 若非聊天室直接觸發的指令（例如來自代墊表單、存入彈窗或結算按鈕），則非同步推播單一通知卡片至聊天訊息中
+    if (!skipChatPush) {
+      setTimeout(() => {
+        try {
+          const savedMsgsRaw = localStorage.getItem('banban_chat_messages');
+          const savedMsgs = savedMsgsRaw ? JSON.parse(savedMsgsRaw) : [];
+          const notifMsg = {
+            id: `notif-msg-${newNotif.id}`,
+            sender: 'assistant' as const,
+            text: desc,
+            timestamp: formatAmPmTime(timeStr),
+            type: type === 'system' ? ('notification' as const) : type,
+            meta: {
+              title,
+              desc,
+              time: timeStr,
+              isNotificationCard: true
+            }
+          };
+          const updatedMsgs = [...savedMsgs, notifMsg];
+          localStorage.setItem('banban_chat_messages', JSON.stringify(updatedMsgs.slice(-50)));
+          window.dispatchEvent(new CustomEvent('banban:new_chat_message', { detail: notifMsg }));
+        } catch (err) {}
+      }, 0);
+    }
   };
 
   const markAllNotificationsAsRead = () => {
@@ -1861,6 +2427,12 @@ export default function App() {
       return updated;
     });
     showToast('已刪除該通知', 'info');
+  };
+
+  const clearAllTodayNotifications = () => {
+    setNotifications([]);
+    localStorage.setItem('muji_notifications', JSON.stringify([]));
+    showToast('已清空今日通知', 'info');
   };
 
   const saveNotifySettings = (newSettings: typeof notifySettings) => {
@@ -2260,122 +2832,20 @@ export default function App() {
   }, [records, monthlyBalances, smartAlerts, hasShownLoadAlert]);
 
 
+  // 若未登入 Google 帳號且非沙盒測試模式，顯示 Google 帳號登入入口
+  if (!currentUser && !isSandboxMode) {
+    return (
+      <GoogleAuthPortal
+        onLogin={handleGoogleLogin}
+        onEnterDevSandbox={handleEnterDevSandbox}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen text-[#3E3A36] font-sans flex flex-col bg-[#F8F7F3] relative overflow-x-hidden antialiased selection:bg-[#E4DFD3] selection:text-[#3E3A36]">
       {/* 淡淡的無印木質感、日系暖色調背景光波 */}
       <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-[#F2EFE7] to-transparent opacity-40 pointer-events-none -z-10" />
-      
-      {/* 🔔 畫面右上角懸浮日系無印風通知鈴鐺 (z-index 高圖層，防遮擋) */}
-      <div className="fixed top-4 right-4 md:top-6 md:right-6 z-[100] select-none">
-        <div className="relative">
-          <button 
-            type="button"
-            onClick={() => setShowNotificationsOpen(!showNotificationsOpen)}
-            className="p-3 bg-white/95 hover:bg-[#EEEDE9] border border-[#E1DDD3]/90 text-[#706B62] hover:text-[#3E3A36] rounded-2xl transition duration-200 flex items-center justify-center relative cursor-pointer shadow-[0_8px_20px_rgba(140,132,117,0.1)] focus:outline-none backdrop-blur-md active:scale-95"
-            title="即時系統通知"
-          >
-            <Bell className="w-4 h-4" />
-            {notifications.filter(n => !n.read).length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 rounded-full text-[9px] text-white font-bold flex items-center justify-center border border-white animate-pulse">
-                {notifications.filter(n => !n.read).length}
-              </span>
-            )}
-          </button>
-
-          {/* 下拉通知選單 */}
-          <AnimatePresence>
-            {showNotificationsOpen && (
-              <>
-                <div 
-                  className="fixed inset-0 z-[90]" 
-                  onClick={() => setShowNotificationsOpen(false)} 
-                />
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute right-0 mt-2.5 w-80 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-[#EEEDE3] z-[100] overflow-hidden text-left"
-                >
-                  <div className="p-4 border-b border-[#EEEDE3] bg-[#FAF9F5] flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 font-semibold text-xs text-[#3E3A36]">
-                      <span>🔔</span>
-                      <span>今日通知 ({notifications.filter(n => !n.read).length})</span>
-                    </div>
-                    {notifications.filter(n => !n.read).length > 0 && (
-                      <button 
-                        onClick={() => {
-                          markAllNotificationsAsRead();
-                          setShowNotificationsOpen(false);
-                        }}
-                        className="text-[10px] text-[#8C8475] hover:text-[#5C564E] font-medium underline cursor-pointer"
-                      >
-                        全部標示已讀
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="max-h-64 overflow-y-auto divide-y divide-[#F5F4EE] max-w-full">
-                    {notifications.length === 0 ? (
-                      <div className="p-8 text-center text-xs text-[#BCB8B0]">
-                        今日尚無任何即時通知
-                        <p className="text-[10px] text-[#C4C0B5] mt-1 font-light">（系統每日午夜將自動重置清除昨日通知）</p>
-                      </div>
-                    ) : (
-                      notifications.map(n => (
-                        <div 
-                          key={n.id} 
-                          onClick={() => {
-                            markNotificationAsRead(n.id);
-                          }}
-                          className={`p-3 hover:bg-[#FAF9F5] transition-all cursor-pointer relative flex items-start gap-2.5 ${!n.read ? 'bg-[#FDFCF7]/95' : ''}`}
-                        >
-                          {!n.read && (
-                            <span className="absolute top-4 left-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
-                          )}
-                          <div className="flex-1 min-w-0 pl-1.5">
-                            <div className="flex justify-between items-start gap-1">
-                              <h4 className="text-[11px] font-semibold text-[#4A4641] truncate">{n.title}</h4>
-                              <span className="text-[9px] text-[#BCB8B0] font-mono whitespace-nowrap">
-                                {formatAmPmTime(n.time)}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-[#7A756E] mt-0.5 leading-relaxed break-words">{n.desc}</p>
-                          </div>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteNotification(n.id);
-                            }}
-                            className="text-[10px] text-[#A39E92] hover:text-red-500 p-1 hover:bg-red-50 rounded-md transition-colors"
-                            title="移除通知"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* 底部功能按鈕：自訂 LINE 通知開關 */}
-                  <div className="p-2.5 bg-[#FAF8F3] border-t border-[#EEEDE3] flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowNotificationsOpen(false);
-                        setIsTelegramSettingsModalOpen(true);
-                      }}
-                      className="w-full py-1.5 px-3 bg-white hover:bg-[#F2EFE7] text-[#4A4641] text-[11px] font-bold rounded-xl border border-[#E0DCD3] transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-                    >
-                      <Sliders className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>設定各項 Telegram 推播開關</span>
-                    </button>
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
 
       {/* 頂部精緻極簡 Header */}
       <Header
@@ -2395,17 +2865,78 @@ export default function App() {
           }
         }}
         unsettledSplitCount={splitSummary.unsettledCount}
-        onOpenTelegramSettings={() => setIsTelegramSettingsModalOpen(true)}
+        onOpenNotifySettings={() => setIsAppNotifyModalOpen(true)}
         onOpenTravelCalculator={() => setShowTravelCalculatorModal(true)}
         pendingQueueCount={pendingSyncQueue.length}
         onOpenDataBackup={() => setIsDataBackupOpen(true)}
         onFlushQueue={handleFlushQueue}
         onOpenPwaInstall={() => setIsPwaInstallModalOpen(true)}
+        currentUser={currentUser}
+        onOpenUserProfile={() => setIsUserProfileModalOpen(true)}
+        onOpenGasDeploy={() => {
+          if (currentUser?.userRole === 'partner') {
+            setIsUserProfileModalOpen(true);
+            showToast('🔒 API 與 Code.gs 設定由主管理員控管，伴侶端可直接記帳同步。', 'info');
+          } else {
+            setIsDeployModalOpen(true);
+          }
+        }}
+        isSandboxMode={isSandboxMode}
+        gasWebUrl={gasWebUrl}
       />
 
+
       {/* 主呈現區 (預留固定頂部 Header 高度間距，避免內容被遮擋) */}
-      <main className="w-full max-w-4xl mx-auto px-3 sm:px-4 flex-grow pt-24 sm:pt-20 pb-32 sm:pb-40">
+      <main className="w-full max-w-4xl mx-auto px-3 sm:px-4 flex-grow pt-24 sm:pt-18 pb-16 sm:pb-20">
         
+        {/* 🔑 若未綁定 Google 試算表 Web App API，顯示顯眼的友善引導卡片 */}
+        {!gasWebUrl && !isSandboxMode && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl p-3.5 sm:p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold shrink-0">
+                <FileCode className="w-4 h-4 text-amber-800" />
+              </div>
+              <div>
+                <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5">
+                  <span>尚未設定 Google 試算表連線金鑰</span>
+                  <span className="text-[10px] bg-amber-200/70 text-amber-900 px-1.5 py-0.5 rounded font-bold">待連動</span>
+                </h4>
+                <p className="text-[11px] text-[#7A7366] leading-relaxed">
+                  請點擊右側按鈕綁定您的 <strong>Google Apps Script Web App API 網址</strong>，開啟雙向即時雲端記帳同步！
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsDeployModalOpen(true)}
+              className="px-3.5 py-1.5 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 whitespace-nowrap self-start sm:self-center shrink-0"
+            >
+              設定連線金鑰與同步
+            </button>
+          </div>
+        )}
+
+        {/* 🧪 若為開發人員沙盒測試模式，顯示沙盒模式說明與關閉按鈕 */}
+        {isSandboxMode && (
+          <div className="bg-slate-800 text-slate-100 rounded-2xl p-3 sm:p-3.5 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs border border-slate-700">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-bold text-[10px]">
+                測試沙盒
+              </span>
+              <span className="text-slate-200">
+                您正處於<strong>「開發人員沙盒測試模式」</strong>，資料僅保存在本機快取中。
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleToggleSandboxMode(false)}
+              className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-bold transition-colors cursor-pointer self-start sm:self-auto shrink-0"
+            >
+              關閉沙盒模式
+            </button>
+          </div>
+        )}
+
         {/* 核心內容視窗切換區，加入優雅 motion 轉場效果 */}
         <div className="relative">
           <AnimatePresence mode="wait">
@@ -2423,17 +2954,27 @@ export default function App() {
                   onGoToHistory={() => setActiveTab('history')}
                   onGoToSettlement={() => setActiveTab('settlement')}
                   onOpenSettleModal={() => setIsSplitSettleModalOpen(true)}
+                  onExecuteSmartCommand={handleExecuteSmartCommand}
+                  onOpenChatAssistant={() => setIsChatAssistantOpen(true)}
+                  isDbConnected={isDbConnected}
+                  onOpenGasDeploy={() => setIsDeployModalOpen(true)}
                 />
               ) : (
-                <motion.div 
-                  key="tab-home"
-                  initial={{ opacity: 0, y: 12 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  exit={{ opacity: 0, y: -12 }} 
-                  transition={{ duration: 0.25 }}
-                  className="space-y-4 sm:space-y-6"
-                >
-                {/* 🎯 當月銷帳之前預計所剩餘額 核心重點看板 */}
+                !isDbConnected ? (
+                  renderDbUnconnectedState(
+                    "尚未連線至資料庫",
+                    "尚未登錄 Google 試算表 Web App API 金鑰，無法讀取公積金即時財務指標與對帳明細。請先設定連線金鑰以同步雲端數據。"
+                  )
+                ) : (
+                  <motion.div 
+                    key="tab-home"
+                    initial={{ opacity: 0, y: 12 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    exit={{ opacity: 0, y: -12 }} 
+                    transition={{ duration: 0.25 }}
+                    className="space-y-4 sm:space-y-6"
+                  >
+                  {/* 🎯 當月銷帳之前預計所剩餘額 核心重點看板 */}
                 {(() => {
                   const quota = overallStats.estimatedQuota;
                   const currentPool = overallStats.diff;
@@ -2734,6 +3275,7 @@ export default function App() {
                   )}
                 </div>
               </motion.div>
+                )
               )
             )}
 
@@ -2745,16 +3287,24 @@ export default function App() {
                   items={splitItems}
                   onDeleteItem={handleDeleteSplitRecord}
                   onOpenAdd={() => setIsSplitAddOpen(true)}
+                  isDbConnected={isDbConnected}
+                  onOpenGasDeploy={() => setIsDeployModalOpen(true)}
                 />
               ) : (
-                <motion.div 
-                  key="tab-history"
-                  initial={{ opacity: 0, y: 12 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  exit={{ opacity: 0, y: -12 }} 
-                  transition={{ duration: 0.25 }}
-                  className="bg-white/70 backdrop-blur-md rounded-3xl p-4 sm:p-6 md:p-8 border border-white/50 shadow-2xs border-[#EBE8E0]"
-                >
+                !isDbConnected ? (
+                  renderDbUnconnectedState(
+                    "尚未連線至資料庫",
+                    "尚未登錄 Google 試算表 Web App API 金鑰，無法讀取公積金歷史記帳明細。請先設定連線金鑰以同步雲端數據。"
+                  )
+                ) : (
+                  <motion.div 
+                    key="tab-history"
+                    initial={{ opacity: 0, y: 12 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    exit={{ opacity: 0, y: -12 }} 
+                    transition={{ duration: 0.25 }}
+                    className="bg-white/70 backdrop-blur-md rounded-3xl p-4 sm:p-6 md:p-8 border border-white/50 shadow-2xs border-[#EBE8E0]"
+                  >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-5 pb-3.5 border-b border-[#F0ECE1] gap-2">
                   <div>
                     <h2 className="text-base font-bold text-[#4A4641] flex items-center gap-2">
@@ -3079,6 +3629,7 @@ export default function App() {
                   })()}
                 </div>
               </motion.div>
+                )
               )
             )}
 
@@ -3091,16 +3642,24 @@ export default function App() {
                   items={splitItems}
                   onOpenSettleModal={() => setIsSplitSettleModalOpen(true)}
                   isLoading={isSplitLoading}
+                  isDbConnected={isDbConnected}
+                  onOpenGasDeploy={() => setIsDeployModalOpen(true)}
                 />
               ) : (
-                <motion.div 
-                  key="tab-settlement"
-                  initial={{ opacity: 0, y: 12 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  exit={{ opacity: 0, y: -12 }} 
-                  transition={{ duration: 0.3 }}
-                  className="space-y-6"
-                >
+                !isDbConnected ? (
+                  renderDbUnconnectedState(
+                    "尚未連線至資料庫",
+                    "尚未登錄 Google 試算表 Web App API 金鑰，無法進行月度公積金自動核銷與撥款對帳。請先設定連線金鑰以同步雲端數據。"
+                  )
+                ) : (
+                  <motion.div 
+                    key="tab-settlement"
+                    initial={{ opacity: 0, y: 12 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    exit={{ opacity: 0, y: -12 }} 
+                    transition={{ duration: 0.3 }}
+                    className="space-y-6"
+                  >
                 {/* 月份選取器與核銷狀態大面板 */}
                 <div className="bg-white/75 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-[#EBE8E0] shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <div className="space-y-1 w-full sm:w-auto">
@@ -3346,6 +3905,7 @@ export default function App() {
                   </div>
                 </div>
               </motion.div>
+                )
               )
             )}
 
@@ -3366,15 +3926,23 @@ export default function App() {
                     });
                   }}
                   showToast={showToast}
+                  isDbConnected={isDbConnected}
+                  onOpenGasDeploy={() => setIsDeployModalOpen(true)}
                 />
               ) : (
-                <motion.div
-                  key="notebook"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  className="space-y-6 max-w-4xl mx-auto pb-12"
-                >
+                !isDbConnected ? (
+                  renderDbUnconnectedState(
+                    "尚未連線至資料庫",
+                    "尚未登錄 Google 試算表 Web App API 金鑰，無法讀取或同步待辦採購筆記。請先設定連線金鑰以同步雲端數據。"
+                  )
+                ) : (
+                  <motion.div
+                    key="notebook"
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -15 }}
+                    className="space-y-6 max-w-4xl mx-auto pb-12"
+                  >
                 {/* 頂部功能區標題與橫幅 */}
                 <div className="bg-gradient-to-r from-amber-800 to-amber-900 text-amber-50 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 shadow-md relative overflow-hidden">
                   <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-400/20 via-transparent to-transparent pointer-events-none" />
@@ -3415,24 +3983,6 @@ export default function App() {
                       <Plus className="w-4 h-4 text-amber-700 stroke-[3]" />
                       <span>新增採購記事</span>
                     </button>
-                  </div>
-
-                  {/* Telegram 快捷提示貼心說明 */}
-                  <div className="mt-4 sm:mt-5 pt-3.5 sm:pt-4 border-t border-amber-700/50 grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-xs text-amber-100/90">
-                    <div className="flex items-start gap-2 bg-amber-950/30 p-2.5 rounded-xl border border-amber-700/30">
-                      <span className="text-sm shrink-0">💬</span>
-                      <div>
-                        <strong className="text-white font-semibold block mb-0.5">Telegram 快速新增指令：</strong>
-                        <span className="text-[11px] sm:text-xs">在群組傳送 「買 全聯 鮮奶」 或 「想要 PS5」 即可智慧判斷自動入單！</span>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-2 bg-amber-950/30 p-2.5 rounded-xl border border-amber-700/30">
-                      <span className="text-sm shrink-0">💡</span>
-                      <div>
-                        <strong className="text-white font-semibold block mb-0.5">分類觀望提示：</strong>
-                        <span className="text-[11px] sm:text-xs">將「想要買」的奢侈品或非急需品列入觀察，特價或閒暇時再購買。</span>
-                      </div>
-                    </div>
                   </div>
                 </div>
 
@@ -3548,7 +4098,7 @@ export default function App() {
                       </div>
                       <h3 className="text-sm font-semibold text-[#3E3A36]">目前沒有符合條件的採購項目</h3>
                       <p className="text-xs text-[#8C8475] mt-1 max-w-xs mx-auto">
-                        您可以點擊畫面下方「＋」按鈕新增，或在 Telegram 群組傳送訊息快速新增！
+                        您可以點擊畫面下方「＋」按鈕新增，或使用代墊頁面的「智慧指令盒」快速入單！
                       </p>
                       <button
                         onClick={() => {
@@ -3690,6 +4240,7 @@ export default function App() {
                   )}
                 </div>
               </motion.div>
+                )
               )
             )}
           </AnimatePresence>
@@ -3831,6 +4382,30 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* 💬 LINE 風格智慧對話記帳懸浮圓形按鈕 */}
+      <FloatingChatButton
+        isOpen={isChatAssistantOpen}
+        onClick={() => setIsChatAssistantOpen(true)}
+        unreadCount={notifications.filter(n => !n.read).length}
+      />
+
+      {/* 💬 LINE 風格智慧對話記帳小秘書 Drawer / Modal (LINE 機器人通知整合、語音輸入與即時記帳) */}
+      <ChatAssistantDrawer
+        isOpen={isChatAssistantOpen}
+        onClose={() => setIsChatAssistantOpen(false)}
+        onExecuteCommand={handleExecuteSmartCommand}
+        onUndo={handleUndoCommandItem}
+        appMode={appMode}
+        notifications={notifications}
+        onMarkRead={markNotificationAsRead}
+        onMarkAllRead={markAllNotificationsAsRead}
+        onDeleteNotification={deleteNotification}
+        onClearAllNotifications={clearAllTodayNotifications}
+        notifySettings={appNotifySettings}
+        toggleNotifySetting={toggleAppNotifySetting}
+        onTestNotification={handleTestInAppNotify}
+      />
+
       {/* 進入網頁時的超支/省錢警告通知彈窗 */}
       <SmartAlertModal
         isOpen={showLoadAlertModal}
@@ -3838,10 +4413,18 @@ export default function App() {
         smartAlerts={smartAlerts}
       />
 
-      {/* Google 試算表連線狀態提示彈窗 */}
-      <SyncAlertModal
-        isOpen={isSyncAlertOpen}
-        onClose={() => setIsSyncAlertOpen(false)}
+      {/* Google 帳戶與個人設定 Modal */}
+      <UserProfileModal
+        isOpen={isUserProfileModalOpen}
+        onClose={() => setIsUserProfileModalOpen(false)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onSwitchAccount={handleSwitchAccount}
+        onOpenGasDeploy={() => setIsDeployModalOpen(true)}
+        isSandboxMode={isSandboxMode}
+        onToggleSandboxMode={handleToggleSandboxMode}
+        gasWebUrl={gasWebUrl}
+        deploySheetUrl={deploySheetUrl}
       />
 
       {/* 🛠️ 自訂極簡無印風雙鍵對話確認 Modal */}
@@ -3890,7 +4473,11 @@ export default function App() {
       {/* 💳 代墊分帳專屬 Modals */}
       <SplitAddModal
         isOpen={isSplitAddOpen}
-        onClose={() => setIsSplitAddOpen(false)}
+        onClose={() => {
+          setIsSplitAddOpen(false);
+          setSplitAddInitialData(undefined);
+        }}
+        initialData={splitAddInitialData}
         onAddSplit={handleAddSplitRecord}
         onSubmit={handleAddSplitRecord}
         showToast={showToast}
@@ -3962,6 +4549,27 @@ export default function App() {
         }}
         onToggleStatus={handleToggleShoppingStatus}
         onDelete={handleDeleteShoppingItem}
+        onConvertToRecord={(item) => {
+          setSelectedShoppingDetail(null);
+          if (appMode === 'split') {
+            setSplitAddInitialData({
+              payer: item.creator?.includes('周') || item.creator === '周' ? '周' : '廖',
+              itemName: item.item,
+              note: `從購物清單轉記帳（地點：${item.store || '一般'}）`
+            });
+            setIsSplitAddOpen(true);
+          } else {
+            setFormData(prev => ({
+              ...prev,
+              item: item.item,
+              payer: item.creator?.includes('周') || item.creator === '周' ? '周沛緹' : '廖尹丞',
+              type: '支出-日常代墊'
+            }));
+            setAddModalType('record');
+            setIsAddOpen(true);
+          }
+          showToast(`已帶入「${item.item}」至記帳建立表單`, 'info');
+        }}
       />
 
       {/* ✈️ 各國即時匯率與出國幣值試算器 Modal */}
@@ -3981,15 +4589,17 @@ export default function App() {
         setCalcMode={setCalcMode}
       />
 
-        {/* 💬 Telegram 即時通知推播開關與偏好設定 Modal */}
-        <TelegramSettingsModal
-          isOpen={isTelegramSettingsModalOpen}
-          onClose={() => setIsTelegramSettingsModalOpen(false)}
-          isTestingTelegram={isTestingTelegram}
-          handleTestTelegramNotify={handleTestTelegramNotify}
-          notifySettings={telegramNotifySettings}
-          setAllNotifySettings={setAllTelegramNotifySettings}
-          toggleNotifySetting={toggleTelegramNotifySetting}
+        {/* 💬 App 內建即時通知開關與偏好設定 Modal */}
+        <AppNotificationModal
+          isOpen={isAppNotifyModalOpen}
+          onClose={() => setIsAppNotifyModalOpen(false)}
+          isTestingNotify={false}
+          handleTestNotify={handleTestInAppNotify}
+          notifySettings={appNotifySettings}
+          setAllNotifySettings={setAllAppNotifySettings}
+          toggleNotifySetting={toggleAppNotifySetting}
+          notifications={notifications}
+          onExecuteSmartCommand={handleExecuteSmartCommand}
         />
 
         {/* 💾 資料備份、還原與離線同步管理 Modal */}
@@ -4018,21 +4628,42 @@ export default function App() {
           }}
         />
 
+        {/* 👤 使用者帳戶與情侶伴侶權限管理 Modal */}
+        <UserProfileModal
+          isOpen={isUserProfileModalOpen}
+          onClose={() => setIsUserProfileModalOpen(false)}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          onSwitchAccount={handleSwitchAccount}
+          onOpenGasDeploy={() => {
+            if (currentUser?.userRole === 'partner') {
+              showToast('🔒 API 與 Code.gs 部署權限僅限主管理員可調整。', 'info');
+            } else {
+              setIsDeployModalOpen(true);
+            }
+          }}
+          isSandboxMode={isSandboxMode}
+          onToggleSandboxMode={handleToggleSandboxMode}
+          gasWebUrl={gasWebUrl}
+          deploySheetUrl={deploySheetUrl}
+          currentInviteCode={currentInviteCode}
+          onGenerateNewInviteCode={handleGenerateNewInviteCode}
+          onCopyInviteShare={handleCopyInviteShare}
+          partnerBindingInfo={partnerBindingInfo}
+          onUnbindPartner={handleUnbindPartner}
+        />
+
         {/* 隱密系統部署與連線設定 Modal */}
         <GasDeployModal
           isOpen={isDeployModalOpen}
           onClose={() => setIsDeployModalOpen(false)}
           deploySheetUrl={deploySheetUrl}
           setDeploySheetUrl={setDeploySheetUrl}
-          deployTelegramToken={deployTelegramToken}
-          setDeployTelegramToken={setDeployTelegramToken}
-          deployTelegramChatId={deployTelegramChatId}
-          setDeployTelegramChatId={setDeployTelegramChatId}
           gasWebUrl={gasWebUrl}
           setGasWebUrl={setGasWebUrl}
-          onOpenTelegramSettings={() => {
+          onOpenNotifySettings={() => {
             setIsDeployModalOpen(false);
-            setIsTelegramSettingsModalOpen(true);
+            setIsAppNotifyModalOpen(true);
           }}
           saveDeployConfig={saveDeployConfig}
           activeDeployCodeTab={activeDeployCodeTab}
@@ -4040,10 +4671,16 @@ export default function App() {
           copiedCodeType={copiedCodeType}
           copyDeployCode={copyDeployCode}
           customizedCodeGs={getCustomizedCodeGs()}
+          isSandboxMode={isSandboxMode}
+          onToggleSandboxMode={handleToggleSandboxMode}
+          currentUser={currentUser}
+          onOpenInviteManager={() => setIsUserProfileModalOpen(true)}
+          inviteCode={currentInviteCode}
         />
 
+
       {/* Footer 簡介 */}
-      <footer className="w-full text-center py-6 border-t border-[#EEEDE8] bg-[#EEEDE9]/30 text-xs text-[#999489] font-light mt-auto pb-24">
+      <footer className="w-full text-center py-4 border-t border-[#EEEDE8] bg-[#EEEDE9]/30 text-xs text-[#999489] font-light mt-auto pb-16 sm:pb-20">
         <p>©2026公積金記帳系統｜Designed by YIN-CHENG</p>
       </footer>
     </div>
