@@ -625,34 +625,34 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
             </div>
 
             {/* 🤖 機器人多功能頁籤列 (對話記帳 💬 / 即時通知 🔔 / 推播設定 ⚙️) */}
-            <div className="bg-[#1C2833] px-3 pt-1.5 flex items-center justify-between border-b border-white/10 shrink-0 overflow-x-auto [scrollbar-width:none]">
-              <div className="flex items-center gap-1">
+            <div className="bg-[#1C2833] px-2 sm:px-3 pt-1.5 flex items-center justify-between border-b border-white/10 shrink-0 overflow-x-auto [scrollbar-width:none] gap-1">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveTab('chat')}
-                  className={`px-3 py-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 rounded-t-xl ${
+                  className={`px-2.5 sm:px-3 py-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 rounded-t-xl shrink-0 ${
                     activeTab === 'chat'
                       ? 'bg-[#8C9EB5] text-white shadow-xs'
                       : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
-                  <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <span>對話記帳</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveTab('notifications')}
-                  className={`px-3 py-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 rounded-t-xl relative ${
+                  className={`px-2.5 sm:px-3 py-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 rounded-t-xl relative shrink-0 ${
                     activeTab === 'notifications'
                       ? 'bg-[#FAF9F5] text-[#3E3A36] shadow-xs'
                       : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
-                  <Bell className="w-3.5 h-3.5 text-rose-400" />
+                  <Bell className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                   <span>即時通知</span>
                   {incomingUnreadCount > 0 && (
-                    <span className="min-w-[15px] h-3.5 px-1 bg-rose-500 rounded-full text-[9px] text-white font-black flex items-center justify-center animate-pulse">
+                    <span className="min-w-[15px] h-3.5 px-1 bg-rose-500 rounded-full text-[9px] text-white font-black flex items-center justify-center animate-pulse shrink-0">
                       {incomingUnreadCount}
                     </span>
                   )}
@@ -661,15 +661,15 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
                 <button
                   type="button"
                   onClick={() => setActiveTab('settings')}
-                  className={`px-3 py-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 rounded-t-xl ${
+                  className={`px-2.5 sm:px-3 py-2 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 rounded-t-xl shrink-0 ${
                     activeTab === 'settings'
                       ? 'bg-[#FAF9F5] text-[#3E3A36] shadow-xs'
                       : 'text-gray-400 hover:text-gray-200'
                   }`}
                 >
-                  <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                  <Sliders className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                   <span>推播設定</span>
-                  <span className="text-[10px] bg-white/20 text-gray-300 font-bold px-1.5 py-0.2 rounded-full">
+                  <span className="text-[10px] bg-white/20 text-gray-300 font-bold px-1.5 py-0.2 rounded-full shrink-0">
                     {activeCount}/9
                   </span>
                 </button>
@@ -679,7 +679,7 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
                 <button
                   type="button"
                   onClick={onTestNotification}
-                  className="text-[10px] bg-emerald-600/90 hover:bg-emerald-600 px-2.5 py-1 rounded-lg text-white font-bold cursor-pointer transition-colors shadow-2xs shrink-0 flex items-center gap-1"
+                  className="text-[10px] sm:text-xs bg-emerald-600/90 hover:bg-emerald-600 px-2 sm:px-2.5 py-1 rounded-lg text-white font-bold cursor-pointer transition-colors shadow-2xs shrink-0 flex items-center gap-1 whitespace-nowrap ml-1"
                 >
                   <span>🔔 測試推播</span>
                 </button>

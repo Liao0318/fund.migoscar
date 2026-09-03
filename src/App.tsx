@@ -4423,15 +4423,15 @@ export default function App() {
                             </div>
 
                             {/* 底部時間與詳情按鈕 */}
-                            <div className="mt-3 pt-2 border-t border-[#F3F0E6] flex items-center justify-between text-[10px] text-[#A39E92]">
-                              <span>
+                            <div className="mt-3 pt-2 border-t border-[#F3F0E6] flex flex-wrap items-center justify-between gap-1 text-[10px] text-[#A39E92]">
+                              <span className="truncate max-w-[200px] sm:max-w-none">
                                 登記人：{item.creator || '夥伴'}
                                 {(() => {
                                   const displayTime = getShoppingItemDisplayTime(item);
                                   return displayTime ? ` · ${displayTime}` : '';
                                 })()}
                               </span>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                                 {isDone && (
                                   <button
                                     type="button"
@@ -4439,14 +4439,14 @@ export default function App() {
                                       e.stopPropagation();
                                       handleConvertShoppingToRecord(item);
                                     }}
-                                    className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-2xs active:scale-95"
+                                    className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-2xs active:scale-95 whitespace-nowrap"
                                     title="一鍵將此已購項目轉為記帳支出"
                                   >
                                     <CreditCard className="w-3 h-3 text-amber-700" />
                                     <span>轉記代墊</span>
                                   </button>
                                 )}
-                                <span className="text-amber-800 font-semibold group-hover:underline flex items-center gap-0.5 text-[11px]">
+                                <span className="text-amber-800 font-semibold group-hover:underline flex items-center gap-0.5 text-[11px] whitespace-nowrap">
                                   <span>詳情</span><ChevronRight className="w-3 h-3" />
                                 </span>
                               </div>

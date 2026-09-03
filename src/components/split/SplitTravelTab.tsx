@@ -1731,7 +1731,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                         ))}
                       </div>
 
-                      <div className="flex gap-2 pt-1">
+                      <div className="flex flex-col sm:flex-row gap-2 pt-1">
                         <input
                           type="text"
                           value={newMemberInput}
@@ -1743,12 +1743,12 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                             }
                           }}
                           placeholder="輸入同行朋友名字，例如：阿翔、小晴、媽媽"
-                          className="flex-1 p-2 bg-white border border-[#DDD8CC] rounded-xl text-xs focus:outline-none focus:border-rose-500"
+                          className="w-full sm:flex-1 p-2 bg-white border border-[#DDD8CC] rounded-xl text-xs focus:outline-none focus:border-rose-500"
                         />
                         <button
                           type="button"
                           onClick={handleAddMemberToForm}
-                          className="px-3 py-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs flex items-center gap-1 cursor-pointer"
+                          className="w-full sm:w-auto px-3 py-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           <span>新增</span>
@@ -3030,7 +3030,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                   </div>
 
                   {/* 新增成員輸入框 */}
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
                     <input
                       type="text"
                       value={newMemberInput}
@@ -3042,12 +3042,12 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                         }
                       }}
                       placeholder="輸入同行朋友名字，例如：阿翔、小晴、媽媽"
-                      className="flex-1 p-2 bg-white border border-[#DDD8CC] rounded-xl text-xs focus:outline-none focus:border-rose-500"
+                      className="w-full sm:flex-1 p-2 bg-white border border-[#DDD8CC] rounded-xl text-xs focus:outline-none focus:border-rose-500"
                     />
                     <button
                       type="button"
                       onClick={handleAddMemberToForm}
-                      className="px-3 py-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs flex items-center gap-1 cursor-pointer"
+                      className="w-full sm:w-auto px-3 py-2 rounded-xl bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
                     >
                       <UserPlus className="w-3.5 h-3.5" />
                       <span>新增成員</span>

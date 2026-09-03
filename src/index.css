@@ -6,3 +6,25 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
+@layer base {
+  *, ::before, ::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: 15px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  @media (min-width: 640px) {
+    html {
+      font-size: 16px;
+    }
+  }
+
+  input, select, textarea, button {
+    max-width: 100%;
+    font-family: inherit;
+  }
+}
+

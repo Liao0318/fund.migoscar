@@ -267,11 +267,11 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
             {activeSection === 'profile' && (
               <div className="space-y-4">
                 {/* 使用者 Google 資訊卡片 */}
-                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <div className={`w-14 h-14 rounded-2xl overflow-hidden shadow-md flex items-center justify-center font-bold text-lg text-white ${
+                <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-[#E8E4D9] space-y-3 sm:space-y-4 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shadow-md flex items-center justify-center font-bold text-base sm:text-lg text-white ${
                           currentUser?.userRole === 'partner' || currentUser?.role === '周' ? 'bg-rose-500' : 'bg-amber-600'
                         }`}>
                           {currentUser?.avatar ? (
@@ -298,21 +298,21 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                         )}
                       </div>
 
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-extrabold text-[#3E3A36] text-sm sm:text-base truncate">
+                          <span className="font-extrabold text-[#3E3A36] text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">
                             {currentUser?.nickname || currentUser?.name || '使用者'}
                           </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap ${
                             isAdmin 
                               ? 'bg-amber-100 text-amber-900 border border-amber-300' 
                               : 'bg-rose-100 text-rose-800 border border-rose-300'
                           }`}>
-                            {isAdmin ? <Crown className="w-2.5 h-2.5" /> : <Heart className="w-2.5 h-2.5" />}
+                            {isAdmin ? <Crown className="w-2.5 h-2.5 shrink-0" /> : <Heart className="w-2.5 h-2.5 shrink-0" />}
                             <span>{isAdmin ? '主要管理者 (廖)' : '受邀伴侶 (周)'}</span>
                           </span>
                         </div>
-                        <p className="text-xs text-[#8C8475] font-mono mt-0.5 truncate">
+                        <p className="text-xs text-[#8C8475] font-mono mt-0.5 truncate max-w-[200px] sm:max-w-none">
                           {currentUser?.email || 'oscargh3359@gmail.com'}
                         </p>
                       </div>
@@ -321,7 +321,7 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setIsEditingNickname(!isEditingNickname)}
-                      className="px-3 py-1.5 bg-[#FAF8F3] hover:bg-[#F2EFE7] border border-[#E6E0D2] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1 transition-all cursor-pointer shrink-0"
+                      className="self-start sm:self-auto px-3 py-1.5 bg-[#FAF8F3] hover:bg-[#F2EFE7] border border-[#E6E0D2] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1 transition-all cursor-pointer shrink-0"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>{isEditingNickname ? '取消編輯' : '修改暱稱'}</span>
@@ -330,24 +330,24 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
 
                   {/* 暱稱修改表單 */}
                   {isEditingNickname && (
-                    <div className="bg-[#FAF9F5] p-3.5 rounded-2xl border border-rose-200/90 space-y-2">
-                      <label className="block text-xs font-bold text-[#3E3A36]">
+                    <div className="bg-[#FAF9F5] p-3 sm:p-3.5 rounded-2xl border border-rose-200/90 space-y-2">
+                      <label className="block text-xs font-bold text-[#3E3A36] break-words">
                         個人專屬暱稱（限文字，少於 3 個字：1~2 個字）
                       </label>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                         <input
                           type="text"
                           value={nicknameInput}
                           onChange={(e) => setNicknameInput(e.target.value)}
                           maxLength={2}
                           placeholder="例如：廖、丞、寶"
-                          className="flex-1 px-3 py-2 bg-white border border-[#DDD8CE] rounded-xl text-xs font-bold text-[#3E3A36] focus:outline-none focus:border-rose-500"
+                          className="w-full sm:flex-1 px-3 py-2 bg-white border border-[#DDD8CE] rounded-xl text-xs font-bold text-[#3E3A36] focus:outline-none focus:border-rose-500"
                         />
                         <button
                           type="button"
                           disabled={!isNicknameValid}
                           onClick={handleSaveNickname}
-                          className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                          className="w-full sm:w-auto px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs whitespace-nowrap"
                         >
                           儲存暱稱
                         </button>

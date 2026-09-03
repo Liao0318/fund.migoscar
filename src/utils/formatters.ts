@@ -16,27 +16,33 @@ export function formatAmPmTime(timeInput: any): string {
   } else if (typeof timeInput === 'number') {
     d = new Date(timeInput);
   } else {
-    // 檢查是否為純數字時間戳記或包含 shop-時間戳
-    const numMatch = strVal.match(/\b\d{10,13}\b/);
-    if (numMatch && !strVal.includes('/') && !strVal.includes('-') && !strVal.includes('T')) {
-      d = new Date(parseInt(numMatch[0], 10));
+    // 檢查是否為 JS Date.toString() 格式 (例如 Wed Aug 12 2026 12:08:00 GMT+0800 ...)
+    const parsedJsDate = new Date(strVal);
+    if (!isNaN(parsedJsDate.getTime()) && !/^\d{4}-\d{2}$/.test(strVal)) {
+      d = parsedJsDate;
     } else {
-      const cleanStr = strVal.replace(/T/g, ' ').replace(/-/g, '/').split('.')[0].split('+')[0];
-      const ms = Date.parse(cleanStr);
-      if (!isNaN(ms)) {
-        d = new Date(ms);
+      // 檢查是否為純數字時間戳記或包含 shop-時間戳
+      const numMatch = strVal.match(/\b\d{10,13}\b/);
+      if (numMatch && !strVal.includes('/') && !strVal.includes('-') && !strVal.includes('T')) {
+        d = new Date(parseInt(numMatch[0], 10));
       } else {
-        const parts = strVal.split(/\s+/);
-        if (parts.length >= 2) {
-          const dateParts = parts[0].split(/[-/]/);
-          const timeParts = parts[1].split(':');
-          if (dateParts.length >= 3 && timeParts.length >= 2) {
-            const year = parseInt(dateParts[0], 10);
-            const month = parseInt(dateParts[1], 10) - 1;
-            const day = parseInt(dateParts[2], 10);
-            const hours = parseInt(timeParts[0], 10);
-            const minutes = parseInt(timeParts[1], 10);
-            d = new Date(year, month, day, hours, minutes);
+        const cleanStr = strVal.replace(/T/g, ' ').replace(/-/g, '/').split('.')[0].split('+')[0];
+        const ms = Date.parse(cleanStr);
+        if (!isNaN(ms)) {
+          d = new Date(ms);
+        } else {
+          const parts = strVal.split(/\s+/);
+          if (parts.length >= 2) {
+            const dateParts = parts[0].split(/[-/]/);
+            const timeParts = parts[1].split(':');
+            if (dateParts.length >= 3 && timeParts.length >= 2) {
+              const year = parseInt(dateParts[0], 10);
+              const month = parseInt(dateParts[1], 10) - 1;
+              const day = parseInt(dateParts[2], 10);
+              const hours = parseInt(timeParts[0], 10);
+              const minutes = parseInt(timeParts[1], 10);
+              d = new Date(year, month, day, hours, minutes);
+            }
           }
         }
       }
