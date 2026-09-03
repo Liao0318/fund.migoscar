@@ -13,13 +13,14 @@ import {
   Layers
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { TravelExpenseItem, TravelTrip } from '../../types';
+import { TravelExpenseItem, TravelTrip, AuthUser } from '../../types';
 
 interface TravelReceiptQuickModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeTrip: TravelTrip;
   tripMembers: string[];
+  currentUser?: AuthUser | null;
   onAddExpenses: (expenses: TravelExpenseItem[]) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -43,6 +44,7 @@ export const TravelReceiptQuickModal: React.FC<TravelReceiptQuickModalProps> = (
   onClose,
   activeTrip,
   tripMembers,
+  currentUser,
   onAddExpenses,
   showToast,
 }) => {
@@ -204,6 +206,8 @@ export const TravelReceiptQuickModal: React.FC<TravelReceiptQuickModalProps> = (
         debtorAmountTWD: debtorAmtTWD,
         location: storeName.trim(),
         note: it.note.trim(),
+        creatorEmail: currentUser?.email || 'oscargh3359@gmail.com',
+        createdBy: currentUser?.name || currentUser?.nickname || currentUser?.role || '廖',
         syncedToSplit: false,
         createdAt: new Date().toISOString().split('T')[0]
       };

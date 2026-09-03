@@ -42,16 +42,18 @@ import {
   Download,
   ExternalLink,
   Receipt,
+  Mail,
   Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { TravelTrip, TravelExpenseItem, TravelWishItem } from '../../types';
+import { TravelTrip, TravelExpenseItem, TravelWishItem, AuthUser } from '../../types';
 import { TravelBatchImportModal } from './TravelBatchImportModal';
 import { TravelReceiptQuickModal } from './TravelReceiptQuickModal';
 
 interface SplitTravelTabProps {
   onConvertToSplit: (item: { itemName: string; totalAmount: number; payer: '廖' | '周' }) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  currentUser?: AuthUser | null;
   gasWebUrl?: string;
   callGasApi?: (action: string, payload?: any) => Promise<any>;
   enqueueSyncItem?: (action: string, payload: any, desc: string) => void;
@@ -235,6 +237,7 @@ export const detectTravelCategory = (name: string): TravelExpenseItem['category'
 export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
   onConvertToSplit,
   showToast,
+  currentUser,
   gasWebUrl,
   callGasApi,
   enqueueSyncItem,
@@ -596,6 +599,8 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         status: '進行中',
         themeColor: tripFormTheme,
         members: tripFormMembers,
+        creatorEmail: currentUser?.email || 'oscargh3359@gmail.com',
+        createdBy: currentUser?.name || currentUser?.nickname || currentUser?.role || '廖',
         createdAt: new Date().toISOString().split('T')[0]
       };
       const updated = [newTrip, ...trips];
@@ -809,6 +814,12 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
       debtorAmountTWD: debtorAmtTWD,
       location: expLocation.trim(),
       note: expNote.trim(),
+      creatorEmail: editingExpenseId 
+        ? (expenses.find(e => e.id === editingExpenseId)?.creatorEmail || currentUser?.email || 'oscargh3359@gmail.com')
+        : (currentUser?.email || 'oscargh3359@gmail.com'),
+      createdBy: editingExpenseId
+        ? (expenses.find(e => e.id === editingExpenseId)?.createdBy || currentUser?.name || currentUser?.nickname || currentUser?.role || '廖')
+        : (currentUser?.name || currentUser?.nickname || currentUser?.role || '廖'),
       syncedToSplit: false,
       createdAt: new Date().toISOString().split('T')[0]
     };
@@ -1120,7 +1131,9 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
       estimatedAmountTWD: parseFloat(wishEstPrice) || undefined,
       addedBy: wishAddedBy,
       status: '待預訂',
-      note: wishNote.trim()
+      note: wishNote.trim(),
+      creatorEmail: currentUser?.email || 'oscargh3359@gmail.com',
+      createdBy: currentUser?.name || currentUser?.nickname || currentUser?.role || '廖'
     };
 
     const updated = [newWish, ...wishlist];
@@ -1249,7 +1262,9 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         '備註/折扣',
         '款項支付方式',
         '代墊人',
-        '分帳對象(就是誰要還給代墊人)'
+        '分帳對象(就是誰要還給代墊人)',
+        '登錄者ID (Gmail)',
+        '登錄者姓名'
       ];
 
       const rows = currentTripExpenses.map(exp => {
@@ -1281,7 +1296,9 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
           exp.note || '',
           exp.paymentMethod || '信用卡',
           exp.payer || '',
-          splitTargetText
+          splitTargetText,
+          exp.creatorEmail || '',
+          exp.createdBy || ''
         ];
       });
 
@@ -1296,7 +1313,9 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         { wch: 16 }, // 備註/折扣
         { wch: 14 }, // 款項支付方式
         { wch: 12 }, // 代墊人
-        { wch: 22 }  // 分帳對象
+        { wch: 22 }, // 分帳對象
+        { wch: 26 }, // 登錄者ID (Gmail)
+        { wch: 14 }  // 登錄者姓名
       ];
 
       const wb = XLSX.utils.book_new();
@@ -1311,7 +1330,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     }
   };
 
-  // 一鍵複製所有旅費支出為 Excel 試算表格式 (Tab 分隔，可直接貼上試算表，精準對齊 10 欄)
+  // 一鍵複製所有旅費支出為 Excel 試算表格式 (Tab 分隔，可直接貼上試算表，精準對齊 10~12 欄)
   const handleCopyExcelData = () => {
     if (!activeTrip || currentTripExpenses.length === 0) {
       showToast('目前尚無支出資料可匯出', 'info');
@@ -1329,7 +1348,9 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
       '備註/折扣',
       '款項支付方式',
       '代墊人',
-      '分帳對象(就是誰要還給代墊人)'
+      '分帳對象(就是誰要還給代墊人)',
+      '登錄者ID (Gmail)',
+      '登錄者姓名'
     ];
 
     const rows = currentTripExpenses.map(exp => {
@@ -1361,13 +1382,15 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         exp.note || '',
         exp.paymentMethod || '信用卡',
         exp.payer || '',
-        splitTargetText
+        splitTargetText,
+        exp.creatorEmail || '',
+        exp.createdBy || ''
       ].join('\t');
     });
 
     const tsvContent = [headers.join('\t'), ...rows].join('\n');
     navigator.clipboard.writeText(tsvContent);
-    showToast('📥 已複製 10 欄標準 Excel 格式表格！可直接在 Google 試算表或 Excel 中按下 Ctrl+V 貼上', 'success');
+    showToast('📥 已複製含登錄者ID之標準 Excel 格式表格！可直接在 Google 試算表或 Excel 中貼上', 'success');
   };
 
   // 一鍵將旅費分帳轉入日常代墊借還
@@ -2308,6 +2331,17 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                           <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold border ${splitBadgeStyle}`}>
                             {splitBadgeLabel}
                           </span>
+
+                          {/* 登錄者 ID (Gmail) 標籤 */}
+                          {(exp.creatorEmail || exp.createdBy) && (
+                            <span 
+                              className="inline-flex items-center gap-1 text-[10px] text-[#6E6659] bg-[#F4F0E6] px-1.5 py-0.5 rounded-md border border-[#DDD6C7] font-medium"
+                              title={`登錄者 ID: ${exp.creatorEmail || ''}${exp.createdBy ? ` (${exp.createdBy})` : ''}`}
+                            >
+                              <Mail className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                              <span className="truncate max-w-[120px] sm:max-w-[150px] font-mono">{exp.creatorEmail || exp.createdBy}</span>
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 text-[11px] text-[#8C8475] flex-wrap">
@@ -2470,6 +2504,15 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                             {w.category}
                           </span>
                           <span>提議人：{w.addedBy}</span>
+                          {(w.creatorEmail || w.createdBy) && (
+                            <span 
+                              className="inline-flex items-center gap-1 text-[10px] text-[#6E6659] bg-[#F4F0E6] px-1.5 py-0.5 rounded-md border border-[#DDD6C7] font-medium"
+                              title={`登錄者 ID: ${w.creatorEmail || ''}${w.createdBy ? ` (${w.createdBy})` : ''}`}
+                            >
+                              <Mail className="w-2.5 h-2.5 text-rose-600 shrink-0" />
+                              <span className="truncate max-w-[120px] font-mono">{w.creatorEmail || w.createdBy}</span>
+                            </span>
+                          )}
                           {w.estimatedAmountTWD !== undefined && w.estimatedAmountTWD !== null && (
                             <span className="font-bold text-[#5C564E]">
                               預估: NT$ {(Number(w.estimatedAmountTWD) || 0).toLocaleString()}
@@ -3732,6 +3775,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
           onClose={() => setIsBatchImportOpen(false)}
           activeTrip={activeTrip}
           tripMembers={tripMembers}
+          currentUser={currentUser}
           onAddTripMembers={handleAddTripMembers}
           onImportExpenses={handleImportExpenses}
           showToast={showToast}
@@ -3745,6 +3789,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
           onClose={() => setIsReceiptQuickOpen(false)}
           activeTrip={activeTrip}
           tripMembers={tripMembers}
+          currentUser={currentUser}
           onAddExpenses={handleAddQuickExpenses}
           showToast={showToast}
         />

@@ -1,11 +1,12 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Pencil, ShoppingBag, X, Store, MapPin, Plus } from 'lucide-react';
-import { ShoppingItem } from '../../types';
+import { ShoppingItem, AuthUser } from '../../types';
 
 interface AddShoppingModalProps {
   isOpen: boolean;
   onClose: () => void;
+  currentUser?: AuthUser | null;
   shoppingForm: ShoppingItem;
   setShoppingForm: React.Dispatch<React.SetStateAction<ShoppingItem>>;
   onSubmitShopping: (e: React.FormEvent) => void;
@@ -16,12 +17,15 @@ interface AddShoppingModalProps {
 export const AddShoppingModal: React.FC<AddShoppingModalProps> = ({
   isOpen,
   onClose,
+  currentUser,
   shoppingForm,
   setShoppingForm,
   onSubmitShopping,
   shoppingStores = [],
   onOpenManageStores
 }) => {
+  const isCurrentUserZhou = currentUser?.role === '周' || currentUser?.name?.includes('周');
+  const myCreatorName = isCurrentUserZhou ? '周沛緹' : '廖尹丞';
   return (
     <AnimatePresence>
       {isOpen && (
@@ -244,26 +248,48 @@ export const AddShoppingModal: React.FC<AddShoppingModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setShoppingForm({ ...shoppingForm, creator: '廖尹丞' })}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 ${
+                      className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 ${
                         shoppingForm.creator === '廖尹丞'
                           ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
                           : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
                       }`}
                     >
-                      <span className="text-base">👦</span>
-                      <span>廖廖 (廖尹丞)</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base">👦</span>
+                        <span>廖廖 (廖尹丞)</span>
+                      </div>
+                      {myCreatorName === '廖尹丞' && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                          shoppingForm.creator === '廖尹丞'
+                            ? 'bg-sky-800 text-sky-100'
+                            : 'bg-sky-100 text-sky-700'
+                        }`}>
+                          您
+                        </span>
+                      )}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShoppingForm({ ...shoppingForm, creator: '周沛緹' })}
-                      className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 ${
+                      className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 ${
                         shoppingForm.creator === '周沛緹'
                           ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
                           : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
                       }`}
                     >
-                      <span className="text-base">👧</span>
-                      <span>周周 (周沛緹)</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base">👧</span>
+                        <span>周周 (周沛緹)</span>
+                      </div>
+                      {myCreatorName === '周沛緹' && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                          shoppingForm.creator === '周沛緹'
+                            ? 'bg-rose-800 text-rose-100'
+                            : 'bg-rose-100 text-rose-700'
+                        }`}>
+                          您
+                        </span>
+                      )}
                     </button>
                   </div>
                 </div>

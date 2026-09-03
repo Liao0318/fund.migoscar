@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Save, Store, MapPin } from 'lucide-react';
-import { ShoppingItem } from '../../types';
+import { X, Plus, Save, Store, MapPin, Sparkles } from 'lucide-react';
+import { ShoppingItem, AuthUser } from '../../types';
 import { CURRENCIES, DEFAULT_RATES_MAP } from '../../utils/formatters';
 
 interface AddRecordModalProps {
@@ -9,6 +9,7 @@ interface AddRecordModalProps {
   onClose: () => void;
   addModalType: 'record' | 'shopping';
   setAddModalType: (type: 'record' | 'shopping') => void;
+  currentUser?: AuthUser | null;
   formData: {
     item: string;
     amount: string;
@@ -41,6 +42,7 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
   onClose,
   addModalType,
   setAddModalType,
+  currentUser,
   formData,
   setFormData,
   onSubmitRecord,
@@ -51,6 +53,8 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
   shoppingStores = [],
   onOpenManageStores
 }) => {
+  const isCurrentUserZhou = currentUser?.role === '周' || currentUser?.name?.includes('周');
+  const myPayerName = isCurrentUserZhou ? '周沛緹' : '廖尹丞';
   return (
     <AnimatePresence>
       {isOpen && (
@@ -160,15 +164,15 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                     <div className="flex flex-wrap items-center gap-1.5 pt-1">
                       <span className="text-[10px] text-[#A09A8F] font-bold">常用：</span>
                       {(formData.type === '收入-固定公積金' ? [
-                        '每月固定公積金', '廖廖補貼款', '周周補貼款', '獎金公款', '其他退款/利息'
+                        '每月固定公積金', '廖廖補貼款', '周周補貼款', '年度獎金公款', '生活備用金', '退款/利息'
                       ] : [
-                        '全聯採買', '好市多', '午餐', '晚餐', '叫外送', '生活用品', '超商', '水電瓦斯', '房租', '加油', '飲料水果'
+                        '午餐', '晚餐', '早餐', '叫外送', '全聯採買', '好市多', '手搖飲料', '超商 7-11', '日用品', '水果食材', '水電瓦斯', '房租', '加油交通', '看診醫藥'
                       ]).map((tag) => (
                         <button
                           key={tag}
                           type="button"
                           onClick={() => setFormData({ ...formData, item: tag })}
-                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer active:scale-95 ${
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer active:scale-95 ${
                             formData.item === tag
                               ? 'bg-[#4D4942] text-white border-[#4D4942] shadow-2xs'
                               : 'bg-white hover:bg-[#F3EFE6] text-[#6E6659] border-[#E0DCD3]'
@@ -241,7 +245,7 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                   {/* 快捷金額加總按鈕 */}
                   <div className="flex items-center gap-1.5 flex-wrap bg-[#FAF9F5] p-2.5 rounded-xl border border-[#EDE8DE]">
                     <span className="text-[10px] text-[#8C8475] font-bold shrink-0">快捷加額：</span>
-                    {[50, 100, 200, 500, 1000, 2000].map((amt) => (
+                    {[50, 100, 200, 500, 1000, 2000, 5000].map((amt) => (
                       <button
                         key={amt}
                         type="button"
@@ -251,7 +255,7 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                         }}
                         className="px-2 py-1 rounded-lg bg-white hover:bg-emerald-50 text-[#5C564E] hover:text-emerald-700 text-[10px] font-bold border border-[#DDD8CD] transition-all cursor-pointer active:scale-95 shadow-2xs"
                       >
-                        +{amt}
+                        +{amt >= 1000 ? `${amt / 1000}k` : amt}
                       </button>
                     ))}
                     <button
@@ -483,26 +487,48 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                           <button
                             type="button"
                             onClick={() => setFormData({ ...formData, payer: '廖尹丞' })}
-                            className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 ${
+                            className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 relative ${
                               formData.payer === '廖尹丞'
                                 ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
                                 : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
                             }`}
                           >
-                            <span className="text-base">👦</span>
-                            <span>廖廖 (廖尹丞)</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-base">👦</span>
+                              <span>廖廖 (廖尹丞)</span>
+                            </div>
+                            {myPayerName === '廖尹丞' && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                formData.payer === '廖尹丞'
+                                  ? 'bg-sky-800 text-sky-100'
+                                  : 'bg-sky-100 text-sky-700'
+                              }`}>
+                                您
+                              </span>
+                            )}
                           </button>
                           <button
                             type="button"
                             onClick={() => setFormData({ ...formData, payer: '周沛緹' })}
-                            className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 ${
+                            className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 relative ${
                               formData.payer === '周沛緹'
                                 ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
                                 : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
                             }`}
                           >
-                            <span className="text-base">👧</span>
-                            <span>周周 (周沛緹)</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-base">👧</span>
+                              <span>周周 (周沛緹)</span>
+                            </div>
+                            {myPayerName === '周沛緹' && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                formData.payer === '周沛緹'
+                                  ? 'bg-rose-800 text-rose-100'
+                                  : 'bg-rose-100 text-rose-700'
+                              }`}>
+                                您
+                              </span>
+                            )}
                           </button>
                         </div>
                       )}

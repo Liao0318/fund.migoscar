@@ -11,6 +11,7 @@ import {
   User as FirebaseUser,
   onAuthStateChanged
 } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { AuthUser } from '../types';
 
@@ -23,6 +24,15 @@ declare global {
 // 初始化 Firebase
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+
+let firestoreInstance: Firestore | null = null;
+try {
+  firestoreInstance = getFirestore(app);
+} catch (e) {
+  console.warn('Firestore initialization failed:', e);
+}
+export const db = firestoreInstance;
+export const isFirestoreAvailable = () => Boolean(db);
 
 export const OAUTH_CLIENT_ID = firebaseConfig.oAuthClientId || '795114622721-m4d0gm78bdd4es3om7hjmvot8mfhhfki.apps.googleusercontent.com';
 
@@ -61,6 +71,7 @@ export function determineUserRole(name: string, email: string): '廖' | '周' | 
 export async function signInWithGooglePopup(): Promise<{ user: AuthUser; accessToken?: string } | null> {
   try {
     const result = await signInWithPopup(auth, provider);
+
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const accessToken = credential?.accessToken;
     if (accessToken) {
@@ -71,7 +82,7 @@ export async function signInWithGooglePopup(): Promise<{ user: AuthUser; accessT
     const role = determineUserRole(fbUser.displayName || '', fbUser.email || '');
 
     const user: AuthUser = {
-      id: `google-${fbUser.uid}`,
+      id: fbUser.email || fbUser.uid,
       name: fbUser.displayName || fbUser.email?.split('@')[0] || (role === '廖' ? '廖尹丞' : '周沛緹'),
       email: fbUser.email || '',
       avatar: fbUser.photoURL || undefined,
@@ -86,7 +97,9 @@ export async function signInWithGooglePopup(): Promise<{ user: AuthUser; accessT
 
     return { user, accessToken };
   } catch (err: any) {
-    console.error('Firebase signInWithPopup error:', err);
+    const errCode = err?.code || '';
+    const errMsg = err?.message || '';
+    console.warn('Firebase signInWithPopup info:', errCode || errMsg);
     throw err;
   }
 }
@@ -114,7 +127,7 @@ export async function fetchGoogleUserInfo(accessToken: string): Promise<{
 
     const data = await res.json();
     return {
-      id: data.sub || data.id,
+      id: data.email || data.sub || data.id,
       email: data.email,
       name: data.name || data.given_name || data.email.split('@')[0],
       picture: data.picture
@@ -159,7 +172,7 @@ export async function requestGoogleOAuthToken(): Promise<{ user: AuthUser; acces
 
           const role = determineUserRole(userInfo.name, userInfo.email);
           const user: AuthUser = {
-            id: `google-${userInfo.id}`,
+            id: userInfo.email,
             name: userInfo.name || (role === '廖' ? '廖尹丞' : '周沛緹'),
             email: userInfo.email,
             avatar: userInfo.picture,
@@ -179,11 +192,40 @@ export async function requestGoogleOAuthToken(): Promise<{ user: AuthUser; acces
         }
       });
 
-      tokenClient.requestAccessToken({ prompt: 'consent' });
+      tokenClient.requestAccessToken({ prompt: 'select_account' });
     } catch (err) {
       reject(err);
     }
   });
+}
+
+export async function syncGoogleUserProfile(): Promise<{ avatar?: string; name?: string; email?: string } | null> {
+  try {
+    const fbUser = auth.currentUser;
+    if (fbUser) {
+      // 重新整理 Firebase 使用者資訊
+      await fbUser.reload().catch(() => {});
+      return {
+        avatar: fbUser.photoURL || undefined,
+        name: fbUser.displayName || undefined,
+        email: fbUser.email || undefined
+      };
+    }
+
+    if (cachedAccessToken) {
+      const userInfo = await fetchGoogleUserInfo(cachedAccessToken);
+      if (userInfo) {
+        return {
+          avatar: userInfo.picture,
+          name: userInfo.name,
+          email: userInfo.email
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('syncGoogleUserProfile error:', err);
+  }
+  return null;
 }
 
 export async function signOutGoogle() {

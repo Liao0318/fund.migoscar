@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Sliders, Heart, Crown, Share2 } from 'lucide-react';
+import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Sliders, Heart, Crown, Share2, Cloud, Database } from 'lucide-react';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { AuthUser } from '../../types';
 
@@ -137,6 +137,85 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                     </p>
                   </div>
 
+                  {/* 📊 試算表 8 大工作頁對照表 (確保所有功能皆已連線) */}
+                  <div className="bg-[#FAF8F3] rounded-2xl p-4 border border-[#E5E0D2] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-xs font-black text-[#3E3A36] flex items-center gap-1.5">
+                        <Database className="w-4 h-4 text-emerald-700" />
+                        <span>Google 試算表已連線之 8 大工作頁 (自動建立與雙向同步)</span>
+                      </h5>
+                      <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                        全功能 100% 串接
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px]">
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🌸</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">1. 流水帳資料庫</strong>
+                          <span className="text-[#8C8475] text-[10px]">公積金存入充值、日常支出與出錢人記帳</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🗓️</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">2. 月度核銷狀態</strong>
+                          <span className="text-[#8C8475] text-[10px]">公積金每月月底對帳與核銷撥款歷史標記</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">💳</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">3. 代墊明細</strong>
+                          <span className="text-[#8C8475] text-[10px]">日常私人代墊、AA制/自訂比例分帳與結清記錄</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🛒</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">4. 購物清單</strong>
+                          <span className="text-[#8C8475] text-[10px]">雙人生活用品採購清單、勾選完成與備註細項</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🏪</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">5. 常用商店</strong>
+                          <span className="text-[#8C8475] text-[10px]">全聯、好市多、菜市場等採購地點快速推薦庫</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">✈️</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">6. 旅遊行程</strong>
+                          <span className="text-[#8C8475] text-[10px]">國內外旅遊行程、幣別、預設匯率、成員與預算</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🧾</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">7. 旅遊支出明細</strong>
+                          <span className="text-[#8C8475] text-[10px]">出國多幣別消費、單筆分帳、代墊與轉入日常</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">💡</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">8. 旅遊心願清單</strong>
+                          <span className="text-[#8C8475] text-[10px]">出國必吃必玩心願踩點清單與代買事項追蹤</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* 🧪 開發者沙盒測試開關 */}
                   {onToggleSandboxMode && (
                     <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 flex items-center justify-between gap-3">
@@ -205,11 +284,14 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                     <button
                       type="button"
                       onClick={saveDeployConfig}
-                      className="ml-auto px-4 py-2 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                      className="ml-auto px-4 py-2 bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
                     >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>儲存並即時更新代碼</span>
+                      <Cloud className="w-3.5 h-3.5 text-amber-200" />
+                      <span>儲存並同步至雲端帳號</span>
                     </button>
+                  </div>
+                  <div className="text-[10px] text-[#8C8475] text-right">
+                    ☁️ 儲存後將自動永久綁定至 Google 帳號，日後換手機登入免重填
                   </div>
 
                 </div>

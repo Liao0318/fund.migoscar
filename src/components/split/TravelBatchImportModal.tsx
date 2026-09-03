@@ -21,13 +21,14 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
-import { TravelExpenseItem, TravelTrip } from '../../types';
+import { TravelExpenseItem, TravelTrip, AuthUser } from '../../types';
 
 interface TravelBatchImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeTrip: TravelTrip;
   tripMembers: string[];
+  currentUser?: AuthUser | null;
   onAddTripMembers: (newMembers: string[]) => void;
   onImportExpenses: (expenses: TravelExpenseItem[]) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -50,6 +51,8 @@ interface ParsedRow {
   participants: string[];
   note: string;
   paymentMethod: string;
+  creatorEmail?: string;
+  createdBy?: string;
 }
 
 const CATEGORY_KEYWORDS: Record<string, TravelExpenseItem['category']> = {
@@ -131,6 +134,7 @@ export const TravelBatchImportModal: React.FC<TravelBatchImportModalProps> = ({
   onClose,
   activeTrip,
   tripMembers,
+  currentUser,
   onAddTripMembers,
   onImportExpenses,
   showToast,
@@ -484,7 +488,9 @@ export const TravelBatchImportModal: React.FC<TravelBatchImportModalProps> = ({
         splitTarget,
         participants,
         note: noteVal,
-        paymentMethod: paymentMethodVal
+        paymentMethod: paymentMethodVal,
+        creatorEmail: cleanParts[10]?.trim() || currentUser?.email || 'oscargh3359@gmail.com',
+        createdBy: cleanParts[11]?.trim() || currentUser?.name || currentUser?.nickname || currentUser?.role || '廖'
       });
     }
 
@@ -587,6 +593,8 @@ export const TravelBatchImportModal: React.FC<TravelBatchImportModalProps> = ({
         debtorAmountTWD: debtorAmtTWD,
         location: row.location,
         note: row.note,
+        creatorEmail: row.creatorEmail || currentUser?.email || 'oscargh3359@gmail.com',
+        createdBy: row.createdBy || currentUser?.name || currentUser?.nickname || currentUser?.role || '廖',
         syncedToSplit: false,
         createdAt: new Date().toISOString().split('T')[0]
       };

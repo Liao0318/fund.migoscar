@@ -82,3 +82,51 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// Notification Click: Focus existing app window or open it
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // If a window is already open, focus it
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // If no window is open, open a new one
+      if (self.clients.openWindow) {
+        return self.clients.openWindow('./');
+      }
+    })
+  );
+});
+
+// Push Event: Handle background push messages
+self.addEventListener('push', (event) => {
+  let title = '伴伴記❤️ 帳目新通知';
+  let body = '您有一則新的伴侶記帳動態！';
+  let data = {};
+
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      title = payload.title || title;
+      body = payload.body || payload.desc || body;
+      data = payload.data || {};
+    } catch (e) {
+      body = event.data.text() || body;
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: './icon.svg',
+      badge: './icon.svg',
+      vibrate: [150, 80, 150],
+      data: { url: './', ...data }
+    })
+  );
+});

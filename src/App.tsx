@@ -29,6 +29,10 @@ import {
   ShoppingBag,
   MapPin,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  CreditCard,
+  ReceiptText,
   Store,
   Clock,
   CheckSquare,
@@ -55,6 +59,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportFundRecordsToCSV } from './utils/exportCsv';
+import { formatAmPmTime, isTodayNotification, isIncomingFromPartner, getShoppingItemDisplayTime } from './utils/formatters';
+import { sendNativeNotification } from './utils/nativeNotify';
 import { CODE_GS_TEMPLATE, INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from './data/gasTemplates';
 import { SplitDebtView } from './components/SplitDebtView';
 import { SplitHomeTab } from './components/split/SplitHomeTab';
@@ -78,8 +84,10 @@ import { ShoppingDetailModal } from './components/modals/ShoppingDetailModal';
 import { CurrencyCalculatorModal } from './components/modals/CurrencyCalculatorModal';
 import { AppNotificationModal } from './components/modals/AppNotificationModal';
 import { GasDeployModal } from './components/modals/GasDeployModal';
+import { DatabaseOnboardingModal } from './components/modals/DatabaseOnboardingModal';
 import { DataBackupModal } from './components/modals/DataBackupModal';
 import { PwaInstallModal } from './components/modals/PwaInstallModal';
+import { UnifiedSettingsModal } from './components/modals/UnifiedSettingsModal';
 import { FloatingChatButton } from './components/chat/FloatingChatButton';
 import { ChatAssistantDrawer } from './components/chat/ChatAssistantDrawer';
 import { 
@@ -93,6 +101,7 @@ import {
   SplitRecordItem, 
   SplitSummary, 
   AppNotifySettings, 
+  AppNotification,
   SmartCommandResult, 
   AuthUser,
   PartnerInviteData,
@@ -105,8 +114,16 @@ import {
   getPartnerBindingInfo,
   savePartnerBindingInfo,
   removePartnerBinding,
-  createShareableInviteCard
+  createShareableInviteCard,
+  resolveInviteCodeOrToken
 } from './utils/partnerInvite';
+import { 
+  saveUserCloudConfig, 
+  getUserCloudConfig,
+  saveUserNotifySettings,
+  getUserNotifySettings
+} from './utils/userConfigService';
+import { syncGoogleUserProfile } from './utils/googleOAuthService';
 
 
 // 定義購物記事資料型態
@@ -122,136 +139,6 @@ export interface ShoppingItem {
   note?: string;
 }
 
-// 鎖定為「yyyy-MM-dd 上午/下午 hh:mm」格式，不含時區或 ISO 字串
-export function formatAmPmTime(timeInput: any): string {
-  if (!timeInput) return '';
-  const strVal = String(timeInput).trim();
-  if (strVal.includes('上午') || strVal.includes('下午')) {
-    return strVal;
-  }
-
-  let d: Date | null = null;
-  if (timeInput instanceof Date) {
-    d = timeInput;
-  } else if (typeof timeInput === 'number') {
-    d = new Date(timeInput);
-  } else {
-    // 檢查是否為純數字時間戳記或包含 shop-時間戳
-    const numMatch = strVal.match(/\b\d{10,13}\b/);
-    if (numMatch && !strVal.includes('/') && !strVal.includes('-') && !strVal.includes('T')) {
-      d = new Date(parseInt(numMatch[0], 10));
-    } else {
-      const cleanStr = strVal.replace(/T/g, ' ').replace(/-/g, '/').split('.')[0].split('+')[0];
-      const ms = Date.parse(cleanStr);
-      if (!isNaN(ms)) {
-        d = new Date(ms);
-      } else {
-        const parts = strVal.split(/\s+/);
-        if (parts.length >= 2) {
-          const dateParts = parts[0].split(/[-/]/);
-          const timeParts = parts[1].split(':');
-          if (dateParts.length >= 3 && timeParts.length >= 2) {
-            const year = parseInt(dateParts[0], 10);
-            const month = parseInt(dateParts[1], 10) - 1;
-            const day = parseInt(dateParts[2], 10);
-            const hours = parseInt(timeParts[0], 10);
-            const minutes = parseInt(timeParts[1], 10);
-            d = new Date(year, month, day, hours, minutes);
-          }
-        }
-      }
-    }
-  }
-
-  if (!d || isNaN(d.getTime())) {
-    return strVal;
-  }
-
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hours = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-
-  const ampm = hours >= 12 ? '下午' : '上午';
-  let h12 = hours % 12;
-  if (h12 === 0) h12 = 12;
-  const hStr = String(h12).padStart(2, '0');
-
-  return `${year}-${month}-${day} ${ampm} ${hStr}:${minutes}`;
-}
-
-/**
- * 判斷指定的時間戳記或日期字串是否為「今天」（依使用者當地時間）
- */
-export function isTodayNotification(timeInput: any): boolean {
-  if (!timeInput) return false;
-  let d: Date | null = null;
-  if (timeInput instanceof Date) {
-    d = timeInput;
-  } else if (typeof timeInput === 'number') {
-    d = new Date(timeInput);
-  } else {
-    const strVal = String(timeInput).trim();
-    const dateMatch = strVal.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-    if (dateMatch) {
-      const year = parseInt(dateMatch[1], 10);
-      const month = parseInt(dateMatch[2], 10) - 1;
-      const day = parseInt(dateMatch[3], 10);
-      const now = new Date();
-      return (
-        year === now.getFullYear() &&
-        month === now.getMonth() &&
-        day === now.getDate()
-      );
-    }
-    const cleanStr = strVal.replace(/上午|下午/g, '').replace(/T/g, ' ').replace(/-/g, '/');
-    const ms = Date.parse(cleanStr);
-    if (!isNaN(ms)) {
-      d = new Date(ms);
-    }
-  }
-
-  if (!d || isNaN(d.getTime())) return false;
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
-}
-
-// 輔助函式：可靠取得採購項目的標準格式化時間
-export function getShoppingItemDisplayTime(item: ShoppingItem | any): string {
-  if (!item) return '';
-  if (item.createdTime) {
-    const formatted = formatAmPmTime(item.createdTime);
-    if (formatted) return formatted;
-  }
-  if (item.timeStr) {
-    const formatted = formatAmPmTime(item.timeStr);
-    if (formatted) return formatted;
-  }
-  if (item.time) {
-    const formatted = formatAmPmTime(item.time);
-    if (formatted) return formatted;
-  }
-  if (item.createdAt) {
-    const formatted = formatAmPmTime(item.createdAt);
-    if (formatted) return formatted;
-  }
-  if (item.id) {
-    const match = String(item.id).match(/\d{10,13}/);
-    if (match) {
-      const ms = parseInt(match[0], 10);
-      if (!isNaN(ms) && ms > 1500000000000 && ms < 2500000000000) {
-        return formatAmPmTime(new Date(ms));
-      }
-    }
-  }
-  return '';
-}
-
 const INITIAL_SHOPPING_ITEMS: ShoppingItem[] = [
   { id: 'shop-1', category: '需要買', item: '高麗菜', store: '菜市場', deadline: '8/13前', status: '待購買', creator: '廖尹丞', createdTime: '2026-08-10 上午 10:00', note: '挑選高麗菜葉片緊實、無蟲蛀者，打算炒培根！' },
   { id: 'shop-2', category: '需要買', item: '衛生紙 1 串', store: '全聯福利中心', deadline: '本週內', status: '待購買', creator: '周沛緹', createdTime: '2026-08-09 下午 06:30', note: '買三層柔柔牌，若有特價大包裝優先。' },
@@ -260,17 +147,6 @@ const INITIAL_SHOPPING_ITEMS: ShoppingItem[] = [
 ];
 
 const INITIAL_STORES = ['菜市場', '全聯福利中心', '日日加', '家樂福', '好市多', '寶雅', '7-ELEVEN', '蝦皮購物'];
-
-// 定義通知資料型態
-interface AppNotification {
-  id: string;
-  title: string;
-  desc: string;
-  time: string;
-  read: boolean;
-  type: 'expense' | 'income' | 'system' | 'delete' | 'settle';
-  timestamp?: number;
-}
 
 // 定義帳目資料型態
 
@@ -563,7 +439,13 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
       const saved = localStorage.getItem('banban_auth_user');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.email) {
+          parsed.id = parsed.email; // 統一使用 Gmail 帳號作為用戶識別 ID，不使用亂數
+        }
+        return parsed;
+      }
     } catch (e) {}
     return null;
   });
@@ -575,7 +457,20 @@ export default function App() {
     return false;
   });
 
+  const isUserProfileModalOpen_deprecated = false;
   const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
+  const [isUnifiedSettingsModalOpen, setIsUnifiedSettingsModalOpen] = useState(false);
+
+  const isCurrentUserZhou = currentUser?.role === '周' || currentUser?.name?.includes('周') || currentUser?.nickname?.includes('周');
+  const defaultPayerName = isCurrentUserZhou ? '周沛緹' : '廖尹丞';
+
+  const [isExchangeRatesCollapsed, setIsExchangeRatesCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('banban_rates_collapsed') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
 
   // 💌 伴侶邀請代碼與情侶雙向綁定狀態
   const [currentInviteCode, setCurrentInviteCode] = useState<string>(() => {
@@ -628,57 +523,143 @@ export default function App() {
     }
   };
 
-  const handleGoogleLogin = (user: AuthUser, partnerInvite?: PartnerInviteData | null) => {
-    setCurrentUser(user);
+  const handleGoogleLogin = async (
+    user: AuthUser, 
+    partnerInvite?: PartnerInviteData | null,
+    initialCloudGasUrl?: string,
+    initialCloudSheetUrl?: string
+  ) => {
+    const cleanUser: AuthUser = {
+      ...user,
+      id: user.email || user.id
+    };
+    setCurrentUser(cleanUser);
     setIsSandboxMode(false);
 
-    // 若為伴侶模式登入且帶有邀請資訊，自動繼承管理員的 GAS Web App API 與試算表網址
-    if (user.userRole === 'partner') {
-      const activeGas = partnerInvite?.gasWebUrl || localStorage.getItem('muji_gas_web_url') || gasWebUrl || '';
-      const activeSheet = partnerInvite?.deploySheetUrl || localStorage.getItem('muji_deploy_sheet_url') || deploySheetUrl || '';
+    // 1. 若網址自帶伴侶邀請碼或已傳入邀請資訊，直接執行伴侶自動綁定
+    if (partnerInvite && partnerInvite.inviteCode) {
+      const activeGas = partnerInvite.gasWebUrl || localStorage.getItem('muji_gas_web_url') || gasWebUrl || '';
+      const activeSheet = partnerInvite.deploySheetUrl || localStorage.getItem('muji_deploy_sheet_url') || deploySheetUrl || '';
       
-      if (partnerInvite?.gasWebUrl) {
-        setGasWebUrl(partnerInvite.gasWebUrl);
-        try { localStorage.setItem('muji_gas_web_url', partnerInvite.gasWebUrl); } catch (e) {}
+      if (activeGas) {
+        setGasWebUrl(activeGas);
+        try { localStorage.setItem('muji_gas_web_url', activeGas); } catch (e) {}
       }
-      if (partnerInvite?.deploySheetUrl) {
-        setDeploySheetUrl(partnerInvite.deploySheetUrl);
-        try { localStorage.setItem('muji_deploy_sheet_url', partnerInvite.deploySheetUrl); } catch (e) {}
+      if (activeSheet) {
+        setDeploySheetUrl(activeSheet);
+        try { localStorage.setItem('muji_deploy_sheet_url', activeSheet); } catch (e) {}
       }
 
       const bindingData: CoupleBindingInfo = {
-        adminEmail: user.adminEmail || partnerInvite?.adminEmail || 'admin@gmail.com',
-        adminName: user.adminName || partnerInvite?.adminName || '主管理員',
+        adminEmail: partnerInvite.adminEmail || 'admin@gmail.com',
+        adminName: partnerInvite.adminName || '主管理員',
         partnerEmail: user.email,
         partnerName: user.name,
-        inviteCode: user.inviteCode || currentInviteCode,
+        inviteCode: partnerInvite.inviteCode,
         gasWebUrl: activeGas,
         deploySheetUrl: activeSheet,
         boundAt: new Date().toISOString()
       };
       savePartnerBindingInfo(bindingData);
       setPartnerBindingInfo(bindingData);
-      showToast(`💖 歡迎 ${user.name}！已成功綁定伴侶帳本 (${user.adminName || '管理員'})`, 'success');
-    } else {
-      // 管理員登入：註冊邀請代碼
+
+      const enhancedPartner: AuthUser = {
+        ...user,
+        userRole: 'partner',
+        adminEmail: partnerInvite.adminEmail,
+        adminName: partnerInvite.adminName,
+        inviteCode: partnerInvite.inviteCode
+      };
+      setCurrentUser(enhancedPartner);
+
+      saveUserCloudConfig(user.email, {
+        email: user.email,
+        name: user.name,
+        gasWebUrl: activeGas,
+        deploySheetUrl: activeSheet,
+        inviteCode: partnerInvite.inviteCode
+      });
+
+      showToast(`💖 歡迎 ${user.name}！已自動加入伴侶帳本 (${partnerInvite.adminName || '管理員'})`, 'success');
+      try {
+        localStorage.setItem('banban_auth_user', JSON.stringify(enhancedPartner));
+        localStorage.setItem('banban_is_sandbox_mode', 'false');
+      } catch (e) {}
+      return;
+    }
+
+    // 2. 檢查先前是否已曾綁定為伴侶
+    const existingBinding = getPartnerBindingInfo();
+    if (existingBinding && existingBinding.partnerEmail && existingBinding.partnerEmail.toLowerCase() === user.email.toLowerCase()) {
+      if (existingBinding.gasWebUrl) {
+        setGasWebUrl(existingBinding.gasWebUrl);
+        try { localStorage.setItem('muji_gas_web_url', existingBinding.gasWebUrl); } catch (e) {}
+      }
+      if (existingBinding.deploySheetUrl) {
+        setDeploySheetUrl(existingBinding.deploySheetUrl);
+        try { localStorage.setItem('muji_deploy_sheet_url', existingBinding.deploySheetUrl); } catch (e) {}
+      }
+      setPartnerBindingInfo(existingBinding);
+      showToast(`💖 歡迎回來，${user.name}！已載入伴侶帳本 (${existingBinding.adminName || '管理員'})`, 'success');
+      try {
+        localStorage.setItem('banban_auth_user', JSON.stringify({ ...user, userRole: 'partner' }));
+        localStorage.setItem('banban_is_sandbox_mode', 'false');
+      } catch (e) {}
+      return;
+    }
+
+    // 3. 檢查先前是否曾建立過 API 資料庫 (本地或 Firestore 雲端)
+    let activeGas = initialCloudGasUrl || gasWebUrl || localStorage.getItem('muji_gas_web_url') || '';
+    let activeSheet = initialCloudSheetUrl || deploySheetUrl || localStorage.getItem('muji_sheet_url') || '';
+
+    try {
+      const cloudConfig = await getUserCloudConfig(user.email);
+      if (cloudConfig) {
+        if (cloudConfig.gasWebUrl && !activeGas) {
+          activeGas = cloudConfig.gasWebUrl;
+          setGasWebUrl(cloudConfig.gasWebUrl);
+          try { localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl); } catch (e) {}
+        }
+        if (cloudConfig.deploySheetUrl && !activeSheet) {
+          activeSheet = cloudConfig.deploySheetUrl;
+          setDeploySheetUrl(cloudConfig.deploySheetUrl);
+          try { localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl); } catch (e) {}
+        }
+        if (cloudConfig.inviteCode) {
+          setCurrentInviteCode(cloudConfig.inviteCode);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to retrieve user cloud config on login:', err);
+    }
+
+    // 若已存在 API 資料庫
+    if (activeGas && activeGas.startsWith('http')) {
+      setGasWebUrl(activeGas);
+      try { localStorage.setItem('muji_gas_web_url', activeGas); } catch (e) {}
+      saveUserCloudConfig(user.email, {
+        email: user.email,
+        name: user.name,
+        gasWebUrl: activeGas,
+        deploySheetUrl: activeSheet
+      });
+
       saveActiveInviteCode({
         inviteCode: currentInviteCode,
         adminEmail: user.email,
         adminName: user.name,
-        gasWebUrl: gasWebUrl,
-        deploySheetUrl: deploySheetUrl,
+        gasWebUrl: activeGas,
+        deploySheetUrl: activeSheet,
         createdAt: new Date().toISOString()
       });
-      showToast(`👑 歡迎回來，${user.name} (主管理員)！`, 'success');
 
-      // 若尚未設定 Google Apps Script Web App API 網址，自動提示連線金鑰設定
-      const existingGas = localStorage.getItem('muji_gas_web_url') || gasWebUrl;
-      if (!existingGas) {
-        setTimeout(() => {
-          setIsDeployModalOpen(true);
-          showToast('⚡ 提醒：請設定 Google 試算表連線金鑰以啟用雙向雲端同步', 'info');
-        }, 800);
-      }
+      showToast(`👑 歡迎回來，${user.name}！已自動同步 Google 帳號綁定的 API 資料庫`, 'success');
+    } else {
+      // 4. 尚未綁定任何 API 或伴侶：自動開啟初次引導彈窗，詢問要「輸入伴侶邀請碼」還是「建立 API 資料庫」
+      showToast(`👑 歡迎 ${user.name}！請選擇帳本加入方式`, 'info');
+      setTimeout(() => {
+        setIsDatabaseOnboardingOpen(true);
+      }, 500);
     }
 
     try {
@@ -687,10 +668,74 @@ export default function App() {
     } catch (e) {}
   };
 
+  /**
+   * 處理透過引導彈窗輸入伴侶邀請碼
+   */
+  const handleBindPartnerInvite = async (inviteInput: string): Promise<{ success: boolean; message?: string }> => {
+    const resolved = resolveInviteCodeOrToken(inviteInput);
+    if (!resolved) {
+      return { success: false, message: '找不到符合的邀請碼，請確認 6 碼代碼或完整連結是否正確' };
+    }
+
+    const activeGas = resolved.gasWebUrl || '';
+    const activeSheet = resolved.deploySheetUrl || '';
+
+    if (activeGas) {
+      setGasWebUrl(activeGas);
+      try { localStorage.setItem('muji_gas_web_url', activeGas); } catch (e) {}
+    }
+    if (activeSheet) {
+      setDeploySheetUrl(activeSheet);
+      try { localStorage.setItem('muji_deploy_sheet_url', activeSheet); } catch (e) {}
+    }
+
+    const bindingData: CoupleBindingInfo = {
+      adminEmail: resolved.adminEmail || 'admin@gmail.com',
+      adminName: resolved.adminName || '主管理員',
+      partnerEmail: currentUser?.email || '',
+      partnerName: currentUser?.name || '伴侶',
+      inviteCode: resolved.inviteCode,
+      gasWebUrl: activeGas,
+      deploySheetUrl: activeSheet,
+      boundAt: new Date().toISOString()
+    };
+
+    savePartnerBindingInfo(bindingData);
+    setPartnerBindingInfo(bindingData);
+
+    if (currentUser) {
+      const updatedUser: AuthUser = {
+        ...currentUser,
+        userRole: 'partner',
+        adminEmail: resolved.adminEmail,
+        adminName: resolved.adminName,
+        inviteCode: resolved.inviteCode
+      };
+      setCurrentUser(updatedUser);
+      try {
+        localStorage.setItem('banban_auth_user', JSON.stringify(updatedUser));
+      } catch (e) {}
+
+      // 同步伴侶設定至雲端
+      if (currentUser.email) {
+        saveUserCloudConfig(currentUser.email, {
+          email: currentUser.email,
+          name: currentUser.name,
+          gasWebUrl: activeGas,
+          deploySheetUrl: activeSheet,
+          inviteCode: resolved.inviteCode
+        });
+      }
+    }
+
+    showToast(`💖 已成功綁定伴侶帳本 (${resolved.adminName || '管理員'})！`, 'success');
+    return { success: true };
+  };
+
 
   const handleEnterDevSandbox = () => {
     const devUser: AuthUser = {
-      id: 'dev-sandbox-user',
+      id: 'dev.sandbox@local.test',
       name: '開發測試者',
       email: 'dev.sandbox@local.test',
       role: 'admin',
@@ -731,6 +776,70 @@ export default function App() {
       localStorage.setItem('banban_is_sandbox_mode', enabled ? 'true' : 'false');
     } catch (e) {}
     showToast(enabled ? '已切換為「開發人員沙盒測試模式」' : '已關閉沙盒模式，切換為「正式連線模式」', 'info');
+  };
+
+  const handleUpdateNickname = (newNickname: string): boolean => {
+    const trimmed = newNickname.trim();
+    if (!trimmed || trimmed.length >= 3) {
+      showToast('暱稱字數需少於 3 個字 (1~2 個字)', 'error');
+      return false;
+    }
+    if (!currentUser) return false;
+
+    const updatedUser: AuthUser = {
+      ...currentUser,
+      nickname: trimmed
+    };
+    setCurrentUser(updatedUser);
+    try {
+      localStorage.setItem('banban_auth_user', JSON.stringify(updatedUser));
+    } catch (e) {}
+
+    if (currentUser.email) {
+      saveUserCloudConfig(currentUser.email, {
+        nickname: trimmed,
+        email: currentUser.email,
+        name: currentUser.name
+      });
+    }
+
+    showToast(`✨ 已成功將右上角顯示暱稱改為「${trimmed}」！`, 'success');
+    return true;
+  };
+
+  const handleSyncGoogleAvatar = async (): Promise<boolean> => {
+    if (!currentUser) return false;
+    showToast('正在與 Google 帳號同步最新頭像...', 'info');
+    try {
+      const profile = await syncGoogleUserProfile();
+      if (profile && profile.avatar) {
+        const updatedUser: AuthUser = {
+          ...currentUser,
+          avatar: profile.avatar,
+          name: profile.name || currentUser.name
+        };
+        setCurrentUser(updatedUser);
+        try {
+          localStorage.setItem('banban_auth_user', JSON.stringify(updatedUser));
+        } catch (e) {}
+
+        if (currentUser.email) {
+          saveUserCloudConfig(currentUser.email, {
+            avatar: profile.avatar,
+            name: profile.name || currentUser.name,
+            email: currentUser.email
+          });
+        }
+        showToast('🎉 已成功同步 Google 帳戶大頭貼照片！', 'success');
+        return true;
+      } else {
+        showToast('Google 帳號照片已是最新狀態', 'info');
+        return true;
+      }
+    } catch (err: any) {
+      showToast('同步 Google 頭像失敗，請重新登入或稍後重試', 'error');
+      return false;
+    }
   };
   
   // ------------------- 即時匯率與出國幣值換算狀態 -------------------
@@ -1205,6 +1314,7 @@ export default function App() {
   };
 
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
+  const [isDatabaseOnboardingOpen, setIsDatabaseOnboardingOpen] = useState(false);
   const [deploySheetUrl, setDeploySheetUrl] = useState(() => localStorage.getItem('muji_sheet_url') || '');
   const [activeDeployCodeTab, setActiveDeployCodeTab] = useState<'codeGs' | 'indexHtml' | 'splitHtml'>('codeGs');
   const [copiedCodeType, setCopiedCodeType] = useState<'codeGs' | 'indexHtml' | 'splitHtml' | null>(null);
@@ -1216,16 +1326,61 @@ export default function App() {
     localStorage.setItem('muji_sheet_url', cleanSheet);
     localStorage.setItem('muji_gas_web_url', cleanGas);
 
+    // ☁️ 自動將 API 綁定至 Google 帳號雲端，日後換任何手機登入自動生效
+    if (currentUser?.email && !isSandboxMode) {
+      saveUserCloudConfig(currentUser.email, {
+        email: currentUser.email,
+        name: currentUser.name,
+        gasWebUrl: cleanGas,
+        deploySheetUrl: cleanSheet
+      });
+
+      if (currentUser.userRole === 'admin') {
+        saveActiveInviteCode({
+          inviteCode: currentInviteCode,
+          adminEmail: currentUser.email,
+          adminName: currentUser.name,
+          gasWebUrl: cleanGas,
+          deploySheetUrl: cleanSheet,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+
     if (cleanSheet) {
       callGasApi('saveSpreadsheetId', { spreadsheetId: cleanSheet, url: cleanSheet });
     }
 
-    showToast('連線設定與 Web App API URL 已儲存！正嘗試即時連線...', 'success');
+    showToast('連線設定與 Web App API 已同步至 Google 雲端帳號！換機免重填。', 'success');
     fetchDashboardData(true);
     fetchShoppingData();
     fetchSplitData(true);
     fetchTravelData(true);
   };
+
+  // ☁️ 開機自動同步使用者 Google 帳號所綁定的 API 設定 (跨裝置換手機無縫讀取)
+  useEffect(() => {
+    if (currentUser?.email && !isSandboxMode && currentUser.userRole !== 'partner') {
+      getUserCloudConfig(currentUser.email).then((cloudConfig) => {
+        if (cloudConfig) {
+          let updated = false;
+          if (cloudConfig.gasWebUrl && !gasWebUrl) {
+            setGasWebUrl(cloudConfig.gasWebUrl);
+            try { localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl); } catch (e) {}
+            updated = true;
+          }
+          if (cloudConfig.deploySheetUrl && !deploySheetUrl) {
+            setDeploySheetUrl(cloudConfig.deploySheetUrl);
+            try { localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl); } catch (e) {}
+            updated = true;
+          }
+          if (updated) {
+            showToast('☁️ 已從雲端帳號自動同步專屬 API 設定', 'info');
+          }
+        }
+      }).catch(() => {});
+    }
+  }, [currentUser?.email]);
 
   const getCustomizedCodeGs = () => {
     let code = CODE_GS_TEMPLATE;
@@ -1406,16 +1561,32 @@ export default function App() {
     };
   }, [gasWebUrl]);
 
-  // 記帳表單狀態 (新增記錄日期，預設今天，包含貨幣選項與自訂匯率)
+  // 記帳表單狀態 (新增記錄日期，預設今天，包含貨幣選項與自訂匯率，智慧預設當前登入者)
   const [formData, setFormData] = useState({
     item: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
-    payer: '廖尹丞' as string,
+    payer: defaultPayerName as string,
     type: '支出-日常代墊' as '支出-日常代墊' | '收入-固定公積金',
     currency: 'TWD',
     customRate: ''
   });
+
+  // 當使用者身分切換且表單未填寫時，自動更新預設付款人/登記人
+  useEffect(() => {
+    setFormData(prev => {
+      if (!prev.item && !prev.amount) {
+        return { ...prev, payer: defaultPayerName };
+      }
+      return prev;
+    });
+    setShoppingForm(prev => {
+      if (!prev.item && !prev.id) {
+        return { ...prev, creator: defaultPayerName as any };
+      }
+      return prev;
+    });
+  }, [defaultPayerName]);
 
   // 系統載入與模擬重置狀態
   const [loading, setLoading] = useState(false);
@@ -1540,7 +1711,7 @@ export default function App() {
       customStore: '',
       deadline: '本週',
       customDeadline: '',
-      creator: '廖尹丞',
+      creator: defaultPayerName as any,
       status: '待購買',
       createdTime: '',
       note: ''
@@ -1615,6 +1786,34 @@ export default function App() {
     }
   };
 
+  // 🛍️ 一鍵將採購品項帶入轉為代墊記帳
+  const handleConvertShoppingToRecord = (item: ShoppingItem) => {
+    setSelectedShoppingDetail(null);
+    const targetPayer = item.creator?.includes('周') || item.creator === '周' ? '周沛緹' : (isCurrentUserZhou ? '周沛緹' : '廖尹丞');
+    const targetSplitPayer = item.creator?.includes('周') || item.creator === '周' ? '周' : (isCurrentUserZhou ? '周' : '廖');
+
+    if (appMode === 'split') {
+      setSplitAddInitialData({
+        payer: targetSplitPayer,
+        itemName: item.item,
+        note: `從採購清單轉記帳（購買地點：${item.store || '一般'}）`
+      });
+      setIsSplitAddOpen(true);
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        item: item.item,
+        payer: targetPayer,
+        type: '支出-日常代墊',
+        currency: 'TWD',
+        amount: ''
+      }));
+      setAddModalType('record');
+      setIsAddOpen(true);
+    }
+    showToast(`已帶入「${item.item}」至記帳表單 ✍️`, 'info');
+  };
+
   const handleAddStore = () => {
     if (!isAddStoreInput.trim()) return;
     const newName = isAddStoreInput.trim();
@@ -1647,24 +1846,36 @@ export default function App() {
     }
   };
 
+  // 載入當前使用者的個人化通知設定
   useEffect(() => {
-    // 載入 App 內建通知設定
-    const savedNotifySettings = localStorage.getItem('banban_app_notify_settings');
-    if (savedNotifySettings) {
-      try {
-        const parsed = JSON.parse(savedNotifySettings);
-        setAppNotifySettings(prev => ({ ...prev, ...parsed }));
-      } catch (e) {}
+    if (currentUser?.email) {
+      const userSettings = getUserNotifySettings(currentUser.email);
+      if (userSettings) {
+        setAppNotifySettings(userSettings);
+      }
+    } else {
+      const savedNotifySettings = localStorage.getItem('banban_app_notify_settings');
+      if (savedNotifySettings) {
+        try {
+          const parsed = JSON.parse(savedNotifySettings);
+          setAppNotifySettings(prev => ({ ...prev, ...parsed }));
+        } catch (e) {}
+      }
     }
 
     fetchShoppingData();
-  }, [gasWebUrl]);
+  }, [gasWebUrl, currentUser?.email]);
 
   const saveAppNotifySettings = (newSettings: AppNotifySettings) => {
     setAppNotifySettings(newSettings);
-    try {
-      localStorage.setItem('banban_app_notify_settings', JSON.stringify(newSettings));
-    } catch (e) {}
+    if (currentUser?.email) {
+      saveUserNotifySettings(currentUser.email, newSettings);
+    } else {
+      try {
+        localStorage.setItem('banban_app_notify_settings', JSON.stringify(newSettings));
+        localStorage.setItem('muji_notification_settings', JSON.stringify(newSettings));
+      } catch (e) {}
+    }
   };
 
   const toggleAppNotifySetting = (key: keyof AppNotifySettings) => {
@@ -1697,7 +1908,12 @@ export default function App() {
       '這是一則 App 內建即時通知！當您記帳、代墊、結算或新增購物清單時，都會立即在此收到通知。',
       'system'
     );
-    showToast('🔔 已發送測試通知至通知中心！', 'success');
+    sendNativeNotification({
+      title: '🌸 伴伴記即時通知測試',
+      body: '這是一則 App 內建原生推播！當伴侶記帳、代墊或更新採購清單時，手機都會立即收到通知。',
+      playSound: true
+    });
+    showToast('🔔 已發送測試通知至通知中心與手機系統！', 'success');
   };
 
   const handleUndoCommandItem = async (actionData?: { id?: string | number; type: 'income' | 'expense' | 'shopping' }): Promise<boolean> => {
@@ -2076,77 +2292,6 @@ export default function App() {
     setIsDeployModalOpen(true);
   };
 
-  const backfillNotificationsFromRecords = (ledgerRecords: RecordItem[]) => {
-    if (!ledgerRecords || ledgerRecords.length === 0) return;
-    
-    setNotifications(prev => {
-      // 僅保留「今天」的通知
-      let updated = prev.filter(n => isTodayNotification(n.timestamp || n.time));
-      let addedAny = false;
-      
-      const sortedLedger = [...ledgerRecords].sort((a, b) => {
-        const da = Date.parse((String(a.date) || '').replace(/-/g, '/'));
-        const db = Date.parse((String(b.date) || '').replace(/-/g, '/'));
-        return db - da;
-      });
-
-      // 僅針對「今天」發生的記帳交易回填即時通知
-      const todayLedger = sortedLedger.filter(rec => isTodayNotification(rec.timestamp || rec.date));
-
-      todayLedger.slice(0, 5).forEach(rec => {
-        const notifId = 'notif-sync-' + rec.id;
-        const isIncome = rec.type.includes('收入');
-        const titleTag = isIncome ? "💰 " : "💸 ";
-        const actionName = isIncome ? "撥入了公積金" : "新增了日常代墊";
-        const notifyTitle = `${titleTag}${rec.payer} ${actionName}`;
-        const notifyDesc = `「${rec.item}」：金額 $${(Number(rec.amount) || 0).toLocaleString()} 元 (${rec.month} 月份)`;
-        
-        const exists = updated.some(n => 
-          n.id === notifId || 
-          n.desc === notifyDesc || 
-          (n.desc.includes(rec.item) && n.desc.includes((Number(rec.amount) || 0).toLocaleString()))
-        );
-        
-        if (!exists) {
-          let recordTimestamp = Date.now();
-          let timeDisplayStr = formatAmPmTime(rec.timestamp || rec.date || '');
-          if (rec.timestamp) {
-            try {
-              const parsed = Date.parse(rec.timestamp.replace(/-/g, '/'));
-              if (!isNaN(parsed)) {
-                recordTimestamp = parsed;
-              }
-            } catch(e) {}
-          } else {
-            try {
-              const parsed = Date.parse((String(rec.date) || '').replace(/-/g, '/'));
-              if (!isNaN(parsed)) recordTimestamp = parsed;
-            } catch(e) {}
-          }
-
-          const isFreshNotif = isAppLoaded;
-
-          updated.push({
-            id: notifId,
-            title: notifyTitle,
-            desc: notifyDesc,
-            time: timeDisplayStr,
-            read: !isFreshNotif, // 💡 新通知為未讀 (read: false)，初始載入回填的通知為已讀 (read: true)
-            type: isIncome ? 'income' : 'expense',
-            timestamp: recordTimestamp
-          });
-          addedAny = true;
-        }
-      });
-
-      if (addedAny || updated.length !== prev.length) {
-        updated.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        localStorage.setItem('muji_notifications', JSON.stringify(updated));
-      }
-      return updated;
-    });
-  };
-
   // 初始化與本機 LocalStorage 綁定
   useEffect(() => {
     // 1. 載入對帳流水帳紀錄
@@ -2221,15 +2366,36 @@ export default function App() {
       }
     }
 
-    // 3. 載入通知紀錄（僅保留「當天」通知，隔天自動全數清除）
+    // 3. 載入通知紀錄（僅保留「當天」通知，隔天自動全數清除歸零，並徹底清理沙盒模擬假通知）
+    const getTodayDateStr = () => {
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    };
+
+    const currentTodayStr = getTodayDateStr();
+    const lastNotifDay = localStorage.getItem('muji_notification_day');
+    const isMockPurged = localStorage.getItem('muji_mock_sandbox_cleared_v2');
     const savedNotifications = localStorage.getItem('muji_notifications');
     let initialLoadedNotifs: AppNotification[] = [];
 
-    if (savedNotifications) {
+    // 若未清除過舊沙盒殘留資料，或跨日（存檔日期與今天不同），直接全數清空歸零
+    if (!isMockPurged || (lastNotifDay && lastNotifDay !== currentTodayStr)) {
+      initialLoadedNotifs = [];
+      localStorage.setItem('muji_notifications', JSON.stringify([]));
+      localStorage.setItem('muji_mock_sandbox_cleared_v2', 'true');
+    } else if (savedNotifications) {
       try {
         const parsedNotifs: AppNotification[] = JSON.parse(savedNotifications);
-        // 嚴格過濾出今天 (Local Date) 的通知，隔日舊通知全數捨棄清除
-        initialLoadedNotifs = parsedNotifs.filter(n => isTodayNotification(n.timestamp || n.time));
+        // 嚴格過濾出今天 (Local Date) 的通知，且排除舊版模擬隨機假項目
+        initialLoadedNotifs = parsedNotifs.filter(n => {
+          if (!isTodayNotification(n.timestamp || n.time)) return false;
+          const text = `${n.title || ''} ${n.desc || ''}`;
+          if (text.includes('全家便利商店買零食') || text.includes('蝦皮公共小拖鞋') || text.includes('家樂福公共垃圾袋') || text.includes('美廉社採買牛奶飲料')) {
+            return false;
+          }
+          return true;
+        });
       } catch (e) {
         initialLoadedNotifs = [];
       }
@@ -2239,9 +2405,7 @@ export default function App() {
     
     setNotifications(initialLoadedNotifs);
     localStorage.setItem('muji_notifications', JSON.stringify(initialLoadedNotifs));
-
-    // 自動依據當天真實交易資料回填最新今日通知
-    backfillNotificationsFromRecords(loadedRecords);
+    localStorage.setItem('muji_notification_day', currentTodayStr);
 
     // 4. 載入通知偏好設定
     const savedSettings = localStorage.getItem('muji_notification_settings');
@@ -2255,9 +2419,26 @@ export default function App() {
 
     }, []);
 
-  // 🕒 跨日自動清理機制：定時與視窗喚醒時自動檢查，若跨越午夜則自動清除昨日以前的舊通知
+  // 🕒 跨日自動清理機制：精準在每日午夜 00:00:00 與視窗喚醒時自動清空昨日所有通知與紅點
   useEffect(() => {
+    const getTodayDateStr = () => {
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    };
+
     const cleanNonTodayNotifications = () => {
+      const todayStr = getTodayDateStr();
+      const lastDay = localStorage.getItem('muji_notification_day');
+
+      if (lastDay && lastDay !== todayStr) {
+        setNotifications([]);
+        localStorage.setItem('muji_notifications', JSON.stringify([]));
+        localStorage.setItem('muji_notification_day', todayStr);
+        return;
+      }
+      localStorage.setItem('muji_notification_day', todayStr);
+
       setNotifications(prev => {
         const todayNotifs = prev.filter(n => isTodayNotification(n.timestamp || n.time));
         if (todayNotifs.length !== prev.length) {
@@ -2268,15 +2449,31 @@ export default function App() {
       });
     };
 
-    // 每 30 秒自動排程檢查一次
-    const timer = setInterval(cleanNonTodayNotifications, 30000);
-    // 使用者切換分頁或視窗重新聚焦時立即檢查
+    // 1. 每 10 秒排程快速比對換日狀態
+    const intervalTimer = setInterval(cleanNonTodayNotifications, 10000);
+
+    // 2. 精準排程午夜 (00:00:00) 換日歸零觸發器
+    let midnightTimeoutId: any = null;
+    const scheduleMidnightClean = () => {
+      const now = new Date();
+      const tomorrowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 100);
+      const msUntilMidnight = Math.max(1000, tomorrowMidnight.getTime() - now.getTime());
+      
+      midnightTimeoutId = setTimeout(() => {
+        cleanNonTodayNotifications();
+        scheduleMidnightClean();
+      }, msUntilMidnight);
+    };
+    scheduleMidnightClean();
+
+    // 3. 使用者切換分頁、解鎖手機或視窗重新聚焦時立即檢查
     const onVisibilityOrFocus = () => cleanNonTodayNotifications();
     window.addEventListener('focus', onVisibilityOrFocus);
     document.addEventListener('visibilitychange', onVisibilityOrFocus);
 
     return () => {
-      clearInterval(timer);
+      clearInterval(intervalTimer);
+      if (midnightTimeoutId) clearTimeout(midnightTimeoutId);
       window.removeEventListener('focus', onVisibilityOrFocus);
       document.removeEventListener('visibilitychange', onVisibilityOrFocus);
     };
@@ -2286,71 +2483,49 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsAppLoaded(true);
-    }, 2000);
+    }, 1500);
     return () => clearTimeout(timer);
   }, []);
 
-  // 🧪 本機沙盒測試：模擬另一半記帳即時背景推播
-  useEffect(() => {
-    if (!notifyEnabled || !isAppLoaded || !isSandboxMode) return;
-    
-    const intervalOfSim = setInterval(() => {
-      // 15% 機率模擬另一半寫入新代墊項目
-      if (Math.random() < 0.15) {
-        const payers: ('廖尹丞' | '周沛緹')[] = ["周沛緹", "廖尹丞"];
-        const randomPayer = payers[Math.floor(Math.random() * payers.length)];
-        const items = ["美廉社採買牛奶飲料", "家樂福公共垃圾袋", "蝦皮公共小拖鞋", "全家便利商店買零食"];
-        const rItem = items[Math.floor(Math.random() * items.length)];
-        const rAmount = Math.floor(Math.random() * 500) + 100;
-        
-        const pad = (n: number) => String(n).padStart(2, '0');
-        const nowObj = new Date();
-        const mockTimestamp = `${nowObj.getFullYear()}-${pad(nowObj.getMonth() + 1)}-${pad(nowObj.getDate())} ${pad(nowObj.getHours())}:${pad(nowObj.getMinutes())}:${pad(nowObj.getSeconds())}`;
-        const monthStr = mockTimestamp.substring(0, 7);
-        const newMockId = Date.now();
-        
-        const mockRow: RecordItem = {
-          id: newMockId,
-          month: monthStr,
-          date: mockTimestamp.split(' ')[0],
-          item: rItem,
-          payer: randomPayer,
-          amount: rAmount,
-          type: "支出-日常代墊",
-          timestamp: mockTimestamp
-        };
-        
-        setRecords(prev => {
-          const updated = [mockRow, ...prev];
-          localStorage.setItem('muji_ledger_data', JSON.stringify(updated));
-          // 延遲更新以確保 setRecords 完成後，能回填新的通知及觸發 Notification 推播
-          setTimeout(() => {
-            backfillNotificationsFromRecords(updated);
-          }, 100);
-          return updated;
-        });
-      }
-    }, 30000); // 每 30 秒執行一次
-    
-    return () => clearInterval(intervalOfSim);
-  }, [notifyEnabled, isAppLoaded]);
+  // 判斷此通知是否為發給當前使用者的（由伴侶或系統發送：我記帳對方收到通知，他記帳我的手機收到通知）
+  const isIncomingNotification = (n: AppNotification) => {
+    return isIncomingFromPartner(n, currentUser);
+  };
+
+  const incomingUnreadCount = notifications.filter(n => !n.read && isIncomingNotification(n)).length;
 
   const addNotificationAndSave = (
     title: string,
     desc: string,
     type: 'expense' | 'income' | 'system' | 'delete' | 'settle',
-    skipChatPush: boolean = false
+    skipChatPush: boolean = false,
+    meta?: {
+      actorEmail?: string;
+      actorName?: string;
+      actorRole?: '廖' | '周' | string;
+      targetEmail?: string;
+      targetRole?: '廖' | '周' | string;
+    }
   ) => {
     if (!notifyEnabled && type !== 'system') return;
-    if (type === 'expense' || type === 'income') {
-      if (!notifySettings.notifyOnAdd) return;
+    if (type === 'expense') {
+      if (!appNotifySettings.notifyOnAdd) return;
+    }
+    if (type === 'income') {
+      if (!appNotifySettings.notifyOnIncome) return;
     }
     if (type === 'delete') {
-      if (!notifySettings.notifyOnDelete) return;
+      if (!appNotifySettings.notifyOnDelete) return;
     }
     if (type === 'settle') {
-      if (!notifySettings.notifyOnSettle) return;
+      if (!appNotifySettings.notifyOnSettle) return;
     }
+
+    const actorEmail = meta?.actorEmail || currentUser?.email || '';
+    const actorName = meta?.actorName || currentUser?.nickname || currentUser?.name || (currentUser?.role === '廖' ? '廖尹丞' : '周沛緹');
+    const actorRole = meta?.actorRole || currentUser?.role || (actorName.includes('廖') ? '廖' : actorName.includes('周') ? '周' : undefined);
+    const targetRole = meta?.targetRole || (actorRole === '廖' ? '周' : actorRole === '周' ? '廖' : undefined);
+    const targetEmail = meta?.targetEmail || currentUser?.partnerEmail || '';
 
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
@@ -2363,7 +2538,12 @@ export default function App() {
       time: timeStr,
       read: false,
       type,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      actorEmail,
+      actorName,
+      actorRole,
+      targetEmail,
+      targetRole
     };
 
     setNotifications(prev => {
@@ -2375,6 +2555,14 @@ export default function App() {
       } catch (e) {}
       return updated;
     });
+
+    // 發送手機原生系統推播與輕柔提示音 (若使用者已授權)
+    sendNativeNotification({
+      title,
+      body: desc,
+      tag: newNotif.id,
+      playSound: true
+    }).catch(() => {});
 
     // 若非聊天室直接觸發的指令（例如來自代墊表單、存入彈窗或結算按鈕），則非同步推播單一通知卡片至聊天訊息中
     if (!skipChatPush) {
@@ -2556,7 +2744,7 @@ export default function App() {
       item: '',
       amount: '',
       date: new Date().toISOString().split('T')[0],
-      payer: '廖尹丞',
+      payer: defaultPayerName,
       type: '支出-日常代墊',
       currency: 'TWD',
       customRate: ''
@@ -2865,29 +3053,19 @@ export default function App() {
           }
         }}
         unsettledSplitCount={splitSummary.unsettledCount}
-        onOpenNotifySettings={() => setIsAppNotifyModalOpen(true)}
         onOpenTravelCalculator={() => setShowTravelCalculatorModal(true)}
+        onOpenSettings={() => setIsUnifiedSettingsModalOpen(true)}
+        onOpenNotifySettings={() => setIsAppNotifyModalOpen(true)}
+        unreadNotificationCount={incomingUnreadCount}
         pendingQueueCount={pendingSyncQueue.length}
-        onOpenDataBackup={() => setIsDataBackupOpen(true)}
-        onFlushQueue={handleFlushQueue}
-        onOpenPwaInstall={() => setIsPwaInstallModalOpen(true)}
         currentUser={currentUser}
-        onOpenUserProfile={() => setIsUserProfileModalOpen(true)}
-        onOpenGasDeploy={() => {
-          if (currentUser?.userRole === 'partner') {
-            setIsUserProfileModalOpen(true);
-            showToast('🔒 API 與 Code.gs 設定由主管理員控管，伴侶端可直接記帳同步。', 'info');
-          } else {
-            setIsDeployModalOpen(true);
-          }
-        }}
         isSandboxMode={isSandboxMode}
         gasWebUrl={gasWebUrl}
       />
 
 
       {/* 主呈現區 (預留固定頂部 Header 高度間距，避免內容被遮擋) */}
-      <main className="w-full max-w-4xl mx-auto px-3 sm:px-4 flex-grow pt-24 sm:pt-18 pb-16 sm:pb-20">
+      <main className="w-full max-w-4xl mx-auto px-3 sm:px-4 flex-grow pt-[116px] sm:pt-20 pb-16 sm:pb-20">
         
         {/* 🔑 若未綁定 Google 試算表 Web App API，顯示顯眼的友善引導卡片 */}
         {!gasWebUrl && !isSandboxMode && (
@@ -3080,52 +3258,75 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* ✈️ 出國旅遊與即時匯率換算看板 */}
-                <div className="bg-gradient-to-r from-[#FAF8F3] via-white to-[#F6F3EA] rounded-2xl p-3.5 sm:p-4 border border-[#E5E1D5] shadow-2xs space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-amber-100/80 text-amber-900 flex items-center justify-center text-sm font-bold shrink-0">
+                {/* ✈️ 出國旅遊與即時匯率換算看板 (可折疊收納) */}
+                <div className="bg-gradient-to-r from-[#FAF8F3] via-white to-[#F6F3EA] rounded-2xl p-3 sm:p-4 border border-[#E5E1D5] shadow-2xs space-y-2.5 transition-all">
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !isExchangeRatesCollapsed;
+                        setIsExchangeRatesCollapsed(next);
+                        try {
+                          localStorage.setItem('banban_rates_collapsed', String(next));
+                        } catch (e) {}
+                      }}
+                      className="flex items-center gap-2 text-left cursor-pointer group flex-1 min-w-0"
+                    >
+                      <div className="w-7 h-7 rounded-xl bg-amber-100/80 text-amber-900 flex items-center justify-center text-xs font-bold shrink-0 group-hover:bg-amber-200 transition-colors">
                         💱
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-[#3E3A36]">
-                          出國外幣即時匯率換算
-                        </h4>
-                        <p className="text-[11px] text-[#8C8475] mt-0.5">
-                          支援外幣記帳自動折算台幣
-                        </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-bold text-[#3E3A36] group-hover:text-amber-900 transition-colors truncate">
+                            出國外幣即時匯率換算
+                          </h4>
+                          <span className="text-[10px] text-[#A39E92] flex items-center">
+                            {isExchangeRatesCollapsed ? (
+                              <ChevronDown className="w-3.5 h-3.5 text-[#8C8475]" />
+                            ) : (
+                              <ChevronUp className="w-3.5 h-3.5 text-[#8C8475]" />
+                            )}
+                          </span>
+                        </div>
+                        {isExchangeRatesCollapsed && (
+                          <p className="text-[10px] text-[#8C8475] truncate">
+                            🇯🇵 日圓 ${exchangeRates['JPY'] || DEFAULT_RATES_MAP['JPY']} · 🇺🇸 美元 ${exchangeRates['USD'] || DEFAULT_RATES_MAP['USD']} (點擊展開)
+                          </p>
+                        )}
                       </div>
-                    </div>
+                    </button>
 
                     <button
                       type="button"
                       onClick={() => setShowTravelCalculatorModal(true)}
-                      className="w-full sm:w-auto px-3.5 py-1.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1 shrink-0 active:scale-95"
+                      className="px-3 py-1.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1 shrink-0 active:scale-95"
                     >
                       <Calculator className="w-3.5 h-3.5" />
-                      <span>匯率計算器</span>
+                      <span>計算器</span>
                     </button>
                   </div>
 
-                  {/* 快捷熱門外幣即時匯率展示 */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-[#EFECE3]">
-                    {[
-                      { code: 'JPY', name: '日圓', flag: '🇯🇵' },
-                      { code: 'USD', name: '美元', flag: '🇺🇸' },
-                      { code: 'EUR', name: '歐元', flag: '🇪🇺' },
-                      { code: 'KRW', name: '韓元', flag: '🇰🇷' }
-                    ].map(c => (
-                      <div key={c.code} className="bg-white/90 rounded-xl p-2 sm:p-2.5 border border-[#EAE6DC] flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-[#4A4641] flex items-center gap-1">
-                          <span>{c.flag}</span>
-                          <span>{c.code}</span>
-                        </span>
-                        <span className="text-xs font-black font-mono text-emerald-800">
-                          ${exchangeRates[c.code] || DEFAULT_RATES_MAP[c.code] || 1} <span className="text-[9px] font-normal text-[#8C8475]">TWD</span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  {/* 快捷熱門外幣即時匯率展示 (未折疊時顯示) */}
+                  {!isExchangeRatesCollapsed && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[#EFECE3]">
+                      {[
+                        { code: 'JPY', name: '日圓', flag: '🇯🇵' },
+                        { code: 'USD', name: '美元', flag: '🇺🇸' },
+                        { code: 'EUR', name: '歐元', flag: '🇪🇺' },
+                        { code: 'KRW', name: '韓元', flag: '🇰🇷' }
+                      ].map(c => (
+                        <div key={c.code} className="bg-white/90 rounded-xl p-2 sm:p-2.5 border border-[#EAE6DC] flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-[#4A4641] flex items-center gap-1">
+                            <span>{c.flag}</span>
+                            <span>{c.code}</span>
+                          </span>
+                          <span className="text-xs font-black font-mono text-emerald-800">
+                            ${exchangeRates[c.code] || DEFAULT_RATES_MAP[c.code] || 1} <span className="text-[9px] font-normal text-[#8C8475]">TWD</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* 智慧安全通知提醒 */}
@@ -3914,6 +4115,7 @@ export default function App() {
               appMode === 'split' ? (
                 <SplitTravelTab
                   key="split-travel"
+                  currentUser={currentUser}
                   gasWebUrl={gasWebUrl}
                   callGasApi={callGasApi}
                   enqueueSyncItem={enqueueSyncItem}
@@ -4229,9 +4431,25 @@ export default function App() {
                                   return displayTime ? ` · ${displayTime}` : '';
                                 })()}
                               </span>
-                              <span className="text-amber-800 font-semibold group-hover:underline flex items-center gap-0.5 text-[11px]">
-                                <span>詳情</span><ChevronRight className="w-3 h-3" />
-                              </span>
+                              <div className="flex items-center gap-2">
+                                {isDone && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleConvertShoppingToRecord(item);
+                                    }}
+                                    className="px-2 py-0.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-2xs active:scale-95"
+                                    title="一鍵將此已購項目轉為記帳支出"
+                                  >
+                                    <CreditCard className="w-3 h-3 text-amber-700" />
+                                    <span>轉記代墊</span>
+                                  </button>
+                                )}
+                                <span className="text-amber-800 font-semibold group-hover:underline flex items-center gap-0.5 text-[11px]">
+                                  <span>詳情</span><ChevronRight className="w-3 h-3" />
+                                </span>
+                              </div>
                             </div>
                           </motion.div>
                         );
@@ -4386,7 +4604,7 @@ export default function App() {
       <FloatingChatButton
         isOpen={isChatAssistantOpen}
         onClick={() => setIsChatAssistantOpen(true)}
-        unreadCount={notifications.filter(n => !n.read).length}
+        unreadCount={incomingUnreadCount}
       />
 
       {/* 💬 LINE 風格智慧對話記帳小秘書 Drawer / Modal (LINE 機器人通知整合、語音輸入與即時記帳) */}
@@ -4397,13 +4615,47 @@ export default function App() {
         onUndo={handleUndoCommandItem}
         appMode={appMode}
         notifications={notifications}
+        currentUser={currentUser}
         onMarkRead={markNotificationAsRead}
         onMarkAllRead={markAllNotificationsAsRead}
         onDeleteNotification={deleteNotification}
         onClearAllNotifications={clearAllTodayNotifications}
         notifySettings={appNotifySettings}
+        setAllNotifySettings={setAllAppNotifySettings}
         toggleNotifySetting={toggleAppNotifySetting}
         onTestNotification={handleTestInAppNotify}
+      />
+
+      {/* ⚙️ 統一系統設定與帳戶中心 Modal (Profile / GAS / Backup / PWA) */}
+      <UnifiedSettingsModal
+        isOpen={isUnifiedSettingsModalOpen}
+        onClose={() => setIsUnifiedSettingsModalOpen(false)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onSwitchAccount={handleSwitchAccount}
+        onOpenGasDeploy={() => {
+          if (currentUser?.userRole === 'partner') {
+            showToast('🔒 API 與 Code.gs 設定由主管理員控管，伴侶端可直接記帳同步。', 'info');
+          } else {
+            setIsDeployModalOpen(true);
+          }
+        }}
+        gasWebUrl={gasWebUrl}
+        deploySheetUrl={deploySheetUrl}
+        isSandboxMode={isSandboxMode}
+        onToggleSandboxMode={handleToggleSandboxMode}
+        onOpenDataBackup={() => setIsDataBackupOpen(true)}
+        onOpenPwaInstall={() => setIsPwaInstallModalOpen(true)}
+        currentInviteCode={currentInviteCode}
+        onGenerateNewInviteCode={handleGenerateNewInviteCode}
+        onCopyInviteShare={handleCopyInviteShare}
+        partnerBindingInfo={partnerBindingInfo}
+        onUnbindPartner={handleUnbindPartner}
+        onUpdateNickname={handleUpdateNickname}
+        onSyncGoogleAvatar={handleSyncGoogleAvatar}
+        pendingQueueCount={pendingSyncQueue.length}
+        isOnline={isOnline}
+        lastSyncedAt={lastSyncedAt}
       />
 
       {/* 進入網頁時的超支/省錢警告通知彈窗 */}
@@ -4506,6 +4758,7 @@ export default function App() {
         onSubmitShopping={handleAddShoppingSubmit}
         shoppingStores={shoppingStores}
         onOpenManageStores={() => setIsManageStoresOpen(true)}
+        currentUser={currentUser}
       />
 
       {/* 🛒 新增/編輯採購項目專屬 Modal */}
@@ -4517,6 +4770,7 @@ export default function App() {
         onSubmitShopping={handleAddShoppingSubmit}
         shoppingStores={shoppingStores}
         onOpenManageStores={() => setIsManageStoresOpen(true)}
+        currentUser={currentUser}
       />
 
       {/* 🏪 管理常用商店 Modal */}
@@ -4549,27 +4803,7 @@ export default function App() {
         }}
         onToggleStatus={handleToggleShoppingStatus}
         onDelete={handleDeleteShoppingItem}
-        onConvertToRecord={(item) => {
-          setSelectedShoppingDetail(null);
-          if (appMode === 'split') {
-            setSplitAddInitialData({
-              payer: item.creator?.includes('周') || item.creator === '周' ? '周' : '廖',
-              itemName: item.item,
-              note: `從購物清單轉記帳（地點：${item.store || '一般'}）`
-            });
-            setIsSplitAddOpen(true);
-          } else {
-            setFormData(prev => ({
-              ...prev,
-              item: item.item,
-              payer: item.creator?.includes('周') || item.creator === '周' ? '周沛緹' : '廖尹丞',
-              type: '支出-日常代墊'
-            }));
-            setAddModalType('record');
-            setIsAddOpen(true);
-          }
-          showToast(`已帶入「${item.item}」至記帳建立表單`, 'info');
-        }}
+        onConvertToRecord={handleConvertShoppingToRecord}
       />
 
       {/* ✈️ 各國即時匯率與出國幣值試算器 Modal */}
@@ -4599,7 +4833,11 @@ export default function App() {
           setAllNotifySettings={setAllAppNotifySettings}
           toggleNotifySetting={toggleAppNotifySetting}
           notifications={notifications}
-          onExecuteSmartCommand={handleExecuteSmartCommand}
+          currentUser={currentUser}
+          onMarkRead={markNotificationAsRead}
+          onMarkAllRead={markAllNotificationsAsRead}
+          onDeleteNotification={deleteNotification}
+          onClearAllNotifications={clearAllTodayNotifications}
         />
 
         {/* 💾 資料備份、還原與離線同步管理 Modal */}
@@ -4651,6 +4889,26 @@ export default function App() {
           onCopyInviteShare={handleCopyInviteShare}
           partnerBindingInfo={partnerBindingInfo}
           onUnbindPartner={handleUnbindPartner}
+          hasDatabaseBound={Boolean(gasWebUrl && gasWebUrl.startsWith('http'))}
+          onOpenDatabaseOnboarding={() => setIsDatabaseOnboardingOpen(true)}
+          onUpdateNickname={handleUpdateNickname}
+          onSyncGoogleAvatar={handleSyncGoogleAvatar}
+        />
+
+        {/* 🚀 新用戶初次建庫與 API 帳號綁定引導 Modal */}
+        <DatabaseOnboardingModal
+          isOpen={isDatabaseOnboardingOpen}
+          onClose={() => setIsDatabaseOnboardingOpen(false)}
+          currentUser={currentUser}
+          gasWebUrl={gasWebUrl}
+          setGasWebUrl={setGasWebUrl}
+          deploySheetUrl={deploySheetUrl}
+          setDeploySheetUrl={setDeploySheetUrl}
+          saveDeployConfig={saveDeployConfig}
+          customizedCodeGs={getCustomizedCodeGs()}
+          inviteCode={currentInviteCode}
+          onGenerateNewInviteCode={handleGenerateNewInviteCode}
+          onBindPartnerInvite={handleBindPartnerInvite}
         />
 
         {/* 隱密系統部署與連線設定 Modal */}

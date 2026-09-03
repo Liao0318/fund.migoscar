@@ -45,6 +45,8 @@ export interface TravelTrip {
   themeColor?: string; // e.g. 'rose', 'sky', 'emerald', 'amber', 'purple', 'stone', 'indigo', 'orange'
   members?: string[]; // 成員名稱清單，例如 ['廖', '周', '小明', '阿美']
   createdAt: string;
+  creatorEmail?: string; // 建立者/登錄者 Google Gmail
+  createdBy?: string;    // 建立者名稱或暱稱
 }
 
 export interface TravelExpenseItem {
@@ -73,6 +75,10 @@ export interface TravelExpenseItem {
   note?: string;
   syncedToSplit: boolean;
   createdAt: string;
+  creatorEmail?: string; // 登錄者 Google Gmail ID (例如: oscargh3359@gmail.com)
+  createdBy?: string;    // 登錄者姓名/角色
+  userEmail?: string;    // 相容別名
+  lastModifiedEmail?: string; // 最後修改者 Email
 }
 
 export interface TravelWishItem {
@@ -84,6 +90,8 @@ export interface TravelWishItem {
   addedBy: '廖' | '周' | '共同';
   status: '待預訂' | '已完成';
   note?: string;
+  creatorEmail?: string; // 登錄者 Google Gmail ID
+  createdBy?: string;
 }
 
 // ------------------- 生活公積金 (Living Fund) 相關資料模型 -------------------
@@ -122,6 +130,11 @@ export interface AppNotification {
   read: boolean;
   type: 'expense' | 'income' | 'system' | 'delete' | 'settle';
   timestamp?: number;
+  actorEmail?: string;       // 觸發此動作的使用者 Gmail
+  actorName?: string;        // 觸發此動作的使用者姓名或暱稱
+  actorRole?: '廖' | '周' | string;
+  targetEmail?: string;      // 指定接收通知的使用者 Gmail
+  targetRole?: '廖' | '周' | string;
 }
 
 export interface CurrencyInfo {
@@ -223,6 +236,7 @@ export interface CoupleBindingInfo {
 export interface AuthUser {
   id: string;
   name: string;
+  nickname?: string;
   email: string;
   avatar?: string;
   role?: '廖' | '周' | 'admin' | 'guest';

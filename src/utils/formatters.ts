@@ -1,4 +1,4 @@
-import { ShoppingItem } from '../types';
+import { ShoppingItem, AppNotification, AuthUser } from '../types';
 
 /**
  * 鎖定為「yyyy-MM-dd 上午/下午 hh:mm」格式，不含時區或 ISO 字串
@@ -100,6 +100,62 @@ export function isTodayNotification(timeInput: any): boolean {
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate()
   );
+}
+
+/**
+ * 判斷通知是否為伴侶發送給我的（我記帳，對方收到通知；他記帳，我的手機收到通知）
+ */
+export function isIncomingFromPartner(n: AppNotification, currentUser?: AuthUser | null): boolean {
+  if (!n) return false;
+
+  // 1. 如果有明確的 actorEmail
+  if (currentUser?.email && n.actorEmail) {
+    if (n.actorEmail.toLowerCase() === currentUser.email.toLowerCase()) {
+      return false; // 自己發的
+    }
+    return true; // 伴侶發的
+  }
+
+  // 2. 如果有明確的 actorRole / targetRole
+  const currentRole = currentUser?.role || (currentUser?.email?.toLowerCase().includes('oscar') ? '廖' : undefined);
+  if (currentRole) {
+    if (n.actorRole && n.actorRole === currentRole) return false;
+    if (n.targetRole && n.targetRole === currentRole) return true;
+  }
+
+  // 3. 從 title, desc, actorName 辨識是否為自己操作的
+  const myNames: string[] = [];
+  if (currentUser?.name) myNames.push(currentUser.name);
+  if (currentUser?.nickname) myNames.push(currentUser.nickname);
+  if (currentUser?.role) myNames.push(currentUser.role);
+  if (currentRole === '廖' || currentUser?.email?.toLowerCase().includes('oscar')) {
+    myNames.push('廖尹丞', '廖', '尹丞');
+  } else if (currentRole === '周') {
+    myNames.push('周沛緹', '周', '沛緹');
+  }
+
+  const titleAndDesc = `${n.title || ''} ${n.desc || ''} ${n.actorName || ''}`;
+  const isSelfAction = myNames.some(name => name && titleAndDesc.includes(name));
+  if (isSelfAction) {
+    return false;
+  }
+
+  // 4. 比對是否包含伴侶的名字
+  const partnerNames: string[] = [];
+  if (currentRole === '廖' || currentUser?.email?.toLowerCase().includes('oscar')) {
+    partnerNames.push('周沛緹', '周', '沛緹');
+  } else if (currentRole === '周') {
+    partnerNames.push('廖尹丞', '廖', '尹丞');
+  }
+  const isPartnerAction = partnerNames.some(name => name && titleAndDesc.includes(name));
+  if (isPartnerAction) {
+    return true;
+  }
+
+  // 系統通知預設為 incoming
+  if (n.type === 'system') return true;
+
+  return false;
 }
 
 /**
