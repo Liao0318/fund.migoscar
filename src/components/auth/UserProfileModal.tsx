@@ -359,64 +359,29 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </div>
               )}
 
-              {/* 💌 伴侶邀請與情侶帳本綁定區 */}
-              {!currentUser ? (
-                /* 🔒 訪客模式：鎖定伴侶邀請與同步 */
-                <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] shadow-2xs space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-stone-100 text-[#8C8475] flex items-center justify-center font-bold">
-                        <Heart className="w-4 h-4 text-stone-400" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1">
-                          <span>💌 伴侶配對與雙人同步</span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-stone-100 text-stone-600">需登入</span>
-                        </h4>
-                        <p className="text-[10px] text-[#8C8475]">登入 Google 帳號後即可產生邀請代碼與伴侶配對</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-[#FAF8F5] p-3 rounded-xl border border-[#EDE7D9] text-xs space-y-1.5">
-                    <p className="text-[11px] text-[#7A7366] leading-relaxed">
-                      🔒 訪客模式下無法進行伴侶配對。需先以 Google 帳號登入，系統才能為您派發專屬伴侶邀請碼，實現雙向即時對帳與共同記帳。
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onSwitchAccount();
-                    }}
-                    className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <LogIn className="w-3.5 h-3.5" />
-                    <span>登入 Google 帳號以解鎖伴侶配對</span>
-                  </button>
-                </div>
-              ) : isAdmin ? (
-                /* 管理員專屬：派發伴侶邀請碼卡片 */
-                <div className="bg-gradient-to-br from-[#FFFDF9] to-[#FDF8EE] rounded-2xl p-4 border border-amber-300/80 shadow-2xs space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold">
-                        <Heart className="w-4 h-4 text-rose-600 fill-rose-500" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1">
-                          <span>💌 派發伴侶專屬邀請碼</span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${hasDatabaseBound ? 'bg-rose-100 text-rose-800' : 'bg-amber-200 text-amber-900'}`}>
-                            {hasDatabaseBound ? '已解鎖' : '未解鎖'}
-                          </span>
-                        </h4>
-                        <p className="text-[10px] text-[#8C8475]">
-                          {hasDatabaseBound ? '伴侶登入輸入此碼即可自動綁定並同步資料庫' : '需先完成 Google 試算表與 API 資料庫綁定'}
-                        </p>
+              {/* 💌 伴侶邀請與情侶帳本綁定區 (僅限登入 Google 帳號用戶，訪客模式不顯示) */}
+              {currentUser && (
+                isAdmin ? (
+                  /* 管理員專屬：派發伴侶邀請碼卡片 */
+                  <div className="bg-gradient-to-br from-[#FFFDF9] to-[#FDF8EE] rounded-2xl p-4 border border-amber-300/80 shadow-2xs space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold">
+                          <Heart className="w-4 h-4 text-rose-600 fill-rose-500" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1">
+                            <span>💌 派發伴侶專屬邀請碼</span>
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${hasDatabaseBound ? 'bg-rose-100 text-rose-800' : 'bg-amber-200 text-amber-900'}`}>
+                              {hasDatabaseBound ? '已解鎖' : '未解鎖'}
+                            </span>
+                          </h4>
+                          <p className="text-[10px] text-[#8C8475]">
+                            {hasDatabaseBound ? '伴侶登入輸入此碼即可自動綁定並同步資料庫' : '需先完成 Google 試算表與 API 資料庫綁定'}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
                   {!hasDatabaseBound ? (
                     /* 🔒 未完成資料庫綁定時的鎖定提示卡 */
@@ -594,7 +559,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </button>
                   )}
                 </div>
-              )}
+              ))}
 
               {/* 🔑 試算表連線金鑰與同步中心 */}
               {!currentUser ? (

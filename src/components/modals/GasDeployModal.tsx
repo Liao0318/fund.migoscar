@@ -311,7 +311,7 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                   </div>
 
                   <div className="pt-1 flex items-center justify-between gap-2 flex-wrap">
-                    {onOpenInviteManager && (
+                    {onOpenInviteManager && currentUser && !isGuestMode && (
                       <button
                         type="button"
                         onClick={() => {

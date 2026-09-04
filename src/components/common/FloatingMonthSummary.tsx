@@ -37,10 +37,10 @@ export const FloatingMonthSummary: React.FC<FloatingMonthSummaryProps> = ({
             </div>
             <div className="flex gap-2 sm:gap-3.5 items-center shrink-0">
               <div className="text-[11px] sm:text-xs text-white whitespace-nowrap">
-                L: <span className="font-mono font-bold text-[#EFC38E]">$ {liaoLatestTotal.toLocaleString('zh-TW')}</span>
+                L: <span className="font-sans tabular-nums font-bold text-[#EFC38E]">$ {liaoLatestTotal.toLocaleString('zh-TW')}</span>
               </div>
               <div className="text-[11px] sm:text-xs text-white whitespace-nowrap">
-                P: <span className="font-mono font-bold text-[#EFC38E]">$ {zhouLatestTotal.toLocaleString('zh-TW')}</span>
+                P: <span className="font-sans tabular-nums font-bold text-[#EFC38E]">$ {zhouLatestTotal.toLocaleString('zh-TW')}</span>
               </div>
               
               <button

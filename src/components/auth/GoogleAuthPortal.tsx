@@ -5,7 +5,12 @@ import {
   Loader2,
   Heart,
   ExternalLink,
-  Lock
+  Lock,
+  KeyRound,
+  ClipboardPaste,
+  CheckCircle2,
+  Sparkles,
+  X
 } from 'lucide-react';
 import { BrandLogo } from '../common/BrandLogo';
 import { AuthUser, PartnerInviteData } from '../../types';
@@ -29,9 +34,71 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // 偵測網址是否帶有伴侶邀請碼
+  // 伴侶邀請碼輸入與偵測狀態
+  const [manualInviteCode, setManualInviteCode] = useState<string>('');
   const [detectedInvite, setDetectedInvite] = useState<PartnerInviteData | null>(null);
-  const [detectedInviteCode, setDetectedInviteCode] = useState<string | null>(null);
+  const [inviteStatus, setInviteStatus] = useState<{
+    valid: boolean;
+    message: string;
+    data: PartnerInviteData | null;
+  } | null>(null);
+
+  const handleCodeChange = (code: string) => {
+    setManualInviteCode(code);
+    if (!code.trim()) {
+      setInviteStatus(null);
+      setDetectedInvite(null);
+      return;
+    }
+    const clean = code.trim();
+    const resolved = resolveInviteCodeOrToken(clean);
+    if (resolved) {
+      setDetectedInvite(resolved);
+      setInviteStatus({
+        valid: true,
+        message: `已成功識別伴侶【${resolved.adminName || '主管理員'}】的帳本邀請！`,
+        data: resolved
+      });
+    } else {
+      if (/^BB-[A-Z0-9]{4,8}$/i.test(clean) || /^[A-Z0-9]{4,8}$/i.test(clean)) {
+        const formattedCode = clean.toUpperCase().startsWith('BB-') ? clean.toUpperCase() : `BB-${clean.toUpperCase()}`;
+        const fallback: PartnerInviteData = {
+          inviteCode: formattedCode,
+          adminEmail: '',
+          adminName: '另一半',
+          gasWebUrl: '',
+          deploySheetUrl: '',
+          createdAt: new Date().toISOString()
+        };
+        setDetectedInvite(fallback);
+        setInviteStatus({
+          valid: true,
+          message: `已填妥邀請碼 ${formattedCode}，完成登入後將自動配對！`,
+          data: fallback
+        });
+      } else {
+        setDetectedInvite(null);
+        setInviteStatus({
+          valid: false,
+          message: '邀請碼格式不符（例如：BB-XXXX 或貼上專屬邀請連結）',
+          data: null
+        });
+      }
+    }
+  };
+
+  const handlePasteClipboard = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          handleCodeChange(text);
+        }
+      }
+    } catch (e) {
+      console.warn('Cannot read clipboard', e);
+    }
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -45,11 +112,7 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
 
       const candidate = inviteParam || hashCode;
       if (candidate) {
-        setDetectedInviteCode(candidate);
-        const resolved = resolveInviteCodeOrToken(candidate);
-        if (resolved) {
-          setDetectedInvite(resolved);
-        }
+        handleCodeChange(candidate);
       }
     } catch (e) {}
   }, []);
@@ -186,22 +249,75 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
           transition={{ duration: 0.4, delay: 0.1 }}
           className="bg-white/95 backdrop-blur-xl rounded-3xl p-5 sm:p-6 border border-[#E8E2D5] shadow-[0_12px_40px_rgba(62,58,54,0.08)] space-y-4"
         >
-          {/* 💌 伴侶邀請連結偵測提示 */}
-          {detectedInviteCode && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-r from-rose-50 to-amber-50 border border-rose-200 rounded-2xl p-3 text-left space-y-1"
-            >
-              <div className="flex items-center gap-1.5 text-xs font-black text-rose-900">
-                <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-600" />
-                <span>已偵測到伴侶邀請碼：{detectedInviteCode.toUpperCase()}</span>
+          {/* 💌 伴侶邀請碼輸入/配對專屬區塊 */}
+          <div className="bg-[#FAF8F5] border border-[#E8E2D5] rounded-2xl p-3.5 sm:p-4 text-left space-y-2.5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-[#4A4641] flex items-center gap-1.5">
+                <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
+                <span>伴侶邀請碼配對（選填）</span>
+              </label>
+              {manualInviteCode && (
+                <button
+                  type="button"
+                  onClick={() => handleCodeChange('')}
+                  className="text-[11px] text-[#8C8475] hover:text-rose-600 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                  <span>清除</span>
+                </button>
+              )}
+            </div>
+
+            <div className="relative flex items-center">
+              <div className="absolute left-3 text-[#8C8475] pointer-events-none">
+                <KeyRound className="w-4 h-4 text-amber-700" />
               </div>
-              <p className="text-[11px] text-rose-800 leading-relaxed">
-                完成 Google 帳號登入後，系統將自動引導您加入另一半的共同記帳帳本！
+              <input
+                type="text"
+                value={manualInviteCode}
+                onChange={(e) => handleCodeChange(e.target.value)}
+                placeholder="輸入邀請碼 (如 BB-9X2K) 或貼上邀請連結"
+                className="w-full bg-white border border-[#DDD6C8] focus:border-rose-400 focus:ring-2 focus:ring-rose-100 rounded-xl pl-9 pr-18 py-2.5 text-xs text-[#3E3A36] placeholder-[#A09A8F] tracking-wide transition-all font-mono"
+              />
+              <button
+                type="button"
+                onClick={handlePasteClipboard}
+                className="absolute right-2 px-2.5 py-1 bg-[#F4EFE6] hover:bg-[#EAE4D6] text-[#5C564E] rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
+                title="貼上剪貼簿內容"
+              >
+                <ClipboardPaste className="w-3 h-3 text-amber-800" />
+                <span>貼上</span>
+              </button>
+            </div>
+
+            {/* 驗證回饋提示 */}
+            {inviteStatus && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`p-2.5 rounded-xl text-xs flex items-start gap-2 ${
+                  inviteStatus.valid
+                    ? 'bg-rose-50/90 text-rose-900 border border-rose-200'
+                    : 'bg-amber-50 text-amber-900 border border-amber-200'
+                }`}
+              >
+                {inviteStatus.valid ? (
+                  <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                ) : (
+                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                )}
+                <div className="text-[11px] leading-relaxed font-medium">
+                  {inviteStatus.message}
+                </div>
+              </motion.div>
+            )}
+
+            {!inviteStatus && (
+              <p className="text-[10px] text-[#8C8475] leading-relaxed">
+                💡 若另一半已提供專屬邀請碼或邀請網址，請在此輸入。登入後將自動建立情侶帳本關聯！
               </p>
-            </motion.div>
-          )}
+            )}
+          </div>
 
           {/* 錯誤警示提示窗 */}
           <AnimatePresence>
@@ -253,7 +369,11 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
                 </svg>
               )}
               <span className="font-extrabold text-[#3C4043]">
-                {isLoggingIn ? '正在開啟 Google 授權視窗...' : '使用 Google 帳戶登入'}
+                {isLoggingIn
+                  ? '正在開啟 Google 授權視窗...'
+                  : detectedInvite
+                  ? '使用 Google 帳戶登入並配對'
+                  : '使用 Google 帳戶登入'}
               </span>
             </button>
 

@@ -55,7 +55,8 @@ import {
   Palmtree,
   Download,
   Database,
-  Key
+  Key,
+  Lightbulb
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportFundRecordsToCSV } from './utils/exportCsv';
@@ -3510,45 +3511,59 @@ export default function App() {
                         <Target className="w-28 h-28 sm:w-32 sm:h-32" />
                       </div>
 
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 border-b border-[#ECE8DE] pb-3">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold tracking-wider text-[#8C8475] uppercase flex items-center gap-1.5">
-                              <Target className="w-4 h-4 text-[#8C8475]" />
-                              當月銷帳前預計所剩餘額
-                            </span>
-                          </div>
+                      {/* 頂部標題列：標題、狀態標籤與算式拆解標籤整齊排列 */}
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3 border-b border-[#ECE8DE] pb-3">
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs sm:text-sm font-bold tracking-wider text-[#8C8475] uppercase flex items-center gap-1.5 whitespace-nowrap">
+                            <Target className="w-4 h-4 text-[#8C8475]" />
+                            當月銷帳前預計所剩餘額
+                          </span>
+
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-bold border shrink-0 whitespace-nowrap ${statusBadgeColor}`}>
+                            {statusText}
+                          </span>
                         </div>
 
-                        <span className={`px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold border self-start sm:self-auto shrink-0 ${statusBadgeColor}`}>
-                          {statusText}
-                        </span>
+                        {/* 算式拆解標籤三者整齊排列 */}
+                        <div className="flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] font-sans tabular-nums bg-white/95 backdrop-blur-xs px-2.5 py-1.5 sm:px-3 rounded-xl border border-[#EBE8DE] text-[#5C564E] shrink-0 whitespace-nowrap shadow-2xs">
+                          <span className="inline-flex items-center gap-1">
+                            <span>池內餘額</span>
+                            <strong className="text-emerald-700 text-xs sm:text-sm font-extrabold">${(Number(currentPool) || 0).toLocaleString('zh-TW')}</strong>
+                          </span>
+                          <span className="text-gray-300 font-bold px-0.5">-</span>
+                          <span className="inline-flex items-center gap-1">
+                            <span>待銷帳代墊</span>
+                            <strong className="text-amber-700 text-xs sm:text-sm font-extrabold">${(Number(pending) || 0).toLocaleString('zh-TW')}</strong>
+                          </span>
+                          <span className="text-gray-300 font-bold px-0.5">=</span>
+                          <span className="inline-flex items-center gap-1">
+                            <span>預計剩餘</span>
+                            <strong className={`text-xs sm:text-sm font-extrabold ${quota >= 0 ? 'text-emerald-700' : 'text-[#C55757]'}`}>
+                              {quota < 0 ? '-' : ''}${(Number(Math.abs(quota)) || 0).toLocaleString('zh-TW')}
+                            </strong>
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-3">
-                        <div className="space-y-0.5">
-                          <span className="text-xs text-[#7A756E] font-medium">預計銷帳後剩餘額度</span>
-                          <div className={`text-2xl sm:text-3xl lg:text-4xl font-light font-mono leading-none tracking-tight break-words ${quota >= 0 ? 'text-emerald-700' : 'text-[#C55757]'}`}>
+                      <div className="flex flex-col md:flex-row md:items-baseline justify-between gap-3 pt-1">
+                        <div className="space-y-1">
+                          <div className={`text-3xl sm:text-4xl lg:text-5xl font-light font-sans tabular-nums leading-none tracking-tight break-words ${quota >= 0 ? 'text-emerald-700' : 'text-[#C55757]'}`}>
                             {quota < 0 ? '- $ ' : '$ '}
-                            <span className="font-bold">{(Number(Math.abs(quota)) || 0).toLocaleString('zh-TW')}</span> 元
-                            {quota < 0 && <span className="text-xs font-bold text-[#C55757] ml-2">(超支)</span>}
+                            <span className="font-extrabold">{(Number(Math.abs(quota)) || 0).toLocaleString('zh-TW')}</span>
+                            <span className="text-base sm:text-lg font-medium text-[#7A756E] ml-2">元</span>
+                            {quota < 0 && <span className="text-sm font-bold text-[#C55757] ml-2">(超支)</span>}
                           </div>
-                        </div>
-
-                        {/* 算式拆解標籤 */}
-                        <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono bg-white/90 backdrop-blur-xs px-2.5 py-1.5 sm:px-3 rounded-xl border border-[#EBE8DE] text-[#5C564E] flex-wrap max-w-full">
-                          <span>池內餘額 <strong className="text-emerald-700">${(Number(currentPool) || 0).toLocaleString('zh-TW')}</strong></span>
-                          <span className="text-gray-400">-</span>
-                          <span>待銷帳代墊 <strong className="text-amber-700">${(Number(pending) || 0).toLocaleString('zh-TW')}</strong></span>
-                          <span className="text-gray-400">=</span>
-                          <span>預計剩餘 <strong className={quota >= 0 ? 'text-emerald-700' : 'text-[#C55757]'}>{quota < 0 ? '-' : ''}${(Number(Math.abs(quota)) || 0).toLocaleString('zh-TW')}</strong></span>
                         </div>
                       </div>
 
-                      {/* 智慧消費判斷建議列 */}
-                      <div className="bg-white/90 rounded-2xl p-2.5 sm:p-3 border border-[#EAE6DC] flex items-start sm:items-center gap-2 text-xs text-[#4A4641]">
-                        <span className="text-sm shrink-0 mt-0.5 sm:mt-0">💡</span>
-                        <span className="font-medium leading-normal">{adviceMessage}</span>
+                      {/* 智慧消費判斷建議列 - 嚴謹水平與垂直置中對齊 */}
+                      <div className="bg-white/95 rounded-xl px-3.5 py-2.5 border border-[#EAE6DC] flex items-center gap-2.5 text-xs text-[#4A4641] shadow-2xs">
+                        <div className="w-5 h-5 rounded-md bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center justify-center shrink-0">
+                          <Lightbulb className="w-3.5 h-3.5" />
+                        </div>
+                        <span className="font-medium text-xs sm:text-sm text-[#4A4641] leading-none flex-1 truncate">
+                          {adviceMessage}
+                        </span>
                       </div>
                     </div>
                   );
@@ -3561,8 +3576,8 @@ export default function App() {
                     <div>
                       <h3 className="text-xs font-semibold text-[#5C564E]">公積金撥入額度</h3>
                     </div>
-                    <div className="text-base font-light text-[#3E3A36] font-mono leading-none mt-2 break-words">
-                      $ <span className="text-lg sm:text-xl font-bold">{(Number(homeStats?.income) || 0).toLocaleString('zh-TW')}</span> 元
+                    <div className="text-base font-light text-[#3E3A36] font-sans tabular-nums leading-none mt-2 break-words">
+                      $ <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold">{(Number(homeStats?.income) || 0).toLocaleString('zh-TW')}</span> <span className="text-xs text-[#8C8475] font-normal">元</span>
                     </div>
                   </div>
 
@@ -3571,8 +3586,8 @@ export default function App() {
                     <div>
                       <h3 className="text-xs font-semibold text-[#5C564E]">雙方代墊總支出</h3>
                     </div>
-                    <div className="text-base font-light text-[#3E3A36] font-mono leading-none mt-2 break-words">
-                      $ <span className="text-lg sm:text-xl font-bold">{(Number(homeStats?.expenses) || 0).toLocaleString('zh-TW')}</span> 元
+                    <div className="text-base font-light text-[#3E3A36] font-sans tabular-nums leading-none mt-2 break-words">
+                      $ <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold">{(Number(homeStats?.expenses) || 0).toLocaleString('zh-TW')}</span> <span className="text-xs text-[#8C8475] font-normal">元</span>
                     </div>
                   </div>
 
@@ -3583,8 +3598,8 @@ export default function App() {
                         {overallStats.diff >= 0 ? '扣除已銷帳撥款後餘額' : '累計超支 (赤字)'}
                       </h3>
                     </div>
-                    <div className={`text-base font-light font-mono leading-none mt-2 break-words ${overallStats.diff >= 0 ? 'text-emerald-700' : 'text-[#C55757]'}`}>
-                      $ <span className="text-lg sm:text-xl font-bold">{(Number(Math.abs(overallStats?.diff || 0)) || 0).toLocaleString('zh-TW')}</span> 元
+                    <div className={`text-base font-light font-sans tabular-nums leading-none mt-2 break-words ${overallStats.diff >= 0 ? 'text-emerald-700' : 'text-[#C55757]'}`}>
+                      $ <span className="text-xl sm:text-2xl lg:text-3xl font-extrabold">{(Number(Math.abs(overallStats?.diff || 0)) || 0).toLocaleString('zh-TW')}</span> <span className="text-xs text-[#8C8475] font-normal">元</span>
                     </div>
                   </div>
                 </div>
@@ -3651,7 +3666,7 @@ export default function App() {
                             <span>{c.flag}</span>
                             <span>{c.code}</span>
                           </span>
-                          <span className="text-xs font-black font-mono text-emerald-800">
+                          <span className="text-xs font-black font-sans tabular-nums text-emerald-800">
                             ${exchangeRates[c.code] || DEFAULT_RATES_MAP[c.code] || 1} <span className="text-[9px] font-normal text-[#8C8475]">TWD</span>
                           </span>
                         </div>
@@ -3715,12 +3730,12 @@ export default function App() {
                         const isExp = r.type.includes('支出');
                         return (
                           <div 
-                            key={r.id}
+                            key={r.id} 
                             className="bg-white/60 border border-[#EEEDE3]/80 rounded-xl p-2.5 sm:p-3 flex items-center justify-between text-xs hover:bg-white transition-all gap-2"
                           >
                             <div className="space-y-1 min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-mono text-[9px] text-[#8C8475] bg-[#FAF9F5] px-1.5 py-0.5 rounded border border-[#EBE8DE]">
+                                <span className="font-sans tabular-nums text-[9px] text-[#8C8475] bg-[#FAF9F5] px-1.5 py-0.5 rounded border border-[#EBE8DE]">
                                   {r.date}
                                 </span>
                                 <span className={`text-[9px] px-1.5 py-0.5 rounded border leading-none ${isExp ? 'bg-[#FCF4F4] text-[#C55757] border-[#F4DFDF]' : 'bg-[#F2F8F4] text-[#428564] border-[#DCEFE5]'}`}>
@@ -3730,11 +3745,11 @@ export default function App() {
                               <h4 className="font-semibold text-[#3E3A36] truncate text-xs sm:text-sm">{r.item}</h4>
                             </div>
                             <div className="text-right shrink-0">
-                              <span className="font-mono font-bold text-xs sm:text-sm text-[#3E3A36] whitespace-nowrap bg-[#FAF9F5] px-2 py-1 rounded border border-[#E8E4D9] block">
+                              <span className="font-sans tabular-nums font-bold text-xs sm:text-sm text-[#3E3A36] whitespace-nowrap bg-[#FAF9F5] px-2 py-1 rounded border border-[#E8E4D9] block">
                                 $ {(Number(r?.amount) || 0).toLocaleString('zh-TW')}
                               </span>
                               {r.currency && r.currency !== 'TWD' && (
-                                <span className="text-[9px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 font-mono block mt-0.5">
+                                <span className="text-[9px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 font-sans tabular-nums block mt-0.5">
                                   {CURRENCIES.find(c => c.code === r.currency)?.flag} {(Number(r?.originalAmount) || 0).toLocaleString('zh-TW')} {r.currency}
                                 </span>
                               )}
@@ -4012,19 +4027,19 @@ export default function App() {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                         <div className="bg-[#FAF8F5] p-2.5 rounded-xl border border-[#EDE8DC] flex flex-col">
                           <span className="text-[10px] text-[#8C8475]">顯示筆數</span>
-                          <span className="font-mono font-bold text-[#3E3A36]">{filtered.length} 筆</span>
+                          <span className="font-sans tabular-nums font-bold text-[#3E3A36]">{filtered.length} 筆</span>
                         </div>
                         <div className="bg-rose-50/60 p-2.5 rounded-xl border border-rose-200/60 flex flex-col">
                           <span className="text-[10px] text-rose-800 font-semibold">支出小計</span>
-                          <span className="font-mono font-bold text-rose-900">NT$ {(Number(expSum) || 0).toLocaleString()}</span>
+                          <span className="font-sans tabular-nums font-bold text-rose-900">NT$ {(Number(expSum) || 0).toLocaleString()}</span>
                         </div>
                         <div className="bg-sky-50/60 p-2.5 rounded-xl border border-sky-200/60 flex flex-col">
                           <span className="text-[10px] text-sky-800 font-semibold">廖代墊小計</span>
-                          <span className="font-mono font-bold text-sky-900">NT$ {(Number(liaoAdv) || 0).toLocaleString()}</span>
+                          <span className="font-sans tabular-nums font-bold text-sky-900">NT$ {(Number(liaoAdv) || 0).toLocaleString()}</span>
                         </div>
                         <div className="bg-amber-50/60 p-2.5 rounded-xl border border-amber-200/60 flex flex-col">
                           <span className="text-[10px] text-amber-800 font-semibold">周代墊小計</span>
-                          <span className="font-mono font-bold text-amber-900">NT$ {(Number(zhouAdv) || 0).toLocaleString()}</span>
+                          <span className="font-sans tabular-nums font-bold text-amber-900">NT$ {(Number(zhouAdv) || 0).toLocaleString()}</span>
                         </div>
                       </div>
 
@@ -4114,14 +4129,14 @@ export default function App() {
                         >
                           <div className="space-y-1 flex-1 min-w-0 pr-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono text-[9px] text-[#8C8475] bg-[#FAF9F5] px-1.5 py-0.5 rounded border border-[#EBE8DE]">
+                              <span className="font-sans tabular-nums text-[9px] text-[#8C8475] bg-[#FAF9F5] px-1.5 py-0.5 rounded border border-[#EBE8DE]">
                                 📅 {r.date || `${r.month}-01`}
                               </span>
                               <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[9px] font-medium border ${
                                 isExp 
-                                  ? 'bg-[#FCF4F4] text-[#C55757] border-[#F4DFDF]' 
-                                  : 'bg-[#F2F8F4] text-[#428564] border-[#DCEFE5]'
-                              }`}>
+                                ? 'bg-[#FCF4F4] text-[#C55757] border-[#F4DFDF]' 
+                                : 'bg-[#F2F8F4] text-[#428564] border-[#DCEFE5]'
+                            }`}>
                                 {isExp ? <TrendingDown className="w-2.5 h-2.5" /> : <TrendingUp className="w-2.5 h-2.5" />}
                                 {isExp ? '日常代墊支出' : '公積金固定撥入'}
                               </span>
@@ -4139,11 +4154,11 @@ export default function App() {
                           <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#F3F0E6]">
                             <div className="text-left sm:text-right">
                               <span className="text-[10px] text-[#A59F94] block font-light">金額 (台幣 NT$)</span>
-                              <span className="font-mono font-bold text-[#3E3A36] text-sm sm:text-base block">
+                              <span className="font-sans tabular-nums font-bold text-[#3E3A36] text-sm sm:text-base block">
                                 $ {(Number(r?.amount) || 0).toLocaleString('zh-TW')}
                               </span>
                               {r.currency && r.currency !== 'TWD' && (
-                                <span className="text-[10px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 font-mono block mt-0.5">
+                                <span className="text-[10px] text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 font-sans tabular-nums block mt-0.5">
                                   {CURRENCIES.find(c => c.code === r.currency)?.flag} {(Number(r?.originalAmount) || 0).toLocaleString('zh-TW')} {r.currency} (匯率 {r.exchangeRate})
                                 </span>
                               )}
@@ -4492,7 +4507,7 @@ export default function App() {
                           </div>
                           <span>{userA.displayName} 的代墊細目</span>
                         </div>
-                        <span className="font-mono font-bold text-[#8C8475] whitespace-nowrap">
+                        <span className="font-sans tabular-nums font-bold text-[#8C8475] whitespace-nowrap">
                           {records.filter(r => r.month === settlementMonth && isUserAPayer(r.payer) && r.type.includes('支出')).length} 筆
                         </span>
                       </div>
@@ -4504,10 +4519,10 @@ export default function App() {
                             <div key={r.id} className="flex justify-between items-center text-xs bg-[#FAF9F5]/50 hover:bg-white p-2.5 rounded-xl transition-all border border-[#F2EDE1] gap-2">
                               <div className="space-y-0.5 flex-grow min-w-0 pr-1">
                                 <div className="font-bold text-[#3E3A36] leading-snug truncate">{r.item}</div>
-                                <div className="font-mono text-[9px] text-[#9A948C] whitespace-nowrap">📅 {r.date || `${r.month}-01`}</div>
+                                <div className="font-sans tabular-nums text-[9px] text-[#9A948C] whitespace-nowrap">📅 {r.date || `${r.month}-01`}</div>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
-                                <span className="font-mono font-bold text-[#4D4942] whitespace-nowrap">$ {(Number(r?.amount) || 0).toLocaleString('zh-TW')}</span>
+                                <span className="font-sans tabular-nums font-bold text-[#4D4942] whitespace-nowrap">$ {(Number(r?.amount) || 0).toLocaleString('zh-TW')}</span>
                                 <button 
                                   onClick={() => handleDelete(r.id)}
                                   className="text-[#A59F94] hover:text-[#C55757] p-1.5 rounded-lg hover:bg-red-50 hover:border-red-100 transition-all border border-transparent cursor-pointer"
@@ -5036,10 +5051,10 @@ export default function App() {
                   ) : (
                     <>
                       <div className="text-[10px] sm:text-xs text-white/90 whitespace-nowrap hidden sm:block">
-                        {userA.shortName}代墊: <span className="font-mono font-bold text-rose-300">$ {(Number(splitSummary?.zhouOwesLiao) || 0).toLocaleString()}</span>
+                        {userA.shortName}代墊: <span className="font-sans tabular-nums font-bold text-rose-300">$ {(Number(splitSummary?.zhouOwesLiao) || 0).toLocaleString()}</span>
                       </div>
                       <div className="text-[10px] sm:text-xs text-white/90 whitespace-nowrap hidden sm:block">
-                        {userB.shortName}代墊: <span className="font-mono font-bold text-rose-300">$ {(Number(splitSummary?.liaoOwesZhou) || 0).toLocaleString()}</span>
+                        {userB.shortName}代墊: <span className="font-sans tabular-nums font-bold text-rose-300">$ {(Number(splitSummary?.liaoOwesZhou) || 0).toLocaleString()}</span>
                       </div>
 
                       {/* 淨結算方向按鈕，點擊可直接開啟對帳彈窗 */}
@@ -5052,12 +5067,12 @@ export default function App() {
                         {splitSummary?.netDebtor === '周' ? (
                           <span className="bg-rose-500/25 hover:bg-rose-500/40 text-rose-200 border border-rose-500/40 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex items-center gap-1">
                             <span>{userB.shortName}應還{userA.shortName}</span>
-                            <span className="font-mono text-white">$ {(Number(splitSummary?.netAmount) || 0).toLocaleString()}</span>
+                            <span className="font-sans tabular-nums text-white">$ {(Number(splitSummary?.netAmount) || 0).toLocaleString()}</span>
                           </span>
                         ) : splitSummary?.netDebtor === '廖' ? (
                           <span className="bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex items-center gap-1">
                             <span>{userA.shortName}應還{userB.shortName}</span>
-                            <span className="font-mono text-white">$ {(Number(splitSummary?.netAmount) || 0).toLocaleString()}</span>
+                            <span className="font-sans tabular-nums text-white">$ {(Number(splitSummary?.netAmount) || 0).toLocaleString()}</span>
                           </span>
                         ) : (
                           <span className="bg-emerald-500/25 text-emerald-200 border border-emerald-500/40 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap">
@@ -5090,10 +5105,10 @@ export default function App() {
                 </div>
                 <div className="flex gap-2 sm:gap-3.5 items-center shrink-0">
                   <div className="text-[11px] sm:text-xs text-white whitespace-nowrap">
-                    {userA.shortName}: <span className="font-mono font-bold text-[#EFC38E]">$ {(Number(liaoLatestTotal) || 0).toLocaleString('zh-TW')}</span>
+                    {userA.shortName}: <span className="font-sans tabular-nums font-bold text-[#EFC38E]">$ {(Number(liaoLatestTotal) || 0).toLocaleString('zh-TW')}</span>
                   </div>
                   <div className="text-[11px] sm:text-xs text-white whitespace-nowrap">
-                    {userB.shortName}: <span className="font-mono font-bold text-[#EFC38E]">$ {(Number(zhouLatestTotal) || 0).toLocaleString('zh-TW')}</span>
+                    {userB.shortName}: <span className="font-sans tabular-nums font-bold text-[#EFC38E]">$ {(Number(zhouLatestTotal) || 0).toLocaleString('zh-TW')}</span>
                   </div>
                   
                   {/* 關閉按鈕 */}
