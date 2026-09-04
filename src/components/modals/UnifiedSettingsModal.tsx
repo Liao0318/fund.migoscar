@@ -24,7 +24,8 @@ import {
   ChevronRight,
   ShieldCheck,
   Camera,
-  LogIn
+  LogIn,
+  Unlink
 } from 'lucide-react';
 import { AuthUser, CoupleBindingInfo, NicknameLengthPreference } from '../../types';
 import { NicknameSettingsSection } from '../common/NicknameSettingsSection';
@@ -101,7 +102,8 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
     }
   }, [currentUser, isOpen]);
 
-  const isAdmin = currentUser?.userRole !== 'partner';
+  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
+  const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
 
   const handleCopyCode = () => {
     if (!currentInviteCode) return;
@@ -361,48 +363,147 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
 
                 {/* 伴侶連線卡片 - 僅限登入 Google 帳號用戶才可使用，訪客模式隱藏不顯示 */}
                 {currentUser && !isGuestMode && (
-                  <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-3 shadow-2xs">
-                    <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5 border-b border-[#F2EDE1] pb-2">
-                      <Heart className="w-4 h-4 text-rose-600" />
-                      <span>💖 伴侶連線與邀請分享</span>
-                    </h4>
-                    
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EBE7DC]">
-                      <div>
-                        <div className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
-                          <span>專屬伴侶配對代碼：</span>
-                          <span className="font-mono bg-white px-2 py-0.5 rounded-lg border border-[#DDD8CE] text-rose-700 font-extrabold text-sm">
-                            {currentInviteCode}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-[#8C8475] mt-1">
-                          伴侶登入後可透過此代碼即時雙向連線，共同記帳並即時接收推播
-                        </p>
+                  isAdmin ? (
+                    /* 管理員專屬：派發伴侶配對邀請卡片 */
+                    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2">
+                        <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5">
+                          <Heart className="w-4 h-4 text-rose-600" />
+                          <span>💌 派發伴侶專屬邀請碼</span>
+                        </h4>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
+                          管理員派發
+                        </span>
                       </div>
+                      
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EBE7DC]">
+                        <div>
+                          <div className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
+                            <span>專屬伴侶配對代碼：</span>
+                            <span className="font-mono bg-white px-2 py-0.5 rounded-lg border border-[#DDD8CE] text-rose-700 font-extrabold text-sm">
+                              {currentInviteCode}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#8C8475] mt-1">
+                            伴侶登入後可透過此代碼即時雙向連線，共同記帳並即時接收推播
+                          </p>
+                        </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={handleCopyCode}
-                          className="px-3 py-1.5 bg-white hover:bg-[#F2EFE7] border border-[#E6E0D2] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1 transition-all cursor-pointer"
-                        >
-                          {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>{copiedCode ? '已複製' : '複製代碼'}</span>
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {onGenerateNewInviteCode && (
+                            <button
+                              type="button"
+                              onClick={onGenerateNewInviteCode}
+                              className="p-1.5 rounded-xl bg-white hover:bg-[#F2EFE7] text-[#5C564E] border border-[#E6E0D2] transition-all cursor-pointer shadow-2xs"
+                              title="重新隨機派發新邀請碼"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
-                        {onCopyInviteShare && (
                           <button
                             type="button"
-                            onClick={handleCopyShareText}
-                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                            onClick={handleCopyCode}
+                            className="px-3 py-1.5 bg-white hover:bg-[#F2EFE7] border border-[#E6E0D2] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1 transition-all cursor-pointer"
                           >
-                            {copiedShare ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-                            <span>{copiedShare ? '已複製連結' : '分享邀請'}</span>
+                            {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                            <span>{copiedCode ? '已複製' : '複製代碼'}</span>
                           </button>
+
+                          {onCopyInviteShare && (
+                            <button
+                              type="button"
+                              onClick={handleCopyShareText}
+                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                            >
+                              {copiedShare ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                              <span>{copiedShare ? '已複製連結' : '分享邀請'}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 伴侶綁定狀態 */}
+                      <div className="bg-[#FAF8F3] p-2.5 rounded-xl border border-[#EBE7DC] text-xs flex items-center justify-between">
+                        <span className="text-[11px] text-[#8C8475] font-bold">伴侶狀態：</span>
+                        {partnerBindingInfo?.partnerEmail ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-emerald-700 font-bold flex items-center gap-1 text-[11px]">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>已綁定 ({partnerBindingInfo.partnerName || '伴侶'})</span>
+                            </span>
+                            {onUnbindPartner && (
+                              <button
+                                type="button"
+                                onClick={onUnbindPartner}
+                                className="text-[10px] text-rose-600 hover:text-rose-800 underline font-bold cursor-pointer"
+                              >
+                                解除綁定
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 text-[10px]">
+                            ⏳ 等待伴侶輸入邀請碼
+                          </span>
                         )}
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* 伴侶專屬：帳本連線狀態卡片 (不顯示派發/分享邀請碼按鈕) */
+                    <div className="bg-gradient-to-br from-rose-50/70 to-[#FFF9F9] rounded-2xl p-4 sm:p-5 border border-rose-200 space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between border-b border-rose-100 pb-2">
+                        <h4 className="text-xs font-extrabold text-rose-900 flex items-center gap-1.5">
+                          <Heart className="w-4 h-4 text-rose-600 fill-rose-500" />
+                          <span>💖 已加入情侶共同帳本</span>
+                        </h4>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                          伴侶已連線
+                        </span>
+                      </div>
+
+                      <div className="bg-white rounded-xl p-3 border border-rose-100 space-y-2 text-xs">
+                        <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
+                          <span>👑 帳本主管理者：</span>
+                          <span className="font-bold text-[#3E3A36]">
+                            {currentUser?.adminName || partnerBindingInfo?.adminName || '主管理員'}
+                            {(currentUser?.adminEmail || partnerBindingInfo?.adminEmail) ? ` (${currentUser?.adminEmail || partnerBindingInfo?.adminEmail})` : ''}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
+                          <span>🔑 使用邀請碼：</span>
+                          <span className="font-mono font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded">
+                            {currentUser?.inviteCode || partnerBindingInfo?.inviteCode || currentInviteCode}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
+                          <span>🟢 資料庫狀態：</span>
+                          <span className="font-bold text-emerald-700">即時雙向連動中</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-rose-100/60 p-2.5 rounded-xl border border-rose-200 text-[11px] text-rose-900 flex items-start gap-1.5">
+                        <ShieldCheck className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                        <span>
+                          API 與試算表連線設定由主管理員統一維護，伴侶端可無憂進行日常記帳、借還代墊與採購清單！
+                        </span>
+                      </div>
+
+                      {onUnbindPartner && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onUnbindPartner();
+                            onClose();
+                          }}
+                          className="w-full py-2 px-3 rounded-xl bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs border border-rose-300 flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Unlink className="w-3.5 h-3.5" />
+                          <span>更換邀請碼或解除綁定</span>
+                        </button>
+                      )}
+                    </div>
+                  )
                 )}
               </div>
             )}
@@ -459,7 +560,9 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                     <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2.5">
                       <div className="flex items-center gap-2">
                         <Key className="w-4 h-4 text-amber-600" />
-                        <h4 className="text-xs font-extrabold text-[#3E3A36]">Google 試算表雲端資料庫連線</h4>
+                        <h4 className="text-xs font-extrabold text-[#3E3A36]">
+                          Google 試算表雲端資料庫連線 {isPartner ? '（伴侶模式）' : ''}
+                        </h4>
                       </div>
                       <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
                         gasWebUrl 
@@ -467,18 +570,26 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                           : 'bg-amber-100 text-amber-800 border border-amber-300'
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${gasWebUrl ? 'bg-emerald-600' : 'bg-amber-600 animate-ping'}`} />
-                        <span>{gasWebUrl ? '已成功綁定' : '尚未綁定'}</span>
+                        <span>{gasWebUrl ? (isPartner ? '已連線情侶共享庫' : '已成功綁定') : '尚未綁定'}</span>
                       </span>
                     </div>
 
                     <p className="text-xs text-[#5C564E] leading-relaxed">
-                      透過 Google Apps Script (GAS) 部署 Web App，伴伴記所有日常代墊、公積金存入與採購紀錄將自動同步存入您的個人 Google 雲端試算表，完全保有 100% 隱私與永續存取權。
+                      {isPartner ? (
+                        `您已加入情侶共同帳本，所有記帳、代墊對帳與採購清單均自動即時同步至主管理員 (${currentUser?.adminName || partnerBindingInfo?.adminName || '主管理員'}) 的私有 Google 雲端試算表，雙向數據即時更新。`
+                      ) : (
+                        '透過 Google Apps Script (GAS) 部署 Web App，伴伴記所有日常代墊、公積金存入與採購紀錄將自動同步存入您的個人 Google 雲端試算表，完全保有 100% 隱私與永續存取權。'
+                      )}
                     </p>
 
                     <div className="bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EAE6DC] space-y-2">
-                      <div className="text-[11px] font-bold text-[#8C8475]">當前 Web App URL 金鑰：</div>
+                      <div className="text-[11px] font-bold text-[#8C8475]">
+                        {isPartner ? '情侶共享 Web App API 連線狀態：' : '當前 Web App URL 金鑰：'}
+                      </div>
                       <div className="font-mono text-[11px] text-[#3E3A36] break-all bg-white p-2.5 rounded-xl border border-[#DDD8CE]">
-                        {gasWebUrl || '尚未設定任何 GAS Web App URL'}
+                        {gasWebUrl ? (
+                          isPartner ? '🟢 已連通主管理員之 Google 雲端試算表 API' : gasWebUrl
+                        ) : '尚未設定任何 GAS Web App URL'}
                       </div>
                     </div>
 
@@ -522,7 +633,7 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                     </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-                      {deploySheetUrl && (
+                      {deploySheetUrl ? (
                         <a
                           href={deploySheetUrl}
                           target="_blank"
@@ -532,19 +643,26 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                           <ExternalLink className="w-3.5 h-3.5" />
                           <span>開啟 Google 雲端試算表</span>
                         </a>
-                      )}
+                      ) : <div />}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          onOpenGasDeploy();
-                        }}
-                        className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 ml-auto"
-                      >
-                        <Key className="w-3.5 h-3.5" />
-                        <span>設定 / 更新 GAS 連線金鑰</span>
-                      </button>
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onOpenGasDeploy();
+                          }}
+                          className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 ml-auto"
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                          <span>設定 / 更新 GAS 連線金鑰</span>
+                        </button>
+                      ) : (
+                        <div className="text-[11px] text-rose-700 font-bold flex items-center gap-1 ml-auto">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>API 由主管理員維護</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

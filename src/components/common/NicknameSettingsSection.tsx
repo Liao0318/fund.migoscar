@@ -18,7 +18,8 @@ export const NicknameSettingsSection: React.FC<NicknameSettingsSectionProps> = (
   onUpdateNickname,
   accentColor = 'amber'
 }) => {
-  const isAdmin = currentUser?.userRole !== 'partner';
+  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail);
+  const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
   const default1Char = isAdmin ? '廖' : '周';
   const default2Char = isAdmin ? '廖廖' : '周周';
 

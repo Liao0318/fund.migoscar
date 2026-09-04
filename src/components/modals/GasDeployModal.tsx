@@ -49,6 +49,9 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
   onOpenInviteManager,
   inviteCode
 }) => {
+  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail);
+  const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -311,7 +314,7 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                   </div>
 
                   <div className="pt-1 flex items-center justify-between gap-2 flex-wrap">
-                    {onOpenInviteManager && currentUser && !isGuestMode && (
+                    {onOpenInviteManager && currentUser && !isGuestMode && isAdmin && (
                       <button
                         type="button"
                         onClick={() => {

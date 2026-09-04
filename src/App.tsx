@@ -571,9 +571,9 @@ export default function App() {
   };
 
   const handleUnbindPartner = () => {
-    removePartnerBinding();
+    removePartnerBinding(currentUser?.email);
     setPartnerBindingInfo(null);
-    if (currentUser?.userRole === 'partner') {
+    if (currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail)) {
       handleLogout();
       showToast('已解除伴侶帳本綁定，請重新輸入邀請碼登入', 'info');
     } else {
@@ -646,6 +646,12 @@ export default function App() {
           localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
           localStorage.setItem('banban_is_sandbox_mode', 'false');
         } catch (e) {}
+        if (activeGas) {
+          fetchDashboardData(false, false);
+          fetchShoppingData(false);
+          fetchSplitData(true);
+          fetchTravelData(true);
+        }
         return;
       }
 
@@ -701,6 +707,12 @@ export default function App() {
         localStorage.setItem('banban_auth_user', JSON.stringify(enhancedPartner));
         localStorage.setItem('banban_is_sandbox_mode', 'false');
       } catch (e) {}
+      if (activeGas) {
+        fetchDashboardData(false, false);
+        fetchShoppingData(false);
+        fetchSplitData(true);
+        fetchTravelData(true);
+      }
       return;
     }
 
@@ -734,6 +746,12 @@ export default function App() {
           localStorage.setItem('banban_auth_user', JSON.stringify(enhancedPartner));
           localStorage.setItem('banban_is_sandbox_mode', 'false');
         } catch (e) {}
+        if (existingBinding.gasWebUrl) {
+          fetchDashboardData(false, false);
+          fetchShoppingData(false);
+          fetchSplitData(true);
+          fetchTravelData(true);
+        }
         return;
       }
     } catch (e) {}
@@ -794,6 +812,10 @@ export default function App() {
 
       const displayWelcomeName = boundNickname || user.name;
       showToast(`👑 歡迎回來，${displayWelcomeName}！已自動同步 Google 帳號綁定的 API 資料庫`, 'success');
+      fetchDashboardData(false, false);
+      fetchShoppingData(false);
+      fetchSplitData(true);
+      fetchTravelData(true);
     } else {
       // 4. 尚未綁定任何 API 或伴侶：自動開啟初次引導彈窗，詢問要「輸入伴侶邀請碼」還是「建立 API 資料庫」
       const displayWelcomeName = boundNickname || user.name;
@@ -888,6 +910,13 @@ export default function App() {
           inviteCode: resolved.inviteCode
         });
       }
+    }
+
+    if (activeGas) {
+      fetchDashboardData(true, false);
+      fetchShoppingData(false);
+      fetchSplitData(true);
+      fetchTravelData(true);
     }
 
     showToast(`💖 已成功綁定伴侶帳本 (${resolved.adminName || '管理員'})！`, 'success');
@@ -1663,25 +1692,66 @@ export default function App() {
 
   // ☁️ 開機自動同步使用者 Google 帳號所綁定的 API 設定 (跨裝置換手機無縫讀取)
   useEffect(() => {
-    if (currentUser?.email && !isSandboxMode && currentUser.userRole !== 'partner') {
-      getUserCloudConfig(currentUser.email).then((cloudConfig) => {
-        if (cloudConfig) {
-          let updated = false;
-          if (cloudConfig.gasWebUrl && !gasWebUrl) {
-            setGasWebUrl(cloudConfig.gasWebUrl);
-            try { localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl); } catch (e) {}
-            updated = true;
-          }
-          if (cloudConfig.deploySheetUrl && !deploySheetUrl) {
-            setDeploySheetUrl(cloudConfig.deploySheetUrl);
-            try { localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl); } catch (e) {}
-            updated = true;
-          }
-          if (updated) {
-            showToast('☁️ 已從雲端帳號自動同步專屬 API 設定', 'info');
-          }
+    if (currentUser?.email && !isSandboxMode) {
+      const cleanEmail = currentUser.email.trim().toLowerCase();
+      const isPartnerRole = currentUser.userRole === 'partner' || Boolean(currentUser.adminEmail);
+
+      const restoreCloudSync = async () => {
+        let activeGas = gasWebUrl || localStorage.getItem('muji_gas_web_url') || '';
+        let activeSheet = deploySheetUrl || localStorage.getItem('muji_sheet_url') || '';
+        let updated = false;
+
+        // 1. 若為伴侶，優先從線上伴侶綁定紀錄同步主管理員的 GAS/Sheet
+        if (isPartnerRole) {
+          try {
+            const binding = await fetchPartnerBindingInfoOnline(cleanEmail);
+            if (binding) {
+              setPartnerBindingInfo(binding);
+              if (binding.gasWebUrl && binding.gasWebUrl !== gasWebUrl) {
+                setGasWebUrl(binding.gasWebUrl);
+                try { localStorage.setItem('muji_gas_web_url', binding.gasWebUrl); } catch (e) {}
+                activeGas = binding.gasWebUrl;
+                updated = true;
+              }
+              if (binding.deploySheetUrl && binding.deploySheetUrl !== deploySheetUrl) {
+                setDeploySheetUrl(binding.deploySheetUrl);
+                try { localStorage.setItem('muji_sheet_url', binding.deploySheetUrl); } catch (e) {}
+                activeSheet = binding.deploySheetUrl;
+                updated = true;
+              }
+            }
+          } catch (e) {}
         }
-      }).catch(() => {});
+
+        // 2. 從個人 UserCloudConfig 同步
+        try {
+          const cloudConfig = await getUserCloudConfig(cleanEmail);
+          if (cloudConfig) {
+            if (cloudConfig.gasWebUrl && !activeGas) {
+              setGasWebUrl(cloudConfig.gasWebUrl);
+              try { localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl); } catch (e) {}
+              activeGas = cloudConfig.gasWebUrl;
+              updated = true;
+            }
+            if (cloudConfig.deploySheetUrl && !activeSheet) {
+              setDeploySheetUrl(cloudConfig.deploySheetUrl);
+              try { localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl); } catch (e) {}
+              activeSheet = cloudConfig.deploySheetUrl;
+              updated = true;
+            }
+          }
+        } catch (e) {}
+
+        if (updated && activeGas) {
+          showToast('☁️ 已從雲端帳號自動同步專屬 API 設定', 'info');
+          fetchDashboardData(true, false);
+          fetchShoppingData(false);
+          fetchSplitData(true);
+          fetchTravelData(true);
+        }
+      };
+
+      restoreCloudSync();
     }
   }, [currentUser?.email]);
 

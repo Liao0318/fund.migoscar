@@ -89,7 +89,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   }, [currentUser, isOpen]);
 
-  const isAdmin = currentUser?.userRole !== 'partner';
+  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
+  const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
 
   // 驗證暱稱：限文字且少於 3 個字 (即 1~2 個字元)
   const trimmedNickname = nicknameInput.trim();

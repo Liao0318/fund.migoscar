@@ -135,7 +135,7 @@ export function resolveUserPersonas(
     };
   }
 
-  const isPartnerLogin = currentUser?.userRole === 'partner';
+  const isPartnerLogin = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBinding?.partnerEmail && partnerBinding.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
   const isOscarEmail = currentUser?.email?.toLowerCase().includes('oscar');
   const isPeitiEmail = currentUser?.email?.toLowerCase().includes('peiti') || currentUser?.email?.toLowerCase().includes('chou');
 

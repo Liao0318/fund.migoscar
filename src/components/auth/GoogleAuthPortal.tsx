@@ -20,7 +20,8 @@ import {
 } from '../../utils/googleOAuthService';
 import { 
   resolveInviteCodeOrToken, 
-  fetchInviteCodeOnline 
+  fetchInviteCodeOnline,
+  fetchPartnerBindingInfoOnline
 } from '../../utils/partnerInvite';
 import { getUserCloudConfig } from '../../utils/userConfigService';
 
@@ -169,6 +170,15 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
               localStorage.setItem(`banban_user_nickname_${cleanEmail}`, savedNickname);
             } catch (e) {}
           }
+        }
+      }
+      
+      // 若為換機伴侶登入，且個人設定尚無 GAS，自動透過配對資訊補齊連線金鑰
+      if (!cloudGas && cleanEmail) {
+        const partnerBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
+        if (partnerBinding && partnerBinding.gasWebUrl) {
+          cloudGas = partnerBinding.gasWebUrl;
+          cloudSheet = partnerBinding.deploySheetUrl || '';
         }
       }
     } catch (e) {
