@@ -21,6 +21,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { SplitRecordItem, SplitSummary, SmartCommandResult, AuthUser, CoupleBindingInfo } from '../../types';
 import { resolveUserPersonas, formatPayerDisplayName } from '../../utils/userPersona';
+import { InitialEmptyEntryFrame } from '../common/InitialEmptyEntryFrame';
 
 interface SplitHomeTabProps {
   summary: SplitSummary;
@@ -37,6 +38,8 @@ interface SplitHomeTabProps {
   onOpenChatAssistant?: () => void;
   isDbConnected?: boolean;
   onOpenGasDeploy?: () => void;
+  onOpenWizard?: (role?: 'admin' | 'partner') => void;
+  onEnableSandbox?: () => void;
 }
 
 const DEFAULT_SPLIT_SUMMARY: SplitSummary = {
@@ -64,6 +67,8 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
   onOpenChatAssistant,
   isDbConnected = true,
   onOpenGasDeploy,
+  onOpenWizard,
+  onEnableSandbox,
 }) => {
   const { userA, userB } = useMemo(() => {
     return resolveUserPersonas(currentUser, partnerBindingInfo);
@@ -96,32 +101,14 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
 
   if (!isDbConnected) {
     return (
-      <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
-        {/* 尚未連線至資料庫 全幅提示卡片 */}
-        <div className="bg-white/85 backdrop-blur-md rounded-3xl p-8 sm:p-12 border border-[#E8E2D5] shadow-2xs text-center space-y-4 my-2">
-          <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-900 flex items-center justify-center mx-auto shadow-inner">
-            <Database className="w-8 h-8 text-amber-700" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-lg sm:text-2xl font-black text-[#3E3A36]">尚未連線至資料庫</h3>
-            <p className="text-xs sm:text-sm text-[#7A7366] leading-relaxed max-w-md mx-auto font-normal">
-              尚未登錄 Google 試算表 Web App API 金鑰，系統未連線至資料庫。為保護資料真實性與隱私，目前不顯示任何帳目數據。
-            </p>
-          </div>
-          {onOpenGasDeploy && (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={onOpenGasDeploy}
-                className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
-              >
-                <Key className="w-4 h-4" />
-                <span>設定連線金鑰與同步</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <InitialEmptyEntryFrame
+        currentUser={currentUser || null}
+        partnerBindingInfo={partnerBindingInfo}
+        onOpenWizard={(role) => onOpenWizard ? onOpenWizard(role) : (onOpenGasDeploy && onOpenGasDeploy())}
+        onOpenDirectSettings={() => onOpenGasDeploy && onOpenGasDeploy()}
+        onEnableSandbox={() => onEnableSandbox && onEnableSandbox()}
+        appMode="split"
+      />
     );
   }
 

@@ -85,8 +85,8 @@ import { ClearDoneConfirmModal } from './components/modals/ClearDoneConfirmModal
 import { ShoppingDetailModal } from './components/modals/ShoppingDetailModal';
 import { CurrencyCalculatorModal } from './components/modals/CurrencyCalculatorModal';
 import { AppNotificationModal } from './components/modals/AppNotificationModal';
-import { GasDeployModal } from './components/modals/GasDeployModal';
-import { DatabaseOnboardingModal } from './components/modals/DatabaseOnboardingModal';
+import { UnifiedDatabaseModal } from './components/modals/UnifiedDatabaseModal';
+import { InitialEmptyEntryFrame } from './components/common/InitialEmptyEntryFrame';
 import { DataBackupModal } from './components/modals/DataBackupModal';
 import { PwaInstallModal } from './components/modals/PwaInstallModal';
 import { UnifiedSettingsModal } from './components/modals/UnifiedSettingsModal';
@@ -790,8 +790,8 @@ export default function App() {
       console.warn('Failed to retrieve user cloud config on login:', err);
     }
 
-    // 若已存在 API 資料庫
-    if (activeGas && activeGas.startsWith('http')) {
+    // 若先前已存在 API 資料庫且非重設狀態
+    if (activeGas && activeGas.startsWith('http') && !partnerInvite) {
       setGasWebUrl(activeGas);
       try { localStorage.setItem('muji_gas_web_url', activeGas); } catch (e) {}
       saveUserCloudConfig(user.email, {
@@ -812,18 +812,18 @@ export default function App() {
       });
 
       const displayWelcomeName = boundNickname || user.name;
-      showToast(`👑 歡迎回來，${displayWelcomeName}！已自動同步 Google 帳號綁定的 API 資料庫`, 'success');
+      showToast(`👑 歡迎回來，${displayWelcomeName}！已載入 Google 帳號設定`, 'success');
       fetchDashboardData(false, false);
       fetchShoppingData(false);
       fetchSplitData(true);
       fetchTravelData(true);
     } else {
-      // 4. 尚未綁定任何 API 或伴侶：自動開啟初次引導彈窗，詢問要「輸入伴侶邀請碼」還是「建立 API 資料庫」
+      // 4. 初次或未綁定：自動跳出引導小精靈，確認是伴侶還是主管理者
       const displayWelcomeName = boundNickname || user.name;
-      showToast(`👑 歡迎 ${displayWelcomeName}！請選擇帳本加入方式`, 'info');
+      showToast(`✨ 歡迎 ${displayWelcomeName}！請在引導小精靈中確認身分與設定`, 'info');
       setTimeout(() => {
-        setIsDatabaseOnboardingOpen(true);
-      }, 500);
+        openUnifiedDatabaseModal('wizard');
+      }, 400);
     }
 
     try {
@@ -979,6 +979,8 @@ export default function App() {
     setIsSandboxMode(false);
     setIsGuestMode(false);
     setIsUnifiedSettingsModalOpen(false);
+    setGasWebUrl('');
+    setDeploySheetUrl('');
     setRecords([]);
     setSplitItems([]);
     setSplitSummary({
@@ -993,6 +995,10 @@ export default function App() {
     setShoppingItems([]);
     try {
       localStorage.removeItem('banban_auth_user');
+      localStorage.removeItem('muji_gas_web_url');
+      localStorage.removeItem('muji_sheet_url');
+      localStorage.removeItem('muji_deploy_sheet_url');
+      localStorage.removeItem('muji_ledger_data');
       localStorage.setItem('banban_is_sandbox_mode', 'false');
       localStorage.setItem('banban_is_guest_mode', 'false');
       window.dispatchEvent(new CustomEvent('travel-data-updated', {
@@ -1008,6 +1014,8 @@ export default function App() {
     setIsSandboxMode(false);
     setIsGuestMode(true);
     setIsUnifiedSettingsModalOpen(false);
+    setGasWebUrl('');
+    setDeploySheetUrl('');
     setRecords([]);
     setSplitItems([]);
     setSplitSummary({
@@ -1022,6 +1030,10 @@ export default function App() {
     setShoppingItems([]);
     try {
       localStorage.removeItem('banban_auth_user');
+      localStorage.removeItem('muji_gas_web_url');
+      localStorage.removeItem('muji_sheet_url');
+      localStorage.removeItem('muji_deploy_sheet_url');
+      localStorage.removeItem('muji_ledger_data');
       localStorage.setItem('banban_is_sandbox_mode', 'false');
       localStorage.setItem('banban_is_guest_mode', 'true');
       window.dispatchEvent(new CustomEvent('travel-data-updated', {
@@ -1170,23 +1182,29 @@ export default function App() {
   const [gasWebUrl, setGasWebUrl] = useState(() => localStorage.getItem('muji_gas_web_url') || '');
   const [isSyncingGas, setIsSyncingGas] = useState(false);
 
+  // 整合式資料庫設定與精靈 Modal 狀態
+  const [isUnifiedDatabaseOpen, setIsUnifiedDatabaseOpen] = useState(false);
+  const [unifiedDatabaseTab, setUnifiedDatabaseTab] = useState<'wizard' | 'settings' | 'code' | 'partner'>('wizard');
+  const [unifiedDatabaseRole, setUnifiedDatabaseRole] = useState<'admin' | 'partner' | undefined>(undefined);
+
+  const openUnifiedDatabaseModal = (tab: 'wizard' | 'settings' | 'code' | 'partner' = 'wizard', role?: 'admin' | 'partner') => {
+    setUnifiedDatabaseTab(tab);
+    setUnifiedDatabaseRole(role);
+    setIsUnifiedDatabaseOpen(true);
+  };
+
   const isDbConnected = Boolean(
-    isGuestMode ||
     (gasWebUrl && gasWebUrl.trim().startsWith('http')) ||
     (typeof window !== 'undefined' && (window as any).google?.script?.run) ||
     isSandboxMode
   );
 
-  const handleOpenGasDeploy = () => {
+  const handleOpenGasDeploy = (initialTab: 'wizard' | 'settings' | 'code' | 'partner' = 'settings') => {
     if (isGuestMode || !currentUser) {
       showToast('🔒 本機離線模式不支援登入或綁定 Google 試算表金鑰，請先登入 Google 帳號！', 'info');
       return;
     }
-    if (currentUser?.userRole === 'partner') {
-      showToast('🔒 API 與 Code.gs 設定由主管理員控管，伴侶端可直接記帳同步。', 'info');
-      return;
-    }
-    setIsDeployModalOpen(true);
+    openUnifiedDatabaseModal(initialTab);
   };
 
   const renderDbUnconnectedState = (
@@ -1213,7 +1231,7 @@ export default function App() {
         <div className="pt-2">
           <button
             type="button"
-            onClick={handleOpenGasDeploy}
+            onClick={() => handleOpenGasDeploy('settings')}
             className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
           >
             <Key className="w-4 h-4" />
@@ -2762,7 +2780,7 @@ export default function App() {
   } | null>(null);
 
   const handleSyncClick = () => {
-    setIsDeployModalOpen(true);
+    openUnifiedDatabaseModal('settings');
   };
 
   // 初始化與本機 LocalStorage 綁定
@@ -3608,7 +3626,7 @@ export default function App() {
             </div>
             <button
               type="button"
-              onClick={() => setIsDeployModalOpen(true)}
+              onClick={() => openUnifiedDatabaseModal('wizard')}
               className="px-3.5 py-1.5 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95 whitespace-nowrap self-start sm:self-center shrink-0"
             >
               設定連線金鑰與同步
@@ -3657,16 +3675,22 @@ export default function App() {
                   onExecuteSmartCommand={handleExecuteSmartCommand}
                   onOpenChatAssistant={() => setIsChatAssistantOpen(true)}
                   isDbConnected={isDbConnected}
-                  onOpenGasDeploy={handleOpenGasDeploy}
+                  onOpenGasDeploy={() => openUnifiedDatabaseModal('settings')}
+                  onOpenWizard={(role) => openUnifiedDatabaseModal('wizard', role)}
+                  onEnableSandbox={() => handleToggleSandboxMode(true)}
                   currentUser={currentUser}
                   partnerBindingInfo={partnerBindingInfo}
                 />
               ) : (
                 !isDbConnected ? (
-                  renderDbUnconnectedState(
-                    "尚未連線至資料庫",
-                    "尚未登錄 Google 試算表 Web App API 金鑰，無法讀取公積金即時財務指標與對帳明細。請先設定連線金鑰以同步雲端數據。"
-                  )
+                  <InitialEmptyEntryFrame
+                    currentUser={currentUser}
+                    partnerBindingInfo={partnerBindingInfo}
+                    onOpenWizard={(role) => openUnifiedDatabaseModal('wizard', role)}
+                    onOpenDirectSettings={() => openUnifiedDatabaseModal('settings')}
+                    onEnableSandbox={() => handleToggleSandboxMode(true)}
+                    appMode="fund"
+                  />
                 ) : (
                   <motion.div 
                     key="tab-home"
@@ -5605,7 +5629,7 @@ export default function App() {
           currentUser={currentUser}
           onLogout={handleLogout}
           onSwitchAccount={handleSwitchAccount}
-          onOpenGasDeploy={handleOpenGasDeploy}
+          onOpenGasDeploy={() => openUnifiedDatabaseModal('settings')}
           isSandboxMode={isSandboxMode}
           onToggleSandboxMode={handleToggleSandboxMode}
           gasWebUrl={gasWebUrl}
@@ -5617,15 +5641,15 @@ export default function App() {
           onUnbindPartner={handleUnbindPartner}
           onBindPartnerInvite={handleBindPartnerInvite}
           hasDatabaseBound={Boolean(gasWebUrl && gasWebUrl.startsWith('http'))}
-          onOpenDatabaseOnboarding={() => setIsDatabaseOnboardingOpen(true)}
+          onOpenDatabaseOnboarding={() => openUnifiedDatabaseModal('wizard')}
           onUpdateNickname={handleUpdateNickname}
           onSyncGoogleAvatar={handleSyncGoogleAvatar}
         />
 
-        {/* 🚀 新用戶初次建庫與 API 帳號綁定引導 Modal */}
-        <DatabaseOnboardingModal
-          isOpen={isDatabaseOnboardingOpen}
-          onClose={() => setIsDatabaseOnboardingOpen(false)}
+        {/* 🚀 整合式資料庫設定與引導小精靈 Modal (整合精靈、設定、Code.gs 與邀請碼) */}
+        <UnifiedDatabaseModal
+          isOpen={isUnifiedDatabaseOpen}
+          onClose={() => setIsUnifiedDatabaseOpen(false)}
           currentUser={currentUser}
           gasWebUrl={gasWebUrl}
           setGasWebUrl={setGasWebUrl}
@@ -5633,36 +5657,16 @@ export default function App() {
           setDeploySheetUrl={setDeploySheetUrl}
           saveDeployConfig={saveDeployConfig}
           customizedCodeGs={getCustomizedCodeGs()}
-          inviteCode={currentInviteCode}
+          currentInviteCode={currentInviteCode}
           onGenerateNewInviteCode={handleGenerateNewInviteCode}
+          onCopyInviteShare={handleCopyInviteShare}
           onBindPartnerInvite={handleBindPartnerInvite}
-        />
-
-        {/* 隱密系統部署與連線設定 Modal */}
-        <GasDeployModal
-          isOpen={isDeployModalOpen}
-          onClose={() => setIsDeployModalOpen(false)}
-          deploySheetUrl={deploySheetUrl}
-          setDeploySheetUrl={setDeploySheetUrl}
-          gasWebUrl={gasWebUrl}
-          setGasWebUrl={setGasWebUrl}
-          onOpenNotifySettings={() => {
-            setIsDeployModalOpen(false);
-            setIsAppNotifyModalOpen(true);
-          }}
-          saveDeployConfig={saveDeployConfig}
-          activeDeployCodeTab={activeDeployCodeTab}
-          setActiveDeployCodeTab={setActiveDeployCodeTab}
-          copiedCodeType={copiedCodeType}
-          copyDeployCode={copyDeployCode}
-          customizedCodeGs={getCustomizedCodeGs()}
+          partnerBindingInfo={partnerBindingInfo}
+          onUnbindPartner={handleUnbindPartner}
           isSandboxMode={isSandboxMode}
           onToggleSandboxMode={handleToggleSandboxMode}
-          currentUser={currentUser}
-          isGuestMode={isGuestMode}
-          onSwitchAccount={handleSwitchAccount}
-          onOpenInviteManager={() => setIsUserProfileModalOpen(true)}
-          inviteCode={currentInviteCode}
+          initialTab={unifiedDatabaseTab}
+          initialWizardRole={unifiedDatabaseRole}
         />
 
 

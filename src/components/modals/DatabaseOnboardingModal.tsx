@@ -2,16 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Rocket, 
-  Settings, 
   CheckCircle2, 
   Copy, 
   Check, 
   FileCode, 
-  ExternalLink, 
   Heart, 
   Sparkles, 
-  Lock, 
-  Cloud, 
   Share2, 
   RefreshCw, 
   ArrowRight, 
@@ -19,7 +15,11 @@ import {
   X,
   AlertCircle,
   Key,
-  Crown
+  Crown,
+  ClipboardPaste,
+  ShieldCheck,
+  HelpCircle,
+  Database
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData } from '../../types';
 import { resolveInviteCodeOrToken, fetchInviteCodeOnline } from '../../utils/partnerInvite';
@@ -53,10 +53,14 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
   inviteCode,
   onGenerateNewInviteCode,
   onBindPartnerInvite,
-  initialChoice = 'partner'
+  initialChoice
 }) => {
-  // 用戶選擇模式：'partner' (輸入伴侶邀請碼) 或 'admin' (自己建立並綁定 API 資料庫)
-  const [onboardingMode, setOnboardingMode] = useState<'partner' | 'admin'>(initialChoice);
+  // 視圖步驟：'select_role' (身分選擇) ｜ 'partner_flow' (伴侶輸入邀請碼) ｜ 'admin_flow' (管理者建庫)
+  const [viewStep, setViewStep] = useState<'select_role' | 'partner_flow' | 'admin_flow'>(() => {
+    if (initialChoice === 'partner') return 'partner_flow';
+    if (initialChoice === 'admin') return 'admin_flow';
+    return 'select_role';
+  });
 
   // 伴侶邀請碼輸入與驗證狀態
   const [inviteInput, setInviteInput] = useState('');
@@ -77,7 +81,13 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
   const [inputSheetUrl, setInputSheetUrl] = useState(deploySheetUrl || '');
   const [inputGasUrl, setInputGasUrl] = useState(gasWebUrl || '');
 
-  // 當使用者輸入邀請碼時即時解析
+  // 同步外部傳入的初始設定
+  useEffect(() => {
+    if (deploySheetUrl) setInputSheetUrl(deploySheetUrl);
+    if (gasWebUrl) setInputGasUrl(gasWebUrl);
+  }, [deploySheetUrl, gasWebUrl]);
+
+  // 當使用者輸入邀請碼時即時解析並查核 Firestore
   useEffect(() => {
     let isMounted = true;
     const clean = inviteInput.trim();
@@ -131,6 +141,19 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
     setTimeout(() => setCopiedInvite(false), 2000);
   };
 
+  const handlePasteClipboard = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          setInviteInput(text.trim());
+        }
+      }
+    } catch (e) {
+      console.warn('Cannot read clipboard', e);
+    }
+  };
+
   const handleCopyShareCard = () => {
     const origin = window.location.origin;
     const pathname = window.location.pathname;
@@ -146,7 +169,7 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
    */
   const handlePartnerSubmit = async () => {
     if (!currentUser) {
-      setPartnerError('🔒 本機體驗模式無法配對伴侶，請先登入 Google 帳號！');
+      setPartnerError('🔒 請先登入 Google 帳號！');
       return;
     }
     const clean = inviteInput.trim();
@@ -181,7 +204,7 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
   const handleVerifyAndBindAdmin = () => {
     setAdminValidationError(null);
     if (!currentUser) {
-      setAdminValidationError('🔒 本機體驗模式不可登入或綁定試算表金鑰，請先登入 Google 帳號！');
+      setAdminValidationError('🔒 請先登入 Google 帳號！');
       return;
     }
     const cleanGas = inputGasUrl.trim();
@@ -219,12 +242,12 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            className="bg-[#FAF9F5] rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl border border-[#E5E0D2] max-h-[92vh] flex flex-col my-auto text-left font-sans"
+            className="bg-[#FAF9F5] rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl border border-[#E5E0D2] max-h-[94vh] flex flex-col my-auto text-left font-sans"
           >
             {/* 標題欄 */}
             <div className="p-4 sm:p-5 border-b border-[#E8E4D9] flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-amber-100/30 to-rose-500/10 shrink-0">
@@ -234,94 +257,167 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
                 </div>
                 <div>
                   <h3 className="font-extrabold text-[#3E3A36] text-sm sm:text-base flex items-center gap-2">
-                    <span>歡迎來到伴伴記❤️</span>
-                    <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
-                      {currentUser?.name || '新用戶'}
-                    </span>
+                    <span>伴伴記 · 帳本引導小精靈 🪄</span>
                   </h3>
                   <p className="text-[11px] text-[#8C8475] font-medium">
-                    請選擇您要加入伴侶的現有帳本，或是建立自己專屬的 API 資料庫
+                    {viewStep === 'select_role' 
+                      ? '歡迎！請確認您在此帳本的身分，以進行專屬設定' 
+                      : viewStep === 'partner_flow'
+                      ? '💖 伴侶快速加入：輸入邀請碼立即同步'
+                      : '👑 帳本主管理者：建立專屬 Google 試算表與 API'}
                   </p>
                 </div>
               </div>
 
-              {isBound && (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-8 h-8 rounded-full bg-[#EFECE3] hover:bg-[#E5E1D5] flex items-center justify-center text-[#8C8475] transition-all cursor-pointer shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-
-            {/* 模式切換卡片：伴侶邀請碼 vs 建立 API */}
-            <div className="bg-white p-3 border-b border-[#EDE7D9] shrink-0">
-              <div className="grid grid-cols-2 gap-2 max-w-md mx-auto">
-                <button
-                  type="button"
-                  onClick={() => setOnboardingMode('partner')}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                    onboardingMode === 'partner'
-                      ? 'bg-rose-50/90 border-rose-400 text-rose-950 shadow-xs'
-                      : 'bg-[#FAF9F5] border-[#E8E2D5] text-[#7A7366] hover:bg-rose-50/40'
-                  }`}
-                >
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                    onboardingMode === 'partner' ? 'bg-rose-500 text-white' : 'bg-[#EAE4D7] text-[#7A7366]'
-                  }`}>
-                    <Heart className="w-4 h-4 fill-current" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black flex items-center gap-1">
-                      <span>輸入伴侶邀請碼</span>
-                    </div>
-                    <div className="text-[10px] text-rose-800/80">加入另一半已建立的帳本</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setOnboardingMode('admin')}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
-                    onboardingMode === 'admin'
-                      ? 'bg-amber-50/90 border-amber-400 text-amber-950 shadow-xs'
-                      : 'bg-[#FAF9F5] border-[#E8E2D5] text-[#7A7366] hover:bg-amber-50/40'
-                  }`}
-                >
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                    onboardingMode === 'admin' ? 'bg-amber-800 text-white' : 'bg-[#EAE4D7] text-[#7A7366]'
-                  }`}>
-                    <Crown className="w-4 h-4 text-amber-100" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black flex items-center gap-1">
-                      <span>建立專屬 API 資料庫</span>
-                    </div>
-                    <div className="text-[10px] text-amber-800/80">主帳號部署並派發邀請碼</div>
-                  </div>
-                </button>
+              <div className="flex items-center gap-2">
+                {currentUser?.email && (
+                  <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-300/80 px-2.5 py-1 rounded-full font-bold hidden sm:inline-block">
+                    {currentUser.email}
+                  </span>
+                )}
+                {isBound && (
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-8 h-8 rounded-full bg-[#EFECE3] hover:bg-[#E5E1D5] flex items-center justify-center text-[#8C8475] transition-all cursor-pointer shrink-0"
+                    title="關閉"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
 
             {/* 內容區 */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-left">
-              {/* ======================= 模式 1: 伴侶邀請碼綁定 ======================= */}
-              {onboardingMode === 'partner' && (
+              
+              {/* ======================= 步驟 0: 身分選擇卡片 ======================= */}
+              {viewStep === 'select_role' && (
                 <motion.div
-                  key="mode-partner"
+                  key="step-select-role"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-4"
+                >
+                  <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 text-center space-y-1.5">
+                    <h4 className="text-sm font-black text-amber-950">
+                      👋 嗨，{currentUser?.name || '朋友'}！請選擇您的身分
+                    </h4>
+                    <p className="text-xs text-amber-900/80 leading-relaxed max-w-md mx-auto">
+                      每一本伴伴記情侶帳本由<strong>一位主管理者</strong>建立 Google 試算表，另一半作為<strong>伴侶</strong>輸入邀請碼即可共享帳本。
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    {/* 身分 A: 主管理者 */}
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setViewStep('admin_flow');
+                        setAdminStep(1);
+                      }}
+                      className="bg-white border-2 border-amber-200 hover:border-amber-600 rounded-3xl p-5 text-left transition-all cursor-pointer shadow-xs hover:shadow-md flex flex-col justify-between group space-y-4"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 text-white flex items-center justify-center shadow-sm">
+                            <Crown className="w-6 h-6 text-amber-100" />
+                          </div>
+                          <span className="text-[10px] bg-amber-100 text-amber-900 font-black px-2.5 py-1 rounded-full border border-amber-200">
+                            👑 建立新帳本
+                          </span>
+                        </div>
+
+                        <div>
+                          <h5 className="text-base font-black text-[#3E3A36] group-hover:text-amber-900 transition-colors">
+                            我是帳本主管理者
+                          </h5>
+                          <p className="text-xs text-[#7A7366] mt-1 leading-relaxed">
+                            由我建立情侶帳本，擁有專屬 Google 試算表與 GAS Web App API，並可派發邀請碼給另一半。
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-[#F0EBE1] flex items-center justify-between text-xs font-bold text-amber-900">
+                        <span>進入管理者設定</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </motion.button>
+
+                    {/* 身分 B: 伴侶 */}
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setViewStep('partner_flow');
+                      }}
+                      className="bg-white border-2 border-rose-200 hover:border-rose-500 rounded-3xl p-5 text-left transition-all cursor-pointer shadow-xs hover:shadow-md flex flex-col justify-between group space-y-4"
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-rose-400 to-rose-600 text-white flex items-center justify-center shadow-sm">
+                            <Heart className="w-6 h-6 fill-white" />
+                          </div>
+                          <span className="text-[10px] bg-rose-100 text-rose-900 font-black px-2.5 py-1 rounded-full border border-rose-200">
+                            💖 加入另一半
+                          </span>
+                        </div>
+
+                        <div>
+                          <h5 className="text-base font-black text-[#3E3A36] group-hover:text-rose-900 transition-colors">
+                            我是伴侶
+                          </h5>
+                          <p className="text-xs text-[#7A7366] mt-1 leading-relaxed">
+                            另一半已經建立好帳本，我只需輸入伴侶提供的 6 碼邀請碼或貼上專屬連結，免建 API 立即加入。
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-[#F0EBE1] flex items-center justify-between text-xs font-bold text-rose-700">
+                        <span>輸入邀請碼加入</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* ======================= 模式 1: 伴侶邀請碼綁定流程 ======================= */}
+              {viewStep === 'partner_flow' && (
+                <motion.div
+                  key="view-partner"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="space-y-4"
                 >
+                  {/* 返回身分選擇按鈕 */}
+                  <div className="flex items-center justify-between pb-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewStep('select_role');
+                        setPartnerError(null);
+                      }}
+                      className="text-xs font-bold text-[#8C8475] hover:text-[#3E3A36] flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>返回切換身分</span>
+                    </button>
+                    <span className="text-[11px] font-black text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
+                      💖 伴侶加入模式
+                    </span>
+                  </div>
+
                   <div className="bg-rose-50/80 border border-rose-200 rounded-2xl p-4 space-y-2">
                     <h4 className="text-xs font-black text-rose-950 flex items-center gap-1.5">
                       <Heart className="w-4 h-4 text-rose-600 fill-rose-500" />
                       <span>輸入伴侶邀請碼，一秒加入情侶共同帳本</span>
                     </h4>
                     <p className="text-[11px] text-rose-800 leading-relaxed">
-                      若您的另一半已經建立好伴伴記帳本，請向對方索取 <strong>6 碼邀請碼（例如 BB-XXXX）</strong> 或專屬邀請連結，貼在下方即可自動綁定並同步記帳！
+                      請向另一半索取 <strong>6 碼邀請碼（例如 BB-XXXX）</strong> 或專屬邀請連結，貼在下方即可自動綁定並同步記帳！
                     </p>
                   </div>
 
@@ -340,13 +436,24 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
                           </span>
                         )}
                       </label>
-                      <input
-                        type="text"
-                        value={inviteInput}
-                        onChange={(e) => setInviteInput(e.target.value)}
-                        placeholder="例如：BB-8924 或貼上邀請網址"
-                        className="w-full px-3.5 py-2.5 text-xs bg-[#FAF9F5] border-2 border-rose-300 focus:border-rose-600 rounded-xl focus:outline-none transition-all font-mono font-bold tracking-wider uppercase text-[#3E3A36]"
-                      />
+                      <div className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={inviteInput}
+                          onChange={(e) => setInviteInput(e.target.value)}
+                          placeholder="例如：BB-8924 或貼上邀請網址"
+                          className="w-full px-3.5 py-2.5 pr-18 text-xs bg-[#FAF9F5] border-2 border-rose-300 focus:border-rose-600 rounded-xl focus:outline-none transition-all font-mono font-bold tracking-wider uppercase text-[#3E3A36]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handlePasteClipboard}
+                          className="absolute right-2 px-2.5 py-1 bg-[#F4EFE6] hover:bg-[#EAE4D6] text-[#5C564E] rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
+                          title="貼上剪貼簿內容"
+                        >
+                          <ClipboardPaste className="w-3 h-3 text-amber-800" />
+                          <span>貼上</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* 即時解析展示卡 */}
@@ -410,14 +517,32 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
                 </motion.div>
               )}
 
-              {/* ======================= 模式 2: 建立專屬 API 資料庫 ======================= */}
-              {onboardingMode === 'admin' && (
+              {/* ======================= 模式 2: 建立專屬 API 資料庫流程 ======================= */}
+              {viewStep === 'admin_flow' && (
                 <motion.div
-                  key="mode-admin"
+                  key="view-admin"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="space-y-4"
                 >
+                  {/* 返回切換身分按鈕 */}
+                  <div className="flex items-center justify-between pb-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewStep('select_role');
+                        setAdminValidationError(null);
+                      }}
+                      className="text-xs font-bold text-[#8C8475] hover:text-[#3E3A36] flex items-center gap-1 cursor-pointer"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>返回切換身分</span>
+                    </button>
+                    <span className="text-[11px] font-black text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+                      👑 帳本主管理者
+                    </span>
+                  </div>
+
                   {/* 步驟進度條 */}
                   <div className="bg-white px-3 py-2 rounded-2xl border border-[#EDE7D9] flex items-center justify-between text-xs">
                     <div className={`flex items-center gap-1.5 font-bold ${adminStep === 1 ? 'text-amber-900' : adminStep > 1 ? 'text-emerald-700' : 'text-[#A0988A]'}`}>
@@ -531,7 +656,7 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
                     <div className="space-y-3">
                       <div className="bg-amber-50/70 border border-amber-200/90 rounded-2xl p-3.5 space-y-1.5">
                         <h4 className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
-                          <Cloud className="w-3.5 h-3.5 text-amber-700" />
+                          <Rocket className="w-3.5 h-3.5 text-amber-700" />
                           <span>第 2 步：貼上 Apps Script 網頁應用程式 API 網址</span>
                         </h4>
                         <p className="text-[11px] text-amber-900/80 leading-relaxed">
