@@ -128,7 +128,8 @@ import {
   saveUserNotifySettings,
   getUserNotifySettings
 } from './utils/userConfigService';
-import { syncGoogleUserProfile } from './utils/googleOAuthService';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { syncGoogleUserProfile, db } from './utils/googleOAuthService';
 
 
 // 定義購物記事資料型態
@@ -1676,6 +1677,17 @@ export default function App() {
           deploySheetUrl: cleanSheet,
           createdAt: new Date().toISOString()
         });
+
+        // 若已有伴侶綁定紀錄，同步更新 Firestore 中的情侶資料庫設定
+        if (partnerBindingInfo) {
+          const updatedBinding: CoupleBindingInfo = {
+            ...partnerBindingInfo,
+            gasWebUrl: cleanGas,
+            deploySheetUrl: cleanSheet
+          };
+          savePartnerBindingInfo(updatedBinding);
+          setPartnerBindingInfo(updatedBinding);
+        }
       }
     }
 
@@ -1690,7 +1702,7 @@ export default function App() {
     fetchTravelData(true);
   };
 
-  // ☁️ 開機自動同步使用者 Google 帳號所綁定的 API 設定 (跨裝置換手機無縫讀取)
+  // ☁️ 開機自動同步使用者 Google 帳號所綁定的 API 設定與情侶雙向即時同步
   useEffect(() => {
     if (currentUser?.email && !isSandboxMode) {
       const cleanEmail = currentUser.email.trim().toLowerCase();
@@ -1701,12 +1713,12 @@ export default function App() {
         let activeSheet = deploySheetUrl || localStorage.getItem('muji_sheet_url') || '';
         let updated = false;
 
-        // 1. 若為伴侶，優先從線上伴侶綁定紀錄同步主管理員的 GAS/Sheet
-        if (isPartnerRole) {
-          try {
-            const binding = await fetchPartnerBindingInfoOnline(cleanEmail);
-            if (binding) {
-              setPartnerBindingInfo(binding);
+        // 1. 無論是主管理員或伴侶，都嘗試同步伴侶綁定紀錄
+        try {
+          const binding = await fetchPartnerBindingInfoOnline(cleanEmail);
+          if (binding) {
+            setPartnerBindingInfo(binding);
+            if (isPartnerRole) {
               if (binding.gasWebUrl && binding.gasWebUrl !== gasWebUrl) {
                 setGasWebUrl(binding.gasWebUrl);
                 try { localStorage.setItem('muji_gas_web_url', binding.gasWebUrl); } catch (e) {}
@@ -1720,8 +1732,8 @@ export default function App() {
                 updated = true;
               }
             }
-          } catch (e) {}
-        }
+          }
+        } catch (e) {}
 
         // 2. 從個人 UserCloudConfig 同步
         try {
@@ -1752,8 +1764,40 @@ export default function App() {
       };
 
       restoreCloudSync();
+
+      // 3. 📡 Firestore 雙向即時監聽情侶綁定狀態 (即時接收伴侶綁定/解綁/更新)
+      let unsubscribe: (() => void) | null = null;
+      if (db) {
+        try {
+          const docRef = doc(db, 'couple_bindings', cleanEmail);
+          unsubscribe = onSnapshot(docRef, (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.data() as CoupleBindingInfo;
+              setPartnerBindingInfo(data);
+              if (isPartnerRole && data.gasWebUrl && data.gasWebUrl !== gasWebUrl) {
+                setGasWebUrl(data.gasWebUrl);
+                try { localStorage.setItem('muji_gas_web_url', data.gasWebUrl); } catch (e) {}
+                if (data.deploySheetUrl) {
+                  setDeploySheetUrl(data.deploySheetUrl);
+                  try { localStorage.setItem('muji_sheet_url', data.deploySheetUrl); } catch (e) {}
+                }
+              }
+            }
+          }, (err) => {
+            console.warn('Firestore onSnapshot error:', err);
+          });
+        } catch (e) {
+          console.warn('Firestore listener setup failed:', e);
+        }
+      }
+
+      return () => {
+        if (unsubscribe) {
+          unsubscribe();
+        }
+      };
     }
-  }, [currentUser?.email]);
+  }, [currentUser?.email, currentUser?.userRole, isSandboxMode]);
 
   const getCustomizedCodeGs = () => {
     let code = CODE_GS_TEMPLATE;
@@ -5348,6 +5392,7 @@ export default function App() {
         onCopyInviteShare={handleCopyInviteShare}
         partnerBindingInfo={partnerBindingInfo}
         onUnbindPartner={handleUnbindPartner}
+        onBindPartnerInvite={handleBindPartnerInvite}
         onUpdateNickname={handleUpdateNickname}
         onSyncGoogleAvatar={handleSyncGoogleAvatar}
         pendingQueueCount={pendingSyncQueue.length}
@@ -5570,6 +5615,7 @@ export default function App() {
           onCopyInviteShare={handleCopyInviteShare}
           partnerBindingInfo={partnerBindingInfo}
           onUnbindPartner={handleUnbindPartner}
+          onBindPartnerInvite={handleBindPartnerInvite}
           hasDatabaseBound={Boolean(gasWebUrl && gasWebUrl.startsWith('http'))}
           onOpenDatabaseOnboarding={() => setIsDatabaseOnboardingOpen(true)}
           onUpdateNickname={handleUpdateNickname}

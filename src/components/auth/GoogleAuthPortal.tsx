@@ -61,24 +61,24 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
       setDetectedInvite(resolved);
       setInviteStatus({
         valid: true,
-        message: `已成功識別伴侶【${resolved.adminName || '主管理員'}】的帳本邀請！`,
+        message: `✅ 已成功識別伴侶【${resolved.adminName || '主管理員'}】的帳本邀請！`,
         data: resolved
       });
       return;
     }
 
-    // 若本地解析為回退預設值，嘗試線上從 Firestore 取得最新管理員綁定資料庫設定
-    const isCodePattern = /^BB-[A-Z0-9]{4,8}$/i.test(clean) || /^[A-Z0-9]{4,8}$/i.test(clean);
+    // 線上從 Firestore 查詢真實存在的邀請碼
+    const isCodePattern = /^BB-[A-Z0-9]{4,8}$/i.test(clean) || /^[A-Z0-9]{4,8}$/i.test(clean) || clean.includes('http') || clean.includes('#join=') || clean.includes('invite=');
     if (isCodePattern) {
       const formattedCode = clean.toUpperCase().startsWith('BB-') ? clean.toUpperCase() : `BB-${clean.toUpperCase()}`;
       setIsValidatingCode(true);
       try {
-        const cloudResolved = await fetchInviteCodeOnline(formattedCode);
-        if (cloudResolved && cloudResolved.gasWebUrl) {
+        const cloudResolved = await fetchInviteCodeOnline(clean);
+        if (cloudResolved && cloudResolved.adminEmail && cloudResolved.gasWebUrl) {
           setDetectedInvite(cloudResolved);
           setInviteStatus({
             valid: true,
-            message: `已成功識別伴侶【${cloudResolved.adminName || '主管理員'}】的帳本邀請！`,
+            message: `✅ 已成功識別伴侶【${cloudResolved.adminName || '主管理員'}】的帳本邀請！登入後將自動連動所有帳目與資料庫`,
             data: cloudResolved
           });
           setIsValidatingCode(false);
@@ -87,25 +87,18 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
       } catch (e) {}
       setIsValidatingCode(false);
 
-      const fallback: PartnerInviteData = resolved || {
-        inviteCode: formattedCode,
-        adminEmail: '',
-        adminName: '另一半',
-        gasWebUrl: '',
-        deploySheetUrl: '',
-        createdAt: new Date().toISOString()
-      };
-      setDetectedInvite(fallback);
+      // 查無此有效邀請碼：嚴格拒絕，不予放行
+      setDetectedInvite(null);
       setInviteStatus({
-        valid: true,
-        message: `已填妥邀請碼 ${formattedCode}，完成登入後將自動建立情侶配對！`,
-        data: fallback
+        valid: false,
+        message: `❌ 查無此邀請碼【${clean.length <= 12 ? clean.toUpperCase() : '輸入之代碼'}】，請確認代碼是否輸入正確或向另一半索取最新邀請碼`,
+        data: null
       });
     } else {
       setDetectedInvite(null);
       setInviteStatus({
         valid: false,
-        message: '邀請碼格式不符（例如：BB-XXXX 或直接貼上專屬邀請連結）',
+        message: '❌ 邀請碼格式不符（格式如：BB-XXXX 或貼上伴侶專屬邀請連結）',
         data: null
       });
     }

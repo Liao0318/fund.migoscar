@@ -25,7 +25,10 @@ import {
   ShieldCheck,
   Camera,
   LogIn,
-  Unlink
+  Unlink,
+  KeyRound,
+  ClipboardPaste,
+  Loader2
 } from 'lucide-react';
 import { AuthUser, CoupleBindingInfo, NicknameLengthPreference } from '../../types';
 import { NicknameSettingsSection } from '../common/NicknameSettingsSection';
@@ -50,6 +53,7 @@ interface UnifiedSettingsModalProps {
   onCopyInviteShare?: () => void;
   partnerBindingInfo?: CoupleBindingInfo | null;
   onUnbindPartner?: () => void;
+  onBindPartnerInvite?: (inviteInput: string) => Promise<{ success: boolean; message?: string }>;
   onUpdateNickname?: (
     nickname: string,
     lengthPreference?: NicknameLengthPreference,
@@ -82,6 +86,7 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   onCopyInviteShare,
   partnerBindingInfo,
   onUnbindPartner,
+  onBindPartnerInvite,
   onUpdateNickname,
   onSyncGoogleAvatar,
   pendingQueueCount = 0,
@@ -95,6 +100,10 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [partnerSubTab, setPartnerSubTab] = useState<'share' | 'join'>('share');
+  const [manualJoinCode, setManualJoinCode] = useState('');
+  const [isSubmittingJoin, setIsSubmittingJoin] = useState(false);
+  const [joinErrorMessage, setJoinErrorMessage] = useState('');
 
   useEffect(() => {
     if (currentUser) {
@@ -364,90 +373,200 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                 {/* 伴侶連線卡片 - 僅限登入 Google 帳號用戶才可使用，訪客模式隱藏不顯示 */}
                 {currentUser && !isGuestMode && (
                   isAdmin ? (
-                    /* 管理員專屬：派發伴侶配對邀請卡片 */
+                    /* 管理員專屬：派發伴侶配對邀請卡片 / 輸入伴侶邀請碼加入卡片 */
                     <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-3 shadow-2xs">
                       <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2">
-                        <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5">
-                          <Heart className="w-4 h-4 text-rose-600" />
-                          <span>💌 派發伴侶專屬邀請碼</span>
-                        </h4>
+                        <div className="flex items-center gap-1 bg-[#F5F2EA] p-0.5 rounded-xl border border-[#E6E0D2]">
+                          <button
+                            type="button"
+                            onClick={() => setPartnerSubTab('share')}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              partnerSubTab === 'share'
+                                ? 'bg-white text-rose-800 shadow-2xs'
+                                : 'text-[#7A7366] hover:text-[#3E3A36]'
+                            }`}
+                          >
+                            💌 派發我的邀請碼
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPartnerSubTab('join')}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              partnerSubTab === 'join'
+                                ? 'bg-white text-rose-800 shadow-2xs'
+                                : 'text-[#7A7366] hover:text-[#3E3A36]'
+                            }`}
+                          >
+                            🔗 加入伴侶帳本
+                          </button>
+                        </div>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                          管理員派發
+                          {partnerSubTab === 'share' ? '管理員模式' : '切換為伴侶'}
                         </span>
                       </div>
                       
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EBE7DC]">
-                        <div>
-                          <div className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
-                            <span>專屬伴侶配對代碼：</span>
-                            <span className="font-mono bg-white px-2 py-0.5 rounded-lg border border-[#DDD8CE] text-rose-700 font-extrabold text-sm">
-                              {currentInviteCode}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-[#8C8475] mt-1">
-                            伴侶登入後可透過此代碼即時雙向連線，共同記帳並即時接收推播
-                          </p>
-                        </div>
+                      {partnerSubTab === 'share' ? (
+                        <>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EBE7DC]">
+                            <div>
+                              <div className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
+                                <span>專屬伴侶配對代碼：</span>
+                                <span className="font-mono bg-white px-2 py-0.5 rounded-lg border border-[#DDD8CE] text-rose-700 font-extrabold text-sm">
+                                  {currentInviteCode}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-[#8C8475] mt-1">
+                                伴侶登入後可透過此代碼即時雙向連線，共同記帳並即時接收推播
+                              </p>
+                            </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          {onGenerateNewInviteCode && (
-                            <button
-                              type="button"
-                              onClick={onGenerateNewInviteCode}
-                              className="p-1.5 rounded-xl bg-white hover:bg-[#F2EFE7] text-[#5C564E] border border-[#E6E0D2] transition-all cursor-pointer shadow-2xs"
-                              title="重新隨機派發新邀請碼"
-                            >
-                              <RefreshCw className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {onGenerateNewInviteCode && (
+                                <button
+                                  type="button"
+                                  onClick={onGenerateNewInviteCode}
+                                  className="p-1.5 rounded-xl bg-white hover:bg-[#F2EFE7] text-[#5C564E] border border-[#E6E0D2] transition-all cursor-pointer shadow-2xs"
+                                  title="重新隨機派發新邀請碼"
+                                >
+                                  <RefreshCw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
 
-                          <button
-                            type="button"
-                            onClick={handleCopyCode}
-                            className="px-3 py-1.5 bg-white hover:bg-[#F2EFE7] border border-[#E6E0D2] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1 transition-all cursor-pointer"
-                          >
-                            {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedCode ? '已複製' : '複製代碼'}</span>
-                          </button>
-
-                          {onCopyInviteShare && (
-                            <button
-                              type="button"
-                              onClick={handleCopyShareText}
-                              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                            >
-                              {copiedShare ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-                              <span>{copiedShare ? '已複製連結' : '分享邀請'}</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* 伴侶綁定狀態 */}
-                      <div className="bg-[#FAF8F3] p-2.5 rounded-xl border border-[#EBE7DC] text-xs flex items-center justify-between">
-                        <span className="text-[11px] text-[#8C8475] font-bold">伴侶狀態：</span>
-                        {partnerBindingInfo?.partnerEmail ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-emerald-700 font-bold flex items-center gap-1 text-[11px]">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>已綁定 ({partnerBindingInfo.partnerName || '伴侶'})</span>
-                            </span>
-                            {onUnbindPartner && (
                               <button
                                 type="button"
-                                onClick={onUnbindPartner}
-                                className="text-[10px] text-rose-600 hover:text-rose-800 underline font-bold cursor-pointer"
+                                onClick={handleCopyCode}
+                                className="px-3 py-1.5 bg-white hover:bg-[#F2EFE7] border border-[#E6E0D2] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1 transition-all cursor-pointer"
                               >
-                                解除綁定
+                                {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                <span>{copiedCode ? '已複製' : '複製代碼'}</span>
                               </button>
+
+                              {onCopyInviteShare && (
+                                <button
+                                  type="button"
+                                  onClick={handleCopyShareText}
+                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                                >
+                                  {copiedShare ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                                  <span>{copiedShare ? '已複製連結' : '分享邀請'}</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 伴侶綁定狀態 */}
+                          <div className="bg-[#FAF8F3] p-2.5 rounded-xl border border-[#EBE7DC] text-xs flex items-center justify-between">
+                            <span className="text-[11px] text-[#8C8475] font-bold">伴侶狀態：</span>
+                            {partnerBindingInfo?.partnerEmail ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-emerald-700 font-bold flex items-center gap-1 text-[11px]">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>已綁定 ({partnerBindingInfo.partnerName || '伴侶'})</span>
+                                </span>
+                                {onUnbindPartner && (
+                                  <button
+                                    type="button"
+                                    onClick={onUnbindPartner}
+                                    className="text-[10px] text-rose-600 hover:text-rose-800 underline font-bold cursor-pointer"
+                                  >
+                                    解除綁定
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 text-[10px]">
+                                ⏳ 等待伴侶輸入邀請碼
+                              </span>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 text-[10px]">
-                            ⏳ 等待伴侶輸入邀請碼
-                          </span>
-                        )}
-                      </div>
+                        </>
+                      ) : (
+                        /* 加入伴侶帳本輸入表單 */
+                        <div className="bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EBE7DC] space-y-3">
+                          <p className="text-xs text-[#5C564E] leading-relaxed">
+                            輸入另一半發給您的專屬邀請碼 (如：BB-XXXX) 或完整邀請連結，即可立即加入伴侶帳本並同步所有收支紀錄：
+                          </p>
+
+                          <div className="space-y-2">
+                            <div className="relative flex items-center">
+                              <div className="absolute left-3 text-[#8C8475] pointer-events-none">
+                                <KeyRound className="w-4 h-4 text-amber-700" />
+                              </div>
+                              <input
+                                type="text"
+                                value={manualJoinCode}
+                                onChange={(e) => {
+                                  setManualJoinCode(e.target.value);
+                                  setJoinErrorMessage('');
+                                }}
+                                placeholder="輸入伴侶的 6 碼邀請碼 (如 BB-8924) 或貼上邀請連結"
+                                className="w-full bg-white border border-[#DDD6C8] focus:border-rose-400 focus:ring-2 focus:ring-rose-100 rounded-xl pl-9 pr-20 py-2.5 text-xs text-[#3E3A36] placeholder-[#A09A8F] tracking-wide font-mono transition-all"
+                              />
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                      const text = await navigator.clipboard.readText();
+                                      if (text) {
+                                        setManualJoinCode(text.trim());
+                                        setJoinErrorMessage('');
+                                      }
+                                    }
+                                  } catch (e) {}
+                                }}
+                                className="absolute right-2 px-2.5 py-1 bg-[#F4EFE6] hover:bg-[#EAE4D6] text-[#5C564E] rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
+                              >
+                                <ClipboardPaste className="w-3 h-3 text-amber-800" />
+                                <span>貼上</span>
+                              </button>
+                            </div>
+
+                            {joinErrorMessage && (
+                              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                                <span>{joinErrorMessage}</span>
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              disabled={!manualJoinCode.trim() || isSubmittingJoin}
+                              onClick={async () => {
+                                if (!onBindPartnerInvite || !manualJoinCode.trim()) return;
+                                setIsSubmittingJoin(true);
+                                setJoinErrorMessage('');
+                                try {
+                                  const result = await onBindPartnerInvite(manualJoinCode.trim());
+                                  if (result.success) {
+                                    setManualJoinCode('');
+                                    onClose();
+                                  } else {
+                                    setJoinErrorMessage(result.message || '驗證失敗，查無此邀請碼');
+                                  }
+                                } catch (err: any) {
+                                  setJoinErrorMessage(err?.message || '配對綁定過程發生錯誤');
+                                } finally {
+                                  setIsSubmittingJoin(false);
+                                }
+                              }}
+                              className="w-full py-2.5 px-4 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-98 disabled:opacity-50"
+                            >
+                              {isSubmittingJoin ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                  <span>正在驗證並連動伴侶帳本...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Heart className="w-4 h-4 fill-white" />
+                                  <span>驗證並加入伴侶帳本</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     /* 伴侶專屬：帳本連線狀態卡片 (不顯示派發/分享邀請碼按鈕) */

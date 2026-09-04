@@ -22,7 +22,7 @@ import {
   Crown
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData } from '../../types';
-import { resolveInviteCodeOrToken } from '../../utils/partnerInvite';
+import { resolveInviteCodeOrToken, fetchInviteCodeOnline } from '../../utils/partnerInvite';
 
 interface DatabaseOnboardingModalProps {
   isOpen: boolean;
@@ -79,6 +79,7 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
 
   // 當使用者輸入邀請碼時即時解析
   useEffect(() => {
+    let isMounted = true;
     const clean = inviteInput.trim();
     if (!clean) {
       setResolvedInvite(null);
@@ -87,17 +88,35 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
     }
 
     const found = resolveInviteCodeOrToken(clean);
-    if (found) {
+    if (found && found.gasWebUrl && found.adminEmail) {
       setResolvedInvite(found);
       setPartnerError(null);
-    } else if (clean.length >= 4) {
-      setResolvedInvite(null);
-      if (!clean.toUpperCase().startsWith('BB-') && !clean.includes('=')) {
-        setPartnerError('邀請碼格式通常為「BB-XXXX」或完整邀請連結');
-      } else {
-        setPartnerError('找不到符合的邀請碼，請向伴侶索取最新 6 碼邀請碼或專屬連結');
-      }
+      return;
     }
+
+    const isCodePattern = /^BB-[A-Z0-9]{4,8}$/i.test(clean) || /^[A-Z0-9]{4,8}$/i.test(clean) || clean.includes('http') || clean.includes('#join=') || clean.includes('invite=');
+    if (isCodePattern) {
+      fetchInviteCodeOnline(clean).then(cloudResolved => {
+        if (!isMounted) return;
+        if (cloudResolved && cloudResolved.adminEmail && cloudResolved.gasWebUrl) {
+          setResolvedInvite(cloudResolved);
+          setPartnerError(null);
+        } else {
+          setResolvedInvite(null);
+          setPartnerError(`查無此邀請碼【${clean.length <= 12 ? clean.toUpperCase() : '代碼'}】，請確認代碼或向伴侶索取最新邀請碼`);
+        }
+      }).catch(() => {
+        if (!isMounted) return;
+        setResolvedInvite(null);
+      });
+    } else if (clean.length >= 3) {
+      setResolvedInvite(null);
+      setPartnerError('邀請碼格式通常為「BB-XXXX」或完整邀請連結');
+    }
+
+    return () => {
+      isMounted = false;
+    };
   }, [inviteInput]);
 
   const handleCopyGsCode = () => {

@@ -199,87 +199,118 @@ export async function removePartnerBinding(email?: string): Promise<void> {
 }
 
 /**
- * 根據邀請碼或 Token 搜尋邀請資訊（同步解析本地與 Token）
+ * 根據邀請碼或 Token 搜尋邀請資訊（同步解析本地與 Token，嚴格拒絕偽造無效代碼）
  */
 export function resolveInviteCodeOrToken(input: string): PartnerInviteData | null {
   if (!input) return null;
   const clean = input.trim();
 
-  // 1. 若 input 包含 URL (例如 https://.../?invite=xxx 或 #invite=xxx)
+  // 1. 若 input 包含 URL (例如 https://.../?invite=xxx 或 #join=BB-XXXX 或 ?code=xxx)
   try {
-    if (clean.includes('invite=') || clean.includes('code=')) {
+    if (clean.includes('invite=') || clean.includes('code=') || clean.includes('join=')) {
+      // 擷取 #join=BB-XXXX 或 #code=BB-XXXX
+      if (clean.includes('#join=')) {
+        const joinCode = clean.split('#join=')[1]?.split('&')[0]?.split('?')[0]?.trim();
+        if (joinCode) {
+          const res = resolveInviteCodeOrToken(joinCode);
+          if (res) return res;
+        }
+      }
+      if (clean.includes('#code=')) {
+        const code = clean.split('#code=')[1]?.split('&')[0]?.split('?')[0]?.trim();
+        if (code) {
+          const res = resolveInviteCodeOrToken(code);
+          if (res) return res;
+        }
+      }
+
+      // 解析 URL 查詢參數
       const url = new URL(clean.startsWith('http') ? clean : `https://dummy.local/${clean}`);
       const tokenParam = url.searchParams.get('invite');
       if (tokenParam) {
         const decoded = decodeInvitePayload(tokenParam);
-        if (decoded) return decoded;
+        if (decoded && decoded.adminEmail) return decoded;
       }
-      const codeParam = url.searchParams.get('code');
+      const codeParam = url.searchParams.get('code') || url.searchParams.get('join');
       if (codeParam) {
-        return resolveInviteCodeOrToken(codeParam);
+        const res = resolveInviteCodeOrToken(codeParam);
+        if (res) return res;
       }
     }
   } catch (e) {}
 
   // 2. 若 input 本身為 Base64 Token
   const fromToken = decodeInvitePayload(clean);
-  if (fromToken) return fromToken;
+  if (fromToken && fromToken.adminEmail && (fromToken.gasWebUrl || fromToken.inviteCode)) {
+    return fromToken;
+  }
 
-  // 3. 從本地註冊表比對
+  // 3. 從本地註冊表比對真實存在的邀請紀錄 (必須含有發行者 email)
   const registry = getInviteRegistry();
-  const upper = clean.toUpperCase().startsWith('BB-') ? clean.toUpperCase() : `BB-${clean.toUpperCase()}`;
-  if (registry[clean.toUpperCase()]) {
-    return registry[clean.toUpperCase()];
+  const rawUpper = clean.toUpperCase();
+  const formattedUpper = rawUpper.startsWith('BB-') ? rawUpper : `BB-${rawUpper}`;
+
+  if (registry[rawUpper] && registry[rawUpper].adminEmail) {
+    return registry[rawUpper];
   }
-  if (registry[upper]) {
-    return registry[upper];
+  if (registry[formattedUpper] && registry[formattedUpper].adminEmail) {
+    return registry[formattedUpper];
   }
 
-  // 4. 比對目前啟用的邀請碼
+  // 4. 比對目前啟用的邀請碼 (必須含有發行者 email)
   try {
     const active = localStorage.getItem(ACTIVE_INVITE_STORAGE_KEY);
     if (active) {
-      const parsed = JSON.parse(active);
-      if (parsed && parsed.inviteCode && (parsed.inviteCode.toUpperCase() === clean.toUpperCase() || parsed.inviteCode.toUpperCase() === upper)) {
+      const parsed = JSON.parse(active) as PartnerInviteData;
+      if (
+        parsed &&
+        parsed.adminEmail &&
+        (parsed.inviteCode?.toUpperCase() === rawUpper || parsed.inviteCode?.toUpperCase() === formattedUpper)
+      ) {
         return parsed;
       }
     }
   } catch (e) {}
 
-  // 5. 若格式符合 BB-XXXX 但在本地尚未登錄 (跨裝置短碼暫存回退)
-  if (/^BB-[A-Z0-9]{4,8}$/i.test(upper)) {
-    return {
-      inviteCode: upper,
-      adminEmail: '',
-      adminName: '另一半',
-      gasWebUrl: localStorage.getItem('muji_gas_web_url') || '',
-      deploySheetUrl: localStorage.getItem('muji_deploy_sheet_url') || localStorage.getItem('muji_spreadsheet_url') || '',
-      createdAt: new Date().toISOString()
-    };
-  }
-
+  // 🚫 嚴格拒絕所有未註冊的隨機虛擬假代碼，不再返回空偽造物件
   return null;
 }
 
 /**
- * 線上非同步解析邀請碼（優先查詢 Firestore 雲端資料庫，讓伴侶在全新裝置上輸入 6 碼短碼即可自動繼承 API 與試算表）
+ * 線上非同步解析邀請碼（嚴格向 Firestore 雲端資料庫查詢真實存在的邀請碼）
  */
 export async function fetchInviteCodeOnline(input: string): Promise<PartnerInviteData | null> {
-  const localResolved = resolveInviteCodeOrToken(input);
+  if (!input) return null;
+  const cleanInput = input.trim();
+
+  // 先嘗試以 Token 或本機既有真實紀錄解析
+  const localResolved = resolveInviteCodeOrToken(cleanInput);
   if (localResolved && localResolved.gasWebUrl && localResolved.adminEmail) {
     return localResolved;
   }
 
-  const clean = input.trim().toUpperCase();
-  const formattedCode = clean.startsWith('BB-') ? clean : `BB-${clean}`;
+  // 擷取乾淨的 BB-XXXX 格式字串
+  let codeToQuery = cleanInput.toUpperCase();
+  if (codeToQuery.includes('#JOIN=')) {
+    codeToQuery = codeToQuery.split('#JOIN=')[1]?.split('&')[0]?.split('?')[0]?.trim();
+  } else if (codeToQuery.includes('CODE=')) {
+    codeToQuery = codeToQuery.split('CODE=')[1]?.split('&')[0]?.split('?')[0]?.trim();
+  }
+  
+  // 移除前後多餘符號與空白
+  codeToQuery = codeToQuery.replace(/[^A-Z0-9-]/g, '');
+  if (!codeToQuery.startsWith('BB-')) {
+    codeToQuery = `BB-${codeToQuery}`;
+  }
 
-  if (isFirestoreAvailable() && db) {
+  // 向 Firestore 查詢真實存在的邀請紀錄
+  if (isFirestoreAvailable() && db && codeToQuery) {
     try {
-      const inviteRef = doc(db, 'partner_invites', formattedCode);
+      const inviteRef = doc(db, 'partner_invites', codeToQuery);
       const snap = await getDoc(inviteRef);
       if (snap.exists()) {
         const cloudInvite = snap.data() as PartnerInviteData;
-        if (cloudInvite && cloudInvite.inviteCode) {
+        if (cloudInvite && cloudInvite.inviteCode && cloudInvite.adminEmail) {
           // 快取至本地
           saveActiveInviteCode(cloudInvite);
           return cloudInvite;
@@ -290,7 +321,13 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
     }
   }
 
-  return localResolved;
+  // 若 Token 解碼出有效資料但無雲端快取，亦可允許
+  if (localResolved && localResolved.adminEmail) {
+    return localResolved;
+  }
+
+  // 查無此邀請碼，返回 null 嚴格拒絕
+  return null;
 }
 
 /**

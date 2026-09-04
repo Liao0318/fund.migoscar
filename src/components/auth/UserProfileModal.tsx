@@ -42,6 +42,7 @@ interface UserProfileModalProps {
   onCopyInviteShare?: () => void;
   partnerBindingInfo?: CoupleBindingInfo | null;
   onUnbindPartner?: () => void;
+  onBindPartnerInvite?: (inviteInput: string) => Promise<{ success: boolean; message?: string }>;
   hasDatabaseBound?: boolean;
   onOpenDatabaseOnboarding?: () => void;
   onUpdateNickname?: (

@@ -349,11 +349,12 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     return '成員';
   }, [userA, userB]);
 
-  // 成員名單
+  // 成員名單 (去重並確保每位成員唯一)
   const tripMembers = useMemo(() => {
-    return activeTrip?.members && activeTrip.members.length > 0
+    const rawList = activeTrip?.members && activeTrip.members.length > 0
       ? activeTrip.members.map(m => formatMemberDisplayName(m))
       : [userA.displayName, userB.displayName];
+    return Array.from(new Set(rawList.filter(Boolean)));
   }, [activeTrip?.members, userA.displayName, userB.displayName, formatMemberDisplayName]);
 
   // 2. 支出資料列表 (訪客模式或未登入一律為空)
@@ -566,6 +567,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
   const [expPaymentMethod, setExpPaymentMethod] = useState<string>('信用卡');
   const [expSplitMode, setExpSplitMode] = useState<TravelExpenseItem['splitMode']>('全體AA');
   const [expSplitTarget, setExpSplitTarget] = useState<string>('全體');
+  const [customDebtorInput, setCustomDebtorInput] = useState<string>('');
   const [expParticipants, setExpParticipants] = useState<string[]>([]);
   const [expCustomSplits, setExpCustomSplits] = useState<Record<string, string>>({});
   const [expLocation, setExpLocation] = useState('');
@@ -636,7 +638,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     setTripFormStartDate(today);
     setTripFormEndDate(today);
     setTripFormTheme('rose');
-    setTripFormMembers([userA.displayName, userB.displayName]);
+    setTripFormMembers(Array.from(new Set([userA.displayName, userB.displayName].filter(Boolean))));
     setNewMemberInput('');
     setIsTripModalOpen(true);
   };
@@ -656,7 +658,8 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     setTripFormStartDate(activeTrip.startDate || '');
     setTripFormEndDate(activeTrip.endDate || '');
     setTripFormTheme(activeTrip.themeColor || 'rose');
-    setTripFormMembers(activeTrip.members && activeTrip.members.length > 0 ? [...activeTrip.members] : [userA.displayName, userB.displayName]);
+    const initMembers = activeTrip.members && activeTrip.members.length > 0 ? [...activeTrip.members] : [userA.displayName, userB.displayName];
+    setTripFormMembers(Array.from(new Set(initMembers.filter(Boolean))));
     setNewMemberInput('');
     setIsTripModalOpen(true);
   };
@@ -911,6 +914,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     setExpSplitTarget('全體');
     setExpParticipants([...tripMembers]);
     setExpCustomSplits({});
+    setCustomDebtorInput('');
     setExpLocation('');
     setExpNote('');
     setIsAddExpenseOpen(true);
@@ -932,6 +936,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     setExpPaymentMethod(targetExp.paymentMethod || '信用卡');
     setExpSplitMode(targetExp.splitMode || '全體AA');
     setExpSplitTarget(targetExp.splitTarget || '全體');
+    setCustomDebtorInput('');
     setExpParticipants(targetExp.participants && targetExp.participants.length > 0 ? [...targetExp.participants] : [...tripMembers]);
     const custMap: Record<string, string> = {};
     if (targetExp.memberSplits) {
@@ -980,13 +985,25 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
 
       tripMembers.forEach(m => { memberSplits[m] = 0; });
 
-      if (expPayer === '共同基金') {
-        // 共同基金支出，不計入個別代墊負債
-        tripMembers.forEach(m => { memberSplits[m] = 0; });
-      } else if (expSplitMode === '個人自付') {
-        // 個人 100% 自付
-        const targetPerson = expSplitTarget && expSplitTarget !== '全體' ? expSplitTarget : (expPayer !== '共同基金' ? expPayer : tripMembers[0]);
+      let finalSplitTarget = expSplitTarget;
+      if (expSplitMode === '個人自付') {
+        const targetPerson = expSplitTarget && expSplitTarget !== '全體' ? expSplitTarget.trim() : (expPayer !== '共同基金' ? expPayer : tripMembers[0]);
+        finalSplitTarget = targetPerson;
         memberSplits[targetPerson] = totalTWD;
+
+        // 若使用者輸入了新自訂需收款人，自動同步加入旅程成員
+        if (targetPerson && !tripMembers.includes(targetPerson)) {
+          const updatedTripMembers = Array.from(new Set([...tripMembers, targetPerson]));
+          const updatedTrip: TravelTrip = {
+            ...activeTrip,
+            members: updatedTripMembers
+          };
+          const updatedTrips = trips.map(t => t.id === activeTrip.id ? updatedTrip : t);
+          saveTrips(updatedTrips);
+          if (callGasApi) {
+            callGasApi('saveTravelTrip', updatedTrip).catch(() => {});
+          }
+        }
       } else if (expSplitMode === '全體AA' || expSplitMode === 'AA平分') {
         const share = Math.round(totalTWD / (tripMembers.length || 1));
         tripMembers.forEach(m => { memberSplits[m] = share; });
@@ -1043,16 +1060,16 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         exchangeRate: rate,
         totalAmountTWD: totalTWD,
         splitMode: expSplitMode,
-        splitTarget: expSplitMode === '個人自付' ? expSplitTarget : undefined,
+        splitTarget: expSplitMode === '個人自付' ? finalSplitTarget : undefined,
         participants,
         memberSplits,
-        debtor,
-        debtorAmountTWD: debtorAmtTWD,
+        debtor: expSplitMode === '個人自付' ? finalSplitTarget : debtor,
+        debtorAmountTWD: debtorAmtTWD || (expSplitMode === '個人自付' ? totalTWD : 0),
         location: expLocation.trim(),
         note: expNote.trim(),
         creatorEmail: editingExpenseId 
-          ? (expenses.find(e => e.id === editingExpenseId)?.creatorEmail || currentUser?.email || '')
-          : (currentUser?.email || ''),
+          ? (expenses.find(e => e.id === editingExpenseId)?.creatorEmail || currentUser?.email || 'oscargh3359@gmail.com')
+          : (currentUser?.email || 'oscargh3359@gmail.com'),
         createdBy: editingExpenseId
           ? (expenses.find(e => e.id === editingExpenseId)?.createdBy || creatorDisplayName)
           : creatorDisplayName,
@@ -1986,9 +2003,9 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                       </div>
 
                       <div className="flex flex-wrap gap-1.5">
-                        {tripFormMembers.map(member => (
+                        {tripFormMembers.map((member, idx) => (
                           <span
-                            key={member}
+                            key={`${member}-${idx}`}
                             className="px-2.5 py-1 rounded-xl bg-white border border-[#DDD8CC] text-[#3E3A36] font-bold text-xs flex items-center gap-1 shadow-2xs"
                           >
                             <span>{member}</span>
@@ -3297,9 +3314,9 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
 
                   {/* 成員標籤清單 */}
                   <div className="flex flex-wrap gap-1.5">
-                    {tripFormMembers.map(member => (
+                    {tripFormMembers.map((member, idx) => (
                       <span
-                        key={member}
+                        key={`${member}-${idx}`}
                         className="px-2.5 py-1 rounded-xl bg-white border border-[#DDD8CC] text-[#3E3A36] font-bold text-xs flex items-center gap-1 shadow-2xs"
                       >
                         <span>{member}</span>
@@ -3754,32 +3771,101 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
                     </div>
                   </div>
 
-                  {/* 個人自付時選擇歸屬成員 */}
+                  {/* 個人自付 / 代購代墊時選擇或自行 Key in 需收款人 */}
                   {expSplitMode === '個人自付' && (
-                    <div className="p-3 bg-purple-50/50 rounded-2xl border border-purple-200 space-y-1.5">
-                      <label className="font-bold text-purple-900 text-xs flex items-center gap-1">
-                        <User className="w-3.5 h-3.5 text-purple-600" />
-                        <span>此品項由誰 100% 個人自付？</span>
-                      </label>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="p-3 bg-purple-50/70 rounded-2xl border border-purple-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-purple-900 text-xs flex items-center gap-1">
+                          <User className="w-3.5 h-3.5 text-purple-600" />
+                          <span>需收款人 / 分帳人（代墊人先付款，此人負責 100% 償還款項）：</span>
+                        </label>
+                      </div>
+
+                      {/* 既有成員快捷選取 */}
+                      <div className="flex flex-wrap gap-1.5">
                         {tripMembers.map(m => (
                           <button
                             key={m}
                             type="button"
-                            onClick={() => setExpSplitTarget(m)}
+                            onClick={() => {
+                              setExpSplitTarget(m);
+                              setCustomDebtorInput('');
+                            }}
                             className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition-all cursor-pointer ${
                               expSplitTarget === m
                                 ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                                : 'bg-white border-[#DDD8CC] text-[#5C564E] hover:bg-purple-50'
+                                : 'bg-white border-purple-200 text-purple-800 hover:bg-purple-100/60'
                             }`}
                           >
-                            👤 {m} 自付
+                            👤 {m}
                           </button>
                         ))}
                       </div>
-                      <p className="text-[10px] text-purple-700">
-                        * 他人代墊此筆款項後，結算時將自動全額計入該成員的償還帳目。
-                      </p>
+
+                      {/* 自行 Key in 需收款人 (代購親友) */}
+                      <div className="pt-1 border-t border-purple-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <div className="flex-1 flex items-center gap-1 bg-white p-1 rounded-xl border border-purple-200 focus-within:border-purple-500 shadow-2xs">
+                          <input
+                            type="text"
+                            value={customDebtorInput}
+                            onChange={(e) => setCustomDebtorInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const trimmed = customDebtorInput.trim();
+                                if (trimmed) {
+                                  setExpSplitTarget(trimmed);
+                                  showToast(`已設定需收款人為：${trimmed}`, 'success');
+                                }
+                              }
+                            }}
+                            placeholder="自行輸入代購親友姓名 (例: 秋女阿姨、緹媽...)"
+                            className="flex-1 px-2.5 py-1 text-xs text-[#3E3A36] bg-transparent focus:outline-none placeholder:text-purple-300"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const trimmed = customDebtorInput.trim();
+                              if (trimmed) {
+                                setExpSplitTarget(trimmed);
+                                showToast(`已設定需收款人為：${trimmed}`, 'success');
+                              }
+                            }}
+                            className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-lg transition-all cursor-pointer shrink-0"
+                          >
+                            設定
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 常年代購親友快速推薦標籤 */}
+                      <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-purple-700">
+                        <span className="font-bold text-purple-900 text-[10px]">常見代購對象：</span>
+                        {['秋女阿姨', '緹媽', '丞媽', '培培', '大嫂'].map(rec => (
+                          <button
+                            key={rec}
+                            type="button"
+                            onClick={() => {
+                              setExpSplitTarget(rec);
+                              setCustomDebtorInput(rec);
+                            }}
+                            className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-all ${
+                              expSplitTarget === rec
+                                ? 'bg-purple-700 text-white border-purple-700'
+                                : 'bg-white border-purple-200 text-purple-800 hover:bg-purple-100'
+                            }`}
+                          >
+                            + {rec}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="p-2 bg-purple-100/70 rounded-xl text-[11px] text-purple-900 font-bold flex items-center justify-between">
+                        <span>💡 代墊分帳摘要：</span>
+                        <span className="text-purple-800">
+                          由【<b className="text-purple-950 underline">{expPayer}</b>】先行付款 ➔ 由【<b className="text-rose-700 underline">{expSplitTarget && expSplitTarget !== '全體' ? expSplitTarget : (tripMembers[0] || '指定人')}</b>】100% 償還代墊款
+                        </span>
+                      </div>
                     </div>
                   )}
 

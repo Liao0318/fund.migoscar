@@ -879,7 +879,7 @@ function getTravelData() {
         else if (colName.indexOf("備註") !== -1 || colName.indexOf("折扣") !== -1 || colName.indexOf("note") !== -1 || colName.indexOf("memo") !== -1) colMap.note = h;
         else if (colName.indexOf("支付") !== -1 || colName.indexOf("付款方式") !== -1 || colName.indexOf("payment") !== -1) colMap.paymentMethod = h;
         else if (colName.indexOf("代墊人") !== -1 || colName.indexOf("付款人") !== -1 || colName.indexOf("出資人") !== -1 || colName.indexOf("payer") !== -1) colMap.payer = h;
-        else if (colName.indexOf("分帳對象") !== -1 || colName.indexOf("誰要還") !== -1 || colName.indexOf("splittarget") !== -1 || colName.indexOf("分帳") !== -1) colMap.splitTarget = h;
+        else if (colName.indexOf("需收款人") !== -1 || colName.indexOf("分帳人") !== -1 || colName.indexOf("償還") !== -1 || colName.indexOf("分帳對象") !== -1 || colName.indexOf("誰要還") !== -1 || colName.indexOf("splittarget") !== -1 || colName.indexOf("debtor") !== -1 || colName.indexOf("分帳") !== -1) colMap.splitTarget = h;
         else if (colName.indexOf("模式") !== -1 || colName.indexOf("分攤模式") !== -1 || colName.indexOf("splitmode") !== -1) colMap.splitMode = h;
         else if (colName.indexOf("分攤成員") !== -1 || colName.indexOf("成員") !== -1 || colName.indexOf("participants") !== -1) colMap.participants = h;
         else if (colName.indexOf("分攤細項") !== -1 || colName.indexOf("membersplits") !== -1) colMap.memberSplits = h;
@@ -1401,8 +1401,50 @@ function addBatchTravelExpenses(payload) {
   try {
     var items = payload.items || [];
     if (!items.length) return { success: true, count: 0 };
+    var ss = getDbSpreadsheet();
+    var sheet = ss.getSheetByName("旅遊支出明細") || ss.getSheetByName("旅遊分帳");
+    if (!sheet) {
+      setupDatabase();
+      sheet = ss.getSheetByName("旅遊支出明細");
+    }
+    var rows = [];
     for (var i = 0; i < items.length; i++) {
-      addTravelExpense(items[i]);
+      var data = items[i];
+      var id = data.id || ("travelexp-" + Date.now() + "-" + i + "-" + Math.floor(Math.random() * 1000));
+      var dateStr = data.date || Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd");
+      var rate = parseFloat(data.exchangeRate) || 1;
+      var origAmt = parseFloat(data.originalAmount !== undefined ? data.originalAmount : data.amount) || 0;
+      var totalTWD = parseFloat(data.totalAmountTWD !== undefined ? data.totalAmountTWD : data.amountTwd) || Math.round(origAmt * rate);
+      var payer = data.payer || "廖";
+      var splitMode = data.splitMode || "全體AA";
+
+      rows.push([
+        id,
+        data.tripId || "",
+        dateStr,
+        data.category || "購物伴手禮",
+        data.itemName || data.title || "旅遊支出",
+        payer,
+        data.originalCurrency || data.currency || "KRW",
+        origAmt,
+        rate,
+        totalTWD,
+        splitMode,
+        JSON.stringify(data.participants || data.splitMembers || ["廖", "周"]),
+        JSON.stringify(data.memberSplits || data.memberSplitShares || {}),
+        data.debtor || "",
+        parseFloat(data.debtorAmountTWD !== undefined ? data.debtorAmountTWD : data.debtAmount) || 0,
+        data.location || "",
+        data.note || "",
+        data.syncedToSplit === true || data.syncedToDailySplit === true,
+        data.createdAt || Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd HH:mm"),
+        data.creatorEmail || data.userEmail || "",
+        data.createdBy || data.creatorName || ""
+      ]);
+    }
+    if (rows.length > 0) {
+      var lastRow = sheet.getLastRow();
+      sheet.getRange(lastRow + 1, 1, rows.length, 21).setValues(rows);
     }
     return { success: true, count: items.length, message: "已成功寫入 " + items.length + " 筆旅費至試算表！" };
   } catch (e) {
