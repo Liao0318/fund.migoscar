@@ -20,9 +20,11 @@ import {
   Cloud,
   Edit3,
   Camera,
-  AlertCircle
+  AlertCircle,
+  LogIn
 } from 'lucide-react';
-import { AuthUser, CoupleBindingInfo } from '../../types';
+import { AuthUser, CoupleBindingInfo, NicknameLengthPreference } from '../../types';
+import { NicknameSettingsSection } from '../common/NicknameSettingsSection';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -42,7 +44,12 @@ interface UserProfileModalProps {
   onUnbindPartner?: () => void;
   hasDatabaseBound?: boolean;
   onOpenDatabaseOnboarding?: () => void;
-  onUpdateNickname?: (nickname: string) => boolean;
+  onUpdateNickname?: (
+    nickname: string,
+    lengthPreference?: NicknameLengthPreference,
+    nickname1Char?: string,
+    nickname2Char?: string
+  ) => boolean;
   onSyncGoogleAvatar?: () => Promise<boolean>;
 }
 
@@ -170,9 +177,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                       isAdmin 
                         ? 'bg-amber-100 text-amber-900 border-amber-300' 
-                        : 'bg-rose-100 text-rose-900 border-rose-300'
+                        : (currentUser ? 'bg-rose-100 text-rose-900 border-rose-300' : 'bg-stone-100 text-stone-700 border-stone-300')
                     }`}>
-                      {isAdmin ? '👑 主管理員' : '💖 伴侶身分'}
+                      {isAdmin ? '👑 主管理員' : (currentUser ? '💖 伴侶身分' : '📱 訪客模式')}
                     </span>
                   </h3>
                 </div>
@@ -188,207 +195,208 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
             {/* 內容區 */}
             <div className="p-4 sm:p-5 space-y-4 text-left overflow-y-auto max-h-[82vh]">
-              {/* 目前登入帳號與 Google 大頭貼同步卡片 */}
-              <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] shadow-2xs space-y-4">
-                <div className="flex items-center gap-3.5">
-                  {/* Google 大頭貼相片 (同步 Google 帳戶) */}
-                  <div className="relative group shrink-0">
-                    <div className={`w-14 h-14 rounded-2xl overflow-hidden border-2 ${
-                      isAdmin ? 'border-amber-300 shadow-amber-100' : 'border-rose-300 shadow-rose-100'
-                    } shadow-md bg-[#FAF8F5] flex items-center justify-center`}>
-                      {currentUser?.avatar ? (
-                        <img
-                          src={currentUser.avatar}
-                          alt={currentUser.nickname || currentUser.name}
-                          referrerPolicy="no-referrer"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className={`w-full h-full ${
-                          isAdmin
-                            ? 'bg-gradient-to-br from-amber-600 to-amber-700'
-                            : 'bg-gradient-to-br from-rose-500 to-rose-600'
-                        } text-white font-black text-xl flex items-center justify-center`}>
-                          {currentUser?.nickname?.[0] || currentUser?.role || (isAdmin ? '廖' : '周')}
+              {!currentUser ? (
+                /* 📱 本機訪客模式卡片 (未登入 Google) */
+                <div className="bg-gradient-to-br from-amber-50/90 to-[#FFFDF9] rounded-2xl p-4 sm:p-5 border border-amber-200/90 shadow-2xs space-y-3.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center font-black text-2xl shrink-0 border border-amber-300 shadow-inner">
+                        📱
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-black text-base text-[#3E3A36]">本機離線訪客模式</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 border border-amber-300 shrink-0">
+                            未登入 Google
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#8C8475] mt-0.5">所有資料僅儲存在此裝置 (localStorage)</p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onSwitchAccount();
+                      }}
+                      className="py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 whitespace-nowrap"
+                    >
+                      <LogIn className="w-4 h-4" />
+                      <span>登入 Google 帳號</span>
+                    </button>
+                  </div>
+
+                  <div className="bg-white/80 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-950 leading-relaxed space-y-1.5">
+                    <div className="font-bold flex items-center gap-1 text-amber-900 text-xs">
+                      <span>⚠️ 訪客模式重要說明與資料保存：</span>
+                    </div>
+                    <p className="text-[#5C564E]">
+                      您目前可順暢使用公積金、代墊分帳與旅遊行程之所有本機記帳功能。因未登入 Google 帳戶，<b>系統完全不連接後端 Google 試算表資料庫</b>，亦<b>無雲端背景同步與伴侶配對功能</b>。
+                    </p>
+                    <p className="text-amber-800 font-medium">
+                      ⚠️ 請注意：若清理手機瀏覽器暫存、開啟無痕模式或更換裝置，本機儲存之資料將無法復原。建議登入 Google 帳號以啟用專屬試算表掛接與伴侶雙向同步！
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                /* 目前登入帳號與 Google 大頭貼同步卡片 */
+                <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] shadow-2xs space-y-4">
+                  <div className="flex items-center gap-3.5">
+                    {/* Google 大頭貼相片 (同步 Google 帳戶) */}
+                    <div className="relative group shrink-0">
+                      <div className={`w-14 h-14 rounded-2xl overflow-hidden border-2 ${
+                        isAdmin ? 'border-amber-300 shadow-amber-100' : 'border-rose-300 shadow-rose-100'
+                      } shadow-md bg-[#FAF8F5] flex items-center justify-center`}>
+                        {currentUser?.avatar ? (
+                          <img
+                            src={currentUser.avatar}
+                            alt={currentUser.nickname || currentUser.name}
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className={`w-full h-full ${
+                            isAdmin
+                              ? 'bg-gradient-to-br from-amber-600 to-amber-700'
+                              : 'bg-gradient-to-br from-rose-500 to-rose-600'
+                          } text-white font-black text-xl flex items-center justify-center`}>
+                            {currentUser?.nickname?.[0] || currentUser?.role || (isAdmin ? '廖' : '周')}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Google 徽章圖示 */}
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white border border-slate-200 shadow-xs flex items-center justify-center p-0.5" title="Google 帳戶已同步照片">
+                        <span className="text-[11px] leading-none">🔍</span>
+                      </div>
+                    </div>
+
+                    {/* 帳戶資訊與暱稱顯示 */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-extrabold text-base text-[#3E3A36]">
+                          {currentUser?.nickname || currentUser?.name || (isAdmin ? '主管理員' : '甜蜜伴侶')}
+                        </span>
+                        {currentUser?.nickname && (
+                          <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded border border-amber-200">
+                            自訂暱稱
+                          </span>
+                        )}
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-0.5">
+                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                          <span>Google 官方授權</span>
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-[#5C564E] font-mono truncate mt-0.5 flex items-center gap-1">
+                        <span className="text-[10px] text-[#8C8475] bg-[#F2EDE2] px-1.5 py-0.2 rounded font-sans font-semibold">
+                          用戶 ID (Gmail)
+                        </span>
+                        <span className="font-bold text-[#3E3A36]">{currentUser?.email || currentUser?.id || '未登入 Google 帳號'}</span>
+                      </div>
+
+                      {/* 原始 Google 帳號姓名 */}
+                      {currentUser?.name && currentUser.nickname && currentUser.name !== currentUser.nickname && (
+                        <div className="text-[11px] text-[#A8A295] truncate mt-0.5">
+                          Google 姓名：{currentUser.name}
                         </div>
                       )}
                     </div>
-
-                    {/* Google 徽章圖示 */}
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white border border-slate-200 shadow-xs flex items-center justify-center p-0.5" title="Google 帳戶已同步照片">
-                      <span className="text-[11px] leading-none">🔍</span>
-                    </div>
                   </div>
 
-                  {/* 帳戶資訊與暱稱顯示 */}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-extrabold text-base text-[#3E3A36]">
-                        {currentUser?.nickname || currentUser?.name || (isAdmin ? '主管理員' : '甜蜜伴侶')}
-                      </span>
-                      {currentUser?.nickname && (
-                        <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded border border-amber-200">
-                          自訂暱稱
-                        </span>
-                      )}
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-0.5">
-                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                        <span>Google 官方授權</span>
-                      </span>
-                    </div>
-
-                    <div className="text-xs text-[#5C564E] font-mono truncate mt-0.5 flex items-center gap-1">
-                      <span className="text-[10px] text-[#8C8475] bg-[#F2EDE2] px-1.5 py-0.2 rounded font-sans font-semibold">
-                        用戶 ID (Gmail)
-                      </span>
-                      <span className="font-bold text-[#3E3A36]">{currentUser?.email || currentUser?.id || 'user@gmail.com'}</span>
-                    </div>
-
-                    {/* 原始 Google 帳號姓名 */}
-                    {currentUser?.name && currentUser.nickname && currentUser.name !== currentUser.nickname && (
-                      <div className="text-[11px] text-[#A8A295] truncate mt-0.5">
-                        Google 姓名：{currentUser.name}
+                  {/* 🔄 同步 Google 大頭貼按鈕 */}
+                  {onSyncGoogleAvatar && (
+                    <div className="flex items-center justify-between p-2.5 bg-[#FAF8F3] rounded-xl border border-[#EDE7D9] text-xs">
+                      <div className="flex items-center gap-1.5 text-[#5C564E]">
+                        <Camera className="w-3.5 h-3.5 text-amber-700" />
+                        <span className="text-[11px] font-medium">照片大頭貼自動同步 Google 帳戶</span>
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 🔄 同步 Google 大頭貼按鈕 */}
-                {onSyncGoogleAvatar && (
-                  <div className="flex items-center justify-between p-2.5 bg-[#FAF8F3] rounded-xl border border-[#EDE7D9] text-xs">
-                    <div className="flex items-center gap-1.5 text-[#5C564E]">
-                      <Camera className="w-3.5 h-3.5 text-amber-700" />
-                      <span className="text-[11px] font-medium">照片大頭貼自動同步 Google 帳戶</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleSyncAvatarClick}
-                      disabled={isSyncingAvatar}
-                      className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-900 font-bold text-[11px] rounded-lg border border-amber-200/90 flex items-center gap-1 shadow-2xs transition-all cursor-pointer active:scale-95 disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3 h-3 text-amber-700 ${isSyncingAvatar ? 'animate-spin' : ''}`} />
-                      <span>{isSyncingAvatar ? '同步中...' : '重新抓取 Google 照片'}</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* ✏️ 暱稱自訂設定區 (限文字，少於三個字：1~2 個字) */}
-                <div className="bg-gradient-to-br from-[#FFFDF9] to-[#FBF7EE] p-3.5 rounded-xl border border-amber-200/90 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-[#3E3A36]">
-                      <Edit3 className="w-3.5 h-3.5 text-amber-800" />
-                      <span>右上角顯示暱稱設定</span>
-                      <span className="text-[10px] text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded font-semibold">
-                        限文字・少於 3 個字 (1~2 字)
-                      </span>
-                    </div>
-                    <span className={`text-[10px] font-mono font-bold ${
-                      trimmedNickname.length >= 3 ? 'text-rose-600 font-black' : 'text-[#8C8475]'
-                    }`}>
-                      {trimmedNickname.length} / 2 字
-                    </span>
-                  </div>
-
-                  {/* 暱稱輸入列 */}
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        value={nicknameInput}
-                        maxLength={2}
-                        onChange={(e) => {
-                          setNicknameInput(e.target.value);
-                          setIsEditingNickname(true);
-                        }}
-                        placeholder="例如: 丞、沛、小廖"
-                        className={`w-full bg-white border ${
-                          trimmedNickname && !isNicknameValid ? 'border-rose-400 focus:ring-rose-200' : 'border-[#D9D3C7] focus:ring-amber-200'
-                        } rounded-xl px-3 py-2 text-xs font-bold text-[#3E3A36] placeholder-[#A8A295] focus:outline-hidden focus:ring-2 transition-all`}
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSaveNickname()}
-                      disabled={!isNicknameValid}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
-                        isNicknameValid
-                          ? 'bg-gradient-to-r from-amber-700 to-amber-800 hover:from-amber-800 hover:to-amber-900 text-white shadow-2xs cursor-pointer active:scale-95'
-                          : 'bg-[#EAE5D9] text-[#A8A295] cursor-not-allowed'
-                      }`}
-                    >
-                      {savedSuccess ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-300" />
-                          <span>已儲存！</span>
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>儲存暱稱</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* 驗證提示文字 */}
-                  {validationMessage && (
-                    <div className={`text-[11px] flex items-center gap-1 ${
-                      isNicknameValid ? 'text-emerald-700 font-semibold' : 'text-rose-600 font-medium'
-                    }`}>
-                      <AlertCircle className="w-3 h-3 shrink-0" />
-                      <span>{validationMessage}</span>
+                      <button
+                        type="button"
+                        onClick={handleSyncAvatarClick}
+                        disabled={isSyncingAvatar}
+                        className="px-2.5 py-1 bg-white hover:bg-amber-50 text-amber-900 font-bold text-[11px] rounded-lg border border-amber-200/90 flex items-center gap-1 shadow-2xs transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3 h-3 text-amber-700 ${isSyncingAvatar ? 'animate-spin' : ''}`} />
+                        <span>重新抓取 Google 照片</span>
+                      </button>
                     </div>
                   )}
 
-                  {/* 快捷推薦暱稱 (符合 < 3 字限制) */}
-                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                    <span className="text-[10px] text-[#8C8475]">推薦快選：</span>
-                    {quickPresets.map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => {
-                          setNicknameInput(preset);
-                          handleSaveNickname(preset);
-                        }}
-                        className="px-2 py-0.5 rounded-lg bg-white hover:bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-bold shadow-2xs transition-all cursor-pointer"
-                      >
-                        {preset}
-                      </button>
-                    ))}
+                  {/* 🏷️ 稱呼顯示設定與字數選擇 (單字 vs 雙字) */}
+                  <NicknameSettingsSection
+                    currentUser={currentUser}
+                    onUpdateNickname={onUpdateNickname}
+                    accentColor="amber"
+                  />
+
+                  {/* 帳戶切換與登出 */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-[#F2EDE1]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSwitchAccount();
+                        onClose();
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-[#FAF8F3] hover:bg-[#F2EDE1] text-[#5C564E] text-xs font-bold transition-all border border-[#E6E0D2] cursor-pointer text-center"
+                    >
+                      切換 Google 帳號
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onLogout();
+                        onClose();
+                      }}
+                      className="py-2 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all border border-rose-200 cursor-pointer flex items-center gap-1 shrink-0"
+                      title="登出目前 Google 帳號"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>登出帳戶</span>
+                    </button>
                   </div>
                 </div>
-
-                {/* 帳戶切換與登出 */}
-                <div className="flex items-center gap-2 pt-1 border-t border-[#F2EDE1]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSwitchAccount();
-                      onClose();
-                    }}
-                    className="flex-1 py-2 px-3 rounded-xl bg-[#FAF8F3] hover:bg-[#F2EDE1] text-[#5C564E] text-xs font-bold transition-all border border-[#E6E0D2] cursor-pointer text-center"
-                  >
-                    切換 Google 帳號
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onLogout();
-                      onClose();
-                    }}
-                    className="py-2 px-3.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all border border-rose-200 cursor-pointer flex items-center gap-1 shrink-0"
-                    title="登出目前 Google 帳號"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>登出帳戶</span>
-                  </button>
-                </div>
-              </div>
+              )}
 
               {/* 💌 伴侶邀請與情侶帳本綁定區 */}
-              {isAdmin ? (
+              {!currentUser ? (
+                /* 🔒 訪客模式：鎖定伴侶邀請與同步 */
+                <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-stone-100 text-[#8C8475] flex items-center justify-center font-bold">
+                        <Heart className="w-4 h-4 text-stone-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1">
+                          <span>💌 伴侶配對與雙人同步</span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-stone-100 text-stone-600">需登入</span>
+                        </h4>
+                        <p className="text-[10px] text-[#8C8475]">登入 Google 帳號後即可產生邀請代碼與伴侶配對</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#FAF8F5] p-3 rounded-xl border border-[#EDE7D9] text-xs space-y-1.5">
+                    <p className="text-[11px] text-[#7A7366] leading-relaxed">
+                      🔒 訪客模式下無法進行伴侶配對。需先以 Google 帳號登入，系統才能為您派發專屬伴侶邀請碼，實現雙向即時對帳與共同記帳。
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onSwitchAccount();
+                    }}
+                    className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>登入 Google 帳號以解鎖伴侶配對</span>
+                  </button>
+                </div>
+              ) : isAdmin ? (
                 /* 管理員專屬：派發伴侶邀請碼卡片 */
                 <div className="bg-gradient-to-br from-[#FFFDF9] to-[#FDF8EE] rounded-2xl p-4 border border-amber-300/80 shadow-2xs space-y-3.5">
                   <div className="flex items-center justify-between">
@@ -550,7 +558,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
                       <span>👑 帳本主管理者：</span>
                       <span className="font-bold text-[#3E3A36]">
-                        {currentUser?.adminName || '主管理員'} ({currentUser?.adminEmail || 'admin@gmail.com'})
+                        {currentUser?.adminName || '主管理員'}{currentUser?.adminEmail ? ` (${currentUser.adminEmail})` : ''}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
@@ -589,74 +597,103 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               )}
 
               {/* 🔑 試算表連線金鑰與同步中心 */}
-              <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] shadow-2xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 flex items-center justify-center font-bold">
-                      <Key className="w-4 h-4" />
+              {!currentUser ? (
+                /* 🔒 訪客模式：未連線 Google 試算表資料庫 */
+                <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-stone-100 text-[#8C8475] flex items-center justify-center font-bold">
+                        <Key className="w-4 h-4 text-stone-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1">
+                          <span>Google 試算表資料庫連線</span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-stone-100 text-stone-600">未連線</span>
+                        </h4>
+                        <p className="text-[10px] text-[#8C8475]">本機離線模式無掛接雲端資料庫</p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1">
-                        <span>Google 試算表資料庫連線</span>
-                        {!isAdmin && <span className="text-[10px] text-slate-500 font-normal">(由管理員控管)</span>}
-                      </h4>
-                      <p className="text-[10px] text-[#8C8475]">雙向即時對帳引擎</p>
-                    </div>
+                    <span className="text-[10px] bg-stone-100 text-stone-600 font-bold px-2 py-0.5 rounded-full">
+                      ⚪ 本機單機模式
+                    </span>
                   </div>
 
-                  {gasWebUrl ? (
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
-                      🟢 已連線同步
-                    </span>
+                  <div className="bg-[#FAF8F5] p-3 rounded-xl border border-[#EDE7D9] space-y-1.5 text-xs">
+                    <p className="text-[11px] text-[#7A7366] leading-relaxed">
+                      🔒 未登入 Google 帳號時，系統不會對後端 Google 試算表發送任何請求或資料，所有記錄均保存在您的本機。若需啟用雲端資料庫存檔與對帳，請先登入 Google 帳戶。
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 flex items-center justify-center font-bold">
+                        <Key className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1">
+                          <span>Google 試算表資料庫連線</span>
+                          {!isAdmin && <span className="text-[10px] text-slate-500 font-normal">(由管理員控管)</span>}
+                        </h4>
+                        <p className="text-[10px] text-[#8C8475]">雙向即時對帳引擎</p>
+                      </div>
+                    </div>
+
+                    {gasWebUrl ? (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                        🟢 已連線同步
+                      </span>
+                    ) : (
+                      <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+                        🟡 尚未綁定金鑰
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="bg-[#FAF8F5] p-2.5 rounded-xl border border-[#EDE7D9] space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
+                      <span>GAS Web App API：</span>
+                      <span className="font-mono text-[#3E3A36] font-semibold truncate max-w-[180px]">
+                        {gasWebUrl ? 'AKfycb... (已啟用)' : '未設定 (請由管理員綁定)'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
+                      <span>試算表資料庫：</span>
+                      <span className="font-mono text-[#3E3A36] font-semibold truncate max-w-[180px]">
+                        {deploySheetUrl ? '已綁定專屬工作表' : '預設資料庫'}
+                      </span>
+                    </div>
+
+                    {/* ☁️ 雲端漫遊狀態提示 */}
+                    {isAdmin && gasWebUrl && (
+                      <div className="pt-1.5 border-t border-[#EAE3D2] flex items-center gap-1.5 text-[10px] text-emerald-800 font-bold">
+                        <Cloud className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>已永久綁定至您的 Google 帳號，日後更換手機或電腦登入自動生效！</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenGasDeploy();
+                      }}
+                      className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-700 to-amber-800 hover:from-amber-800 hover:to-amber-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
+                    >
+                      <Key className="w-3.5 h-3.5 text-amber-200" />
+                      <span>管理 / 變更 Google 試算表連線設定 (管理員)</span>
+                    </button>
                   ) : (
-                    <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
-                      🟡 尚未綁定金鑰
-                    </span>
-                  )}
-                </div>
-
-                <div className="bg-[#FAF8F5] p-2.5 rounded-xl border border-[#EDE7D9] space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
-                    <span>GAS Web App API：</span>
-                    <span className="font-mono text-[#3E3A36] font-semibold truncate max-w-[180px]">
-                      {gasWebUrl ? 'AKfycb... (已啟用)' : '未設定 (請由管理員綁定)'}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
-                    <span>試算表資料庫：</span>
-                    <span className="font-mono text-[#3E3A36] font-semibold truncate max-w-[180px]">
-                      {deploySheetUrl ? '已綁定專屬工作表' : '預設資料庫'}
-                    </span>
-                  </div>
-
-                  {/* ☁️ 雲端漫遊狀態提示 */}
-                  {isAdmin && gasWebUrl && (
-                    <div className="pt-1.5 border-t border-[#EAE3D2] flex items-center gap-1.5 text-[10px] text-emerald-800 font-bold">
-                      <Cloud className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>已永久綁定至您的 Google 帳號，日後更換手機或電腦登入自動生效！</span>
+                    <div className="text-[11px] text-[#8C8475] bg-[#FAF8F3] p-2.5 rounded-xl border border-[#E5E0D2] flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <span>雲端試算表連線由主管理員統一設定，伴侶無需手動設定即可直接同步記帳。</span>
                     </div>
                   )}
                 </div>
-
-                {isAdmin ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenGasDeploy();
-                    }}
-                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-700 to-amber-800 hover:from-amber-800 hover:to-amber-900 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
-                  >
-                    <Key className="w-3.5 h-3.5 text-amber-200" />
-                    <span>管理 / 變更 Google 試算表連線設定 (管理員)</span>
-                  </button>
-                ) : (
-                  <div className="text-[11px] text-[#8C8475] bg-[#FAF8F3] p-2.5 rounded-xl border border-[#E5E0D2] flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                    <span>雲端試算表連線由主管理員統一設定，伴侶無需手動設定即可直接同步記帳。</span>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* 🧪 本機離線試用模式切換 */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5">

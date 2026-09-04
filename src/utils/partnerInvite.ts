@@ -174,7 +174,7 @@ export function resolveInviteCodeOrToken(input: string): PartnerInviteData | nul
   if (/^BB-[A-Z0-9]{4,8}$/i.test(upper)) {
     return {
       inviteCode: upper,
-      adminEmail: 'admin@google.com',
+      adminEmail: '',
       adminName: '主管理員',
       gasWebUrl: localStorage.getItem('muji_gas_web_url') || '',
       deploySheetUrl: localStorage.getItem('muji_deploy_sheet_url') || localStorage.getItem('muji_spreadsheet_url') || '',

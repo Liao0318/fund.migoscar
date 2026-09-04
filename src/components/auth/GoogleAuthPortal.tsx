@@ -19,10 +19,12 @@ import { getUserCloudConfig } from '../../utils/userConfigService';
 interface GoogleAuthPortalProps {
   onLogin: (user: AuthUser, partnerInvite?: PartnerInviteData | null, initialCloudGasUrl?: string, initialCloudSheetUrl?: string) => void;
   onEnterDevSandbox?: () => void;
+  onEnterGuestMode?: () => void;
 }
 
 export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
-  onLogin
+  onLogin,
+  onEnterGuestMode
 }) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -53,17 +55,35 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
   }, []);
 
   /**
-   * 完成登入並同步使用者雲端資料庫設定
+   * 完成登入並同步使用者雲端資料庫設定與自訂暱稱
    */
   const processSuccessfulUser = async (rawUser: AuthUser) => {
     let cloudGas = '';
     let cloudSheet = '';
+    let savedNickname = '';
+    const cleanEmail = (rawUser.email || '').trim().toLowerCase();
 
+    // 1. 本地讀取綁定的專屬暱稱
+    try {
+      if (cleanEmail) {
+        savedNickname = localStorage.getItem(`banban_user_nickname_${cleanEmail}`) || '';
+      }
+    } catch (e) {}
+
+    // 2. 雲端讀取 Firestore 個人專屬設定（跨裝置或重新登入）
     try {
       const existingConfig = await getUserCloudConfig(rawUser.email);
       if (existingConfig) {
         cloudGas = existingConfig.gasWebUrl || '';
         cloudSheet = existingConfig.deploySheetUrl || '';
+        if (existingConfig.nickname) {
+          savedNickname = existingConfig.nickname;
+          if (cleanEmail) {
+            try {
+              localStorage.setItem(`banban_user_nickname_${cleanEmail}`, savedNickname);
+            } catch (e) {}
+          }
+        }
       }
     } catch (e) {
       console.warn('Failed to load user cloud config:', e);
@@ -71,6 +91,7 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
 
     const enhancedUser: AuthUser = {
       ...rawUser,
+      nickname: savedNickname || rawUser.nickname,
       authMethod: 'google_oauth'
     };
 
@@ -240,6 +261,41 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#8C8475] pt-1">
               <Lock className="w-3.5 h-3.5 text-emerald-600" />
               <span>點擊後將開啟 Google 官方登入頁面選擇帳號</span>
+            </div>
+
+            {/* 分隔線 */}
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-[#E8E2D5]" />
+              <span className="shrink-0 mx-3 text-[11px] text-[#A09A8F] font-bold">或</span>
+              <div className="flex-grow border-t border-[#E8E2D5]" />
+            </div>
+
+            {/* 本機離線體驗模式按鈕 */}
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onEnterGuestMode) {
+                    onEnterGuestMode();
+                  } else {
+                    try {
+                      localStorage.setItem('banban_is_guest_mode', 'true');
+                    } catch (e) {}
+                    window.location.reload();
+                  }
+                }}
+                className="w-full py-3 px-4 rounded-2xl text-xs font-bold border border-[#DDD6C8] bg-[#F7F5F0] hover:bg-[#EFECE4] text-[#5C564E] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-[0.99]"
+              >
+                <span>📱</span>
+                <span>暫不登入，直接以本機模式體驗</span>
+              </button>
+
+              <div className="bg-amber-50/80 border border-amber-200/70 rounded-xl p-2.5 text-[11px] text-amber-900 leading-relaxed text-left">
+                <div className="font-bold flex items-center gap-1 mb-0.5 text-amber-950">
+                  <span>💡 本機模式說明：</span>
+                </div>
+                <span>所有資料皆僅存在本機手機中。若需連接 Google 試算表雲端備份或啟用伴侶配對同步，登入 Google 帳號即可解鎖！</span>
+              </div>
             </div>
           </div>
         </motion.div>

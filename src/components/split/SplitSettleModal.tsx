@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   CheckCircle2, 
   X, 
@@ -8,12 +8,15 @@ import {
   Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SplitSummary } from '../../types';
+import { SplitSummary, AuthUser, CoupleBindingInfo } from '../../types';
+import { resolveUserPersonas } from '../../utils/userPersona';
 
 interface SplitSettleModalProps {
   isOpen: boolean;
   onClose: () => void;
   summary: SplitSummary;
+  currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
   onConfirmSettle?: (settleNote?: string) => void;
   onSettle?: (settleNote?: string) => void;
 }
@@ -22,9 +25,15 @@ export const SplitSettleModal: React.FC<SplitSettleModalProps> = ({
   isOpen,
   onClose,
   summary,
+  currentUser,
+  partnerBindingInfo,
   onConfirmSettle,
   onSettle,
 }) => {
+  const { userA, userB } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
+
   const [settleNote, setSettleNote] = useState('');
 
   const handleConfirm = () => {
@@ -74,7 +83,7 @@ export const SplitSettleModal: React.FC<SplitSettleModalProps> = ({
                 <div className="text-[11px] font-bold text-emerald-800">
                   {!summary || summary.netDebtor === 'none'
                     ? '目前無須返還款項'
-                    : `應由 ${summary.netDebtor === '廖' ? '廖廖' : '周周'} 返還給 ${summary.netDebtor === '廖' ? '周周' : '廖廖'}`}
+                    : `應由 ${summary.netDebtor === '廖' ? userA.displayName : userB.displayName} 返還給 ${summary.netDebtor === '廖' ? userB.displayName : userA.displayName}`}
                 </div>
                 <div className="text-2xl sm:text-3xl font-black text-emerald-700">
                   NT$ {(Number(summary?.netAmount) || 0).toLocaleString()} 元

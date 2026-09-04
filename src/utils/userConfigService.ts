@@ -6,6 +6,9 @@ export interface UserCloudConfig {
   email: string;
   name: string;
   nickname?: string;
+  nickname1Char?: string;
+  nickname2Char?: string;
+  nicknameLengthPreference?: '1-char' | '2-char';
   avatar?: string;
   gasWebUrl?: string;
   deploySheetUrl?: string;
@@ -46,6 +49,9 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
     email: cleanEmail,
     name: config.name !== undefined ? config.name : (existing.name || ''),
     nickname: config.nickname !== undefined ? config.nickname : (existing.nickname || ''),
+    nickname1Char: config.nickname1Char !== undefined ? config.nickname1Char : existing.nickname1Char,
+    nickname2Char: config.nickname2Char !== undefined ? config.nickname2Char : existing.nickname2Char,
+    nicknameLengthPreference: config.nicknameLengthPreference !== undefined ? config.nicknameLengthPreference : existing.nicknameLengthPreference,
     avatar: config.avatar !== undefined ? config.avatar : (existing.avatar || ''),
     gasWebUrl: config.gasWebUrl !== undefined ? config.gasWebUrl : (existing.gasWebUrl || ''),
     deploySheetUrl: config.deploySheetUrl !== undefined ? config.deploySheetUrl : (existing.deploySheetUrl || ''),

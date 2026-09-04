@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Save, Store, MapPin, Sparkles } from 'lucide-react';
-import { ShoppingItem, AuthUser } from '../../types';
+import { X, Plus, Save, Store, MapPin, Sparkles, User } from 'lucide-react';
+import { ShoppingItem, AuthUser, CoupleBindingInfo } from '../../types';
 import { CURRENCIES, DEFAULT_RATES_MAP } from '../../utils/formatters';
+import { resolveUserPersonas } from '../../utils/userPersona';
 
 interface AddRecordModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface AddRecordModalProps {
   addModalType: 'record' | 'shopping';
   setAddModalType: (type: 'record' | 'shopping') => void;
   currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
   formData: {
     item: string;
     amount: string;
@@ -43,6 +45,7 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
   addModalType,
   setAddModalType,
   currentUser,
+  partnerBindingInfo,
   formData,
   setFormData,
   onSubmitRecord,
@@ -53,8 +56,9 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
   shoppingStores = [],
   onOpenManageStores
 }) => {
-  const isCurrentUserZhou = currentUser?.role === '周' || currentUser?.name?.includes('周');
-  const myPayerName = isCurrentUserZhou ? '周沛緹' : '廖尹丞';
+  const { userA, userB, currentUserPersona } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
   return (
     <AnimatePresence>
       {isOpen && (
@@ -463,22 +467,31 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                       {formData.type === '收入-固定公積金' ? (
                         <div className="grid grid-cols-3 gap-2">
                           {[
-                            { label: '共同帳戶', val: '共同帳戶', icon: '🏦' },
-                            { label: '廖廖', val: '廖尹丞', icon: '👦' },
-                            { label: '周周', val: '周沛緹', icon: '👧' },
+                            { label: '共同帳戶', val: '共同帳戶', icon: '🏦', avatar: '' },
+                            { label: userA.displayName, val: userA.name, icon: userA.iconEmoji, avatar: userA.avatar },
+                            { label: userB.displayName, val: userB.name, icon: userB.iconEmoji, avatar: userB.avatar },
                           ].map((p) => (
                             <button
                               key={p.val}
                               type="button"
                               onClick={() => setFormData({ ...formData, payer: p.val })}
-                              className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-95 ${
+                              className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
                                 formData.payer === p.val
                                   ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
                                   : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
                               }`}
                             >
-                              <span>{p.icon}</span>
-                              <span>{p.label}</span>
+                              {p.avatar ? (
+                                <img
+                                  src={p.avatar}
+                                  alt={p.label}
+                                  referrerPolicy="no-referrer"
+                                  className="w-4 h-4 rounded-full object-cover shrink-0"
+                                />
+                              ) : (
+                                <span>{p.icon}</span>
+                              )}
+                              <span className="truncate">{p.label}</span>
                             </button>
                           ))}
                         </div>
@@ -486,20 +499,29 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                         <div className="grid grid-cols-2 gap-2.5">
                           <button
                             type="button"
-                            onClick={() => setFormData({ ...formData, payer: '廖尹丞' })}
+                            onClick={() => setFormData({ ...formData, payer: userA.name })}
                             className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 relative ${
-                              formData.payer === '廖尹丞'
+                              formData.payer === userA.name || formData.payer === userA.nickname || formData.payer === '廖尹丞'
                                 ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
                                 : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
                             }`}
                           >
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-base">👦</span>
-                              <span>廖廖 (廖尹丞)</span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              {userA.avatar ? (
+                                <img
+                                  src={userA.avatar}
+                                  alt={userA.displayName}
+                                  referrerPolicy="no-referrer"
+                                  className="w-5 h-5 rounded-full object-cover shrink-0 border border-white/80 shadow-2xs"
+                                />
+                              ) : (
+                                <span className="text-base">{userA.iconEmoji}</span>
+                              )}
+                              <span className="truncate">{userA.displayName} ({userA.name})</span>
                             </div>
-                            {myPayerName === '廖尹丞' && (
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                                formData.payer === '廖尹丞'
+                            {userA.isCurrentUser && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                                formData.payer === userA.name || formData.payer === userA.nickname || formData.payer === '廖尹丞'
                                   ? 'bg-sky-800 text-sky-100'
                                   : 'bg-sky-100 text-sky-700'
                               }`}>
@@ -509,20 +531,35 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setFormData({ ...formData, payer: '周沛緹' })}
+                            onClick={() => setFormData({ ...formData, payer: userB.name })}
                             className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 relative ${
-                              formData.payer === '周沛緹'
-                                ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
-                                : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
+                              formData.payer === userB.name || formData.payer === userB.nickname || formData.payer === '周沛緹' || formData.payer === '待確認' || formData.payer === '待確認伴侶'
+                                ? (userB.isPendingBinding ? 'bg-neutral-800 text-white border-neutral-900 shadow-xs' : 'bg-rose-600 text-white border-rose-700 shadow-xs')
+                                : (userB.isPendingBinding ? 'bg-neutral-50/80 border-dashed border-neutral-300 text-neutral-600 hover:bg-white' : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white')
                             }`}
                           >
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-base">👧</span>
-                              <span>周周 (周沛緹)</span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              {userB.avatar ? (
+                                <img
+                                  src={userB.avatar}
+                                  alt={userB.displayName}
+                                  referrerPolicy="no-referrer"
+                                  className="w-5 h-5 rounded-full object-cover shrink-0 border border-white/80 shadow-2xs"
+                                />
+                              ) : (
+                                <span className="text-base">{userB.iconEmoji}</span>
+                              )}
+                              <span className="truncate">
+                                {userB.isPendingBinding ? '待確認伴侶 (等待受邀)' : `${userB.displayName} (${userB.name})`}
+                              </span>
                             </div>
-                            {myPayerName === '周沛緹' && (
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                                formData.payer === '周沛緹'
+                            {userB.isPendingBinding ? (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 bg-neutral-900 text-white border border-neutral-700">
+                                待受邀
+                              </span>
+                            ) : userB.isCurrentUser && (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                                formData.payer === userB.name || formData.payer === userB.nickname
                                   ? 'bg-rose-800 text-rose-100'
                                   : 'bg-rose-100 text-rose-700'
                               }`}>
@@ -687,8 +724,8 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                       onChange={(e) => setShoppingForm({ ...shoppingForm, creator: e.target.value as any })}
                       className="w-full px-3.5 py-2 bg-[#FAF9F5] border border-[#E5E1D7] rounded-xl text-xs text-[#3E3A36] focus:outline-none focus:border-amber-600 focus:bg-white transition-all cursor-pointer"
                     >
-                      <option value="廖尹丞">廖尹丞</option>
-                      <option value="周沛緹">周沛緹</option>
+                      <option value={userA.name}>{userA.displayName} ({userA.name})</option>
+                      <option value={userB.name}>{userB.isPendingBinding ? '待確認伴侶 (等待受邀)' : `${userB.displayName} (${userB.name})`}</option>
                     </select>
                   </div>
 

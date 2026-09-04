@@ -14,6 +14,7 @@ import {
 import { getFirestore, Firestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { AuthUser } from '../types';
+import { cleanGoogleDisplayName } from './userPersona';
 
 declare global {
   interface Window {
@@ -79,11 +80,12 @@ export async function signInWithGooglePopup(): Promise<{ user: AuthUser; accessT
     }
 
     const fbUser = result.user;
-    const role = determineUserRole(fbUser.displayName || '', fbUser.email || '');
+    const cleanFbName = cleanGoogleDisplayName(fbUser.displayName || '');
+    const role = determineUserRole(cleanFbName, fbUser.email || '');
 
     const user: AuthUser = {
       id: fbUser.email || fbUser.uid,
-      name: fbUser.displayName || fbUser.email?.split('@')[0] || (role === '廖' ? '廖尹丞' : '周沛緹'),
+      name: cleanFbName || fbUser.email?.split('@')[0] || (role === '廖' ? '廖尹丞' : '周沛緹'),
       email: fbUser.email || '',
       avatar: fbUser.photoURL || undefined,
       role,
@@ -170,10 +172,11 @@ export async function requestGoogleOAuthToken(): Promise<{ user: AuthUser; acces
             return;
           }
 
-          const role = determineUserRole(userInfo.name, userInfo.email);
+          const cleanName = cleanGoogleDisplayName(userInfo.name || '');
+          const role = determineUserRole(cleanName, userInfo.email);
           const user: AuthUser = {
             id: userInfo.email,
-            name: userInfo.name || (role === '廖' ? '廖尹丞' : '周沛緹'),
+            name: cleanName || (role === '廖' ? '廖尹丞' : '周沛緹'),
             email: userInfo.email,
             avatar: userInfo.picture,
             role,

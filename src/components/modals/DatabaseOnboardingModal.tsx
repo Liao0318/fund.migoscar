@@ -126,6 +126,10 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
    * 伴侶模式：提交邀請碼完成綁定
    */
   const handlePartnerSubmit = async () => {
+    if (!currentUser) {
+      setPartnerError('🔒 本機體驗模式無法配對伴侶，請先登入 Google 帳號！');
+      return;
+    }
     const clean = inviteInput.trim();
     if (!clean) {
       setPartnerError('請輸入伴侶提供的 6 碼邀請代碼（例如 BB-XXXX）或貼上專屬連結');
@@ -157,6 +161,10 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
    */
   const handleVerifyAndBindAdmin = () => {
     setAdminValidationError(null);
+    if (!currentUser) {
+      setAdminValidationError('🔒 本機體驗模式不可登入或綁定試算表金鑰，請先登入 Google 帳號！');
+      return;
+    }
     const cleanGas = inputGasUrl.trim();
     const cleanSheet = inputSheetUrl.trim();
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -23,10 +23,13 @@ import {
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SplitRecordItem, SplitSummary } from '../types';
+import { SplitRecordItem, SplitSummary, AuthUser, CoupleBindingInfo } from '../types';
+import { resolveUserPersonas } from '../utils/userPersona';
 
 interface SplitDebtViewProps {
   gasApiUrl: string;
+  currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
   onSwitchToFund?: () => void;
   onOpenSettings?: () => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -34,10 +37,15 @@ interface SplitDebtViewProps {
 
 export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
   gasApiUrl,
+  currentUser,
+  partnerBindingInfo,
   onSwitchToFund,
   onOpenSettings,
   showToast
 }) => {
+  const { userA, userB, currentUserPersona } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
   // 資料狀態
   const [items, setItems] = useState<SplitRecordItem[]>(() => {
     try {
@@ -442,7 +450,9 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
               ) : (
                 <div className="pt-1">
                   <div className="text-xs font-bold text-[#6E6359]">
-                    {summary.netDebtor === '廖' ? '廖尹丞 應返還給 周沛緹' : '周沛緹 應返還給 廖尹丞'}
+                    {summary.netDebtor === '廖'
+                      ? `${userA.displayName} 應返還給 ${userB.displayName}`
+                      : `${userB.displayName} 應返還給 ${userA.displayName}`}
                   </div>
                   <div className="text-3xl font-black tracking-tight text-[#D34E36] flex items-baseline gap-1 pt-0.5">
                     <span className="text-base font-bold text-[#8C7E74]">NT$</span>
@@ -468,18 +478,18 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
           {/* 雙方累計代墊細目 */}
           <div className="mt-4 pt-3 border-t border-black/5 grid grid-cols-2 gap-3 text-xs">
             <div className="p-2.5 rounded-xl bg-white/70 border border-black/5 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#2B825B]" />
-                <span className="text-[#6E6359]">周 應返還 廖</span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-[#2B825B] shrink-0" />
+                <span className="text-[#6E6359] truncate">{userB.shortName} 應返還 {userA.shortName}</span>
               </div>
-              <span className="font-bold text-[#3D3733]">NT$ {(Number(summary?.zhouOwesLiao) || 0).toLocaleString()}</span>
+              <span className="font-bold text-[#3D3733] shrink-0">NT$ {(Number(summary?.zhouOwesLiao) || 0).toLocaleString()}</span>
             </div>
             <div className="p-2.5 rounded-xl bg-white/70 border border-black/5 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-[#D34E36]" />
-                <span className="text-[#6E6359]">廖 應返還 周</span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-2 h-2 rounded-full bg-[#D34E36] shrink-0" />
+                <span className="text-[#6E6359] truncate">{userA.shortName} 應返還 {userB.shortName}</span>
               </div>
-              <span className="font-bold text-[#3D3733]">NT$ {(Number(summary?.liaoOwesZhou) || 0).toLocaleString()}</span>
+              <span className="font-bold text-[#3D3733] shrink-0">NT$ {(Number(summary?.liaoOwesZhou) || 0).toLocaleString()}</span>
             </div>
           </div>
         </motion.div>
@@ -527,8 +537,12 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                           : 'bg-[#F9F7F4] border-[#E8E1D7] text-[#8C7E74] hover:bg-white'
                       }`}
                     >
-                      <User className="w-3.5 h-3.5" />
-                      廖尹丞 先墊
+                      {userA.avatar ? (
+                        <img src={userA.avatar} alt={userA.displayName} referrerPolicy="no-referrer" className="w-4 h-4 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <span className="text-sm">{userA.iconEmoji}</span>
+                      )}
+                      <span className="truncate">{userA.displayName} 先墊</span>
                     </button>
                     <button
                       type="button"
@@ -539,8 +553,12 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                           : 'bg-[#F9F7F4] border-[#E8E1D7] text-[#8C7E74] hover:bg-white'
                       }`}
                     >
-                      <User className="w-3.5 h-3.5" />
-                      周沛緹 先墊
+                      {userB.avatar ? (
+                        <img src={userB.avatar} alt={userB.displayName} referrerPolicy="no-referrer" className="w-4 h-4 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <span className="text-sm">{userB.iconEmoji}</span>
+                      )}
+                      <span className="truncate">{userB.displayName} 先墊</span>
                     </button>
                   </div>
                 </div>
@@ -631,7 +649,7 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                     className="p-3 rounded-xl bg-[#FFF9F5] border border-[#F2DEC9]"
                   >
                     <label className="block text-xs font-bold text-[#8A5A36] mb-1">
-                      {payer === '廖' ? '周沛緹' : '廖尹丞'} 應返還金額 (NT$)
+                      {payer === '廖' ? (userB.isPendingBinding ? '待確認伴侶' : userB.displayName) : userA.displayName} 應返還金額 (NT$)
                     </label>
                     <input
                       type="number"
@@ -665,8 +683,8 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                     <div className="flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-[#2E6B47]" />
                       <span>
-                        記錄後：<strong>{payer === '廖' ? '周沛緹' : '廖尹丞'}</strong> 需返還{' '}
-                        <strong>{payer === '廖' ? '廖尹丞' : '周沛緹'}</strong>
+                        記錄後：<strong>{payer === '廖' ? (userB.isPendingBinding ? '待確認伴侶' : userB.displayName) : userA.displayName}</strong> 需返還{' '}
+                        <strong>{payer === '廖' ? userA.displayName : (userB.isPendingBinding ? '待確認伴侶' : userB.displayName)}</strong>
                       </span>
                     </div>
                     <span className="font-bold text-sm text-[#2E6B47]">
@@ -781,7 +799,7 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                             : 'bg-[#FDF2F0] text-[#D34E36]'
                         }`}
                       >
-                        {item.payer === '廖' ? '廖尹丞 先墊' : '周沛緹 先墊'}
+                        {item.payer === '廖' ? `${userA.displayName} 先墊` : `${userB.isPendingBinding ? '待確認伴侶' : userB.displayName} 先墊`}
                       </span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F2EDE7] text-[#8C7E74]">
                         {item.splitMode}

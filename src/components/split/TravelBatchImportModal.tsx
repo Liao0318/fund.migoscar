@@ -17,7 +17,8 @@ import {
   Download,
   Upload,
   FileText,
-  CreditCard
+  CreditCard,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -147,6 +148,8 @@ export const TravelBatchImportModal: React.FC<TravelBatchImportModalProps> = ({
   const [discoveredNewMembers, setDiscoveredNewMembers] = useState<string[]>([]);
   const [step, setStep] = useState<'input' | 'preview'>('input');
   const [isDragging, setIsDragging] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 10 欄標準表頭名稱
@@ -489,8 +492,8 @@ export const TravelBatchImportModal: React.FC<TravelBatchImportModalProps> = ({
         participants,
         note: noteVal,
         paymentMethod: paymentMethodVal,
-        creatorEmail: cleanParts[10]?.trim() || currentUser?.email || 'oscargh3359@gmail.com',
-        createdBy: cleanParts[11]?.trim() || currentUser?.name || currentUser?.nickname || currentUser?.role || '廖'
+        creatorEmail: cleanParts[10]?.trim() || currentUser?.email || '',
+        createdBy: cleanParts[11]?.trim() || currentUser?.name || currentUser?.nickname || currentUser?.role || '訪客'
       });
     }
 
@@ -507,6 +510,7 @@ export const TravelBatchImportModal: React.FC<TravelBatchImportModalProps> = ({
 
   // 匯入至旅程
   const handleConfirmImport = () => {
+    if (isImporting) return;
     const rate = parseFloat(exchangeRate) || 1;
     const selectedRows = parsedRows.filter(r => r.selected);
     if (selectedRows.length === 0) {
@@ -514,95 +518,103 @@ export const TravelBatchImportModal: React.FC<TravelBatchImportModalProps> = ({
       return;
     }
 
-    // 若有發現新成員，自動合併至旅程成員
-    if (discoveredNewMembers.length > 0) {
-      onAddTripMembers(discoveredNewMembers);
-    }
+    setIsImporting(true);
 
-    const currentTripAllMembers = Array.from(new Set([...tripMembers, ...discoveredNewMembers]));
-
-    const importedExpenses: TravelExpenseItem[] = selectedRows.map((row, idx) => {
-      const origAmt = row.totalAmount;
-      const totalTWD = Math.round(origAmt * rate);
-
-      // 計算各成員應分擔金額
-      const memberSplits: Record<string, number> = {};
-      currentTripAllMembers.forEach(m => { memberSplits[m] = 0; });
-
-      let debtor = 'none';
-      let debtorAmtTWD = 0;
-
-      if (row.splitMode === '個人自付' && row.splitTarget) {
-        // 個人專屬 100% 由該成員負擔
-        memberSplits[row.splitTarget] = totalTWD;
-        if (row.payer !== row.splitTarget) {
-          debtor = row.splitTarget;
-          debtorAmtTWD = totalTWD;
+    setTimeout(() => {
+      try {
+        // 若有發現新成員，自動合併至旅程成員
+        if (discoveredNewMembers.length > 0) {
+          onAddTripMembers(discoveredNewMembers);
         }
-      } else if (row.splitMode === '全體AA' || row.splitMode === 'AA平分') {
-        const share = Math.round(totalTWD / (currentTripAllMembers.length || 1));
-        currentTripAllMembers.forEach(m => { memberSplits[m] = share; });
-        if (row.payer !== '共同基金') {
-          const nonPayers = currentTripAllMembers.filter(m => m !== row.payer);
-          if (nonPayers.length === 1) {
-            debtor = nonPayers[0];
-            debtorAmtTWD = memberSplits[debtor] || 0;
-          } else {
-            debtor = '多位成員';
-            debtorAmtTWD = totalTWD - (memberSplits[row.payer] || share);
+
+        const currentTripAllMembers = Array.from(new Set([...tripMembers, ...discoveredNewMembers]));
+
+        const importedExpenses: TravelExpenseItem[] = selectedRows.map((row, idx) => {
+          const origAmt = row.totalAmount;
+          const totalTWD = Math.round(origAmt * rate);
+
+          // 計算各成員應分擔金額
+          const memberSplits: Record<string, number> = {};
+          currentTripAllMembers.forEach(m => { memberSplits[m] = 0; });
+
+          let debtor = 'none';
+          let debtorAmtTWD = 0;
+
+          if (row.splitMode === '個人自付' && row.splitTarget) {
+            // 個人專屬 100% 由該成員負擔
+            memberSplits[row.splitTarget] = totalTWD;
+            if (row.payer !== row.splitTarget) {
+              debtor = row.splitTarget;
+              debtorAmtTWD = totalTWD;
+            }
+          } else if (row.splitMode === '全體AA' || row.splitMode === 'AA平分') {
+            const share = Math.round(totalTWD / (currentTripAllMembers.length || 1));
+            currentTripAllMembers.forEach(m => { memberSplits[m] = share; });
+            if (row.payer !== '共同基金') {
+              const nonPayers = currentTripAllMembers.filter(m => m !== row.payer);
+              if (nonPayers.length === 1) {
+                debtor = nonPayers[0];
+                debtorAmtTWD = memberSplits[debtor] || 0;
+              } else {
+                debtor = '多位成員';
+                debtorAmtTWD = totalTWD - (memberSplits[row.payer] || share);
+              }
+            }
+          } else if (row.splitMode === '參與者AA') {
+            const parts = row.participants.length > 0 ? row.participants : currentTripAllMembers;
+            if (parts.length === 1) {
+              const singleTarget = parts[0];
+              memberSplits[singleTarget] = totalTWD;
+              if (row.payer !== '共同基金' && row.payer !== singleTarget) {
+                debtor = singleTarget;
+                debtorAmtTWD = totalTWD;
+              }
+            } else {
+              const share = Math.round(totalTWD / (parts.length || 1));
+              parts.forEach(p => { memberSplits[p] = share; });
+              if (row.payer !== '共同基金') {
+                debtor = '部分成員';
+                debtorAmtTWD = totalTWD - (memberSplits[row.payer] || 0);
+              }
+            }
           }
-        }
-      } else if (row.splitMode === '參與者AA') {
-        const parts = row.participants.length > 0 ? row.participants : currentTripAllMembers;
-        if (parts.length === 1) {
-          const singleTarget = parts[0];
-          memberSplits[singleTarget] = totalTWD;
-          if (row.payer !== '共同基金' && row.payer !== singleTarget) {
-            debtor = singleTarget;
-            debtorAmtTWD = totalTWD;
-          }
-        } else {
-          const share = Math.round(totalTWD / (parts.length || 1));
-          parts.forEach(p => { memberSplits[p] = share; });
-          if (row.payer !== '共同基金') {
-            debtor = '部分成員';
-            debtorAmtTWD = totalTWD - (memberSplits[row.payer] || 0);
-          }
-        }
+
+          return {
+            id: `exp-import-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
+            tripId: activeTrip.id,
+            date: row.date || new Date().toISOString().split('T')[0],
+            category: row.category,
+            itemName: row.itemName,
+            payer: row.payer,
+            originalCurrency: currency,
+            originalAmount: origAmt,
+            exchangeRate: rate,
+            totalAmountTWD: totalTWD,
+            splitMode: row.splitMode,
+            splitTarget: row.splitTarget,
+            unitPrice: row.unitPrice,
+            quantity: row.quantity,
+            paymentMethod: row.paymentMethod,
+            participants: row.participants,
+            memberSplits,
+            debtor,
+            debtorAmountTWD: debtorAmtTWD,
+            location: row.location,
+            note: row.note,
+            creatorEmail: row.creatorEmail || currentUser?.email || '',
+            createdBy: row.createdBy || currentUser?.nickname || currentUser?.name || currentUser?.role || '訪客',
+            syncedToSplit: false,
+            createdAt: new Date().toISOString().split('T')[0]
+          };
+        });
+
+        onImportExpenses(importedExpenses);
+        onClose();
+        showToast(`🎉 成功匯入 ${importedExpenses.length} 筆旅費明細！已為您自動重算「誰該還誰」結算總表`, 'success');
+      } finally {
+        setIsImporting(false);
       }
-
-      return {
-        id: `exp-import-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 4)}`,
-        tripId: activeTrip.id,
-        date: row.date || new Date().toISOString().split('T')[0],
-        category: row.category,
-        itemName: row.itemName,
-        payer: row.payer,
-        originalCurrency: currency,
-        originalAmount: origAmt,
-        exchangeRate: rate,
-        totalAmountTWD: totalTWD,
-        splitMode: row.splitMode,
-        splitTarget: row.splitTarget,
-        unitPrice: row.unitPrice,
-        quantity: row.quantity,
-        paymentMethod: row.paymentMethod,
-        participants: row.participants,
-        memberSplits,
-        debtor,
-        debtorAmountTWD: debtorAmtTWD,
-        location: row.location,
-        note: row.note,
-        creatorEmail: row.creatorEmail || currentUser?.email || 'oscargh3359@gmail.com',
-        createdBy: row.createdBy || currentUser?.name || currentUser?.nickname || currentUser?.role || '廖',
-        syncedToSplit: false,
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-    });
-
-    onImportExpenses(importedExpenses);
-    onClose();
-    showToast(`🎉 成功匯入 ${importedExpenses.length} 筆旅費明細！已為您自動重算「誰該還誰」結算總表`, 'success');
+    }, 150);
   };
 
   // 範例 Excel 格式快速帶入
@@ -1125,11 +1137,21 @@ export const TravelBatchImportModal: React.FC<TravelBatchImportModalProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  disabled={isImporting}
                   onClick={handleConfirmImport}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-bold shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95"
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 disabled:opacity-75 disabled:cursor-not-allowed text-white font-bold shadow-md cursor-pointer flex items-center gap-2 active:scale-95 transition-all"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>確認匯入 {selectedCount} 筆旅費明細</span>
+                  {isImporting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>正在批次匯入並運算分帳...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>確認匯入 {selectedCount} 筆旅費明細</span>
+                    </>
+                  )}
                 </button>
               </div>
             </>

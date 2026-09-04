@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Search, 
   Trash2, 
@@ -16,8 +16,9 @@ import {
   Database,
   Key
 } from 'lucide-react';
-import { SplitRecordItem } from '../../types';
+import { SplitRecordItem, AuthUser, CoupleBindingInfo } from '../../types';
 import { exportSplitRecordsToCSV } from '../../utils/exportCsv';
+import { resolveUserPersonas } from '../../utils/userPersona';
 
 interface SplitHistoryTabProps {
   items: SplitRecordItem[];
@@ -25,6 +26,8 @@ interface SplitHistoryTabProps {
   onOpenAdd: () => void;
   isDbConnected?: boolean;
   onOpenGasDeploy?: () => void;
+  currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
 }
 
 export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
@@ -33,11 +36,17 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
   onOpenAdd,
   isDbConnected = true,
   onOpenGasDeploy,
+  currentUser,
+  partnerBindingInfo,
 }) => {
+  const { userA, userB } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
+
   const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'unsettled' | 'settled'>('ALL');
-  const [filterPayer, setFilterPayer] = useState<'ALL' | '廖' | '周'>('ALL');
-  const [filterDebtor, setFilterDebtor] = useState<'ALL' | '廖' | '周'>('ALL');
+  const [filterPayer, setFilterPayer] = useState<string>('ALL');
+  const [filterDebtor, setFilterDebtor] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'time-desc' | 'time-asc' | 'amount-desc' | 'amount-asc'>('time-desc');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -73,13 +82,33 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
     );
   }
 
+  const isItemPayerUserA = (payerStr?: string) => {
+    const p = (payerStr || '').trim();
+    return p === userA.shortName || p === userA.name || p === userA.displayName || p === '廖';
+  };
+
+  const isItemDebtorUserA = (debtorStr?: string) => {
+    const d = (debtorStr || '').trim();
+    return d === userA.shortName || d === userA.name || d === userA.displayName || d === '廖';
+  };
+
   const filteredItems = safeItems
     .filter((item) => {
       if (!item) return false;
       if (filterStatus === 'unsettled' && item.status !== '未結清') return false;
       if (filterStatus === 'settled' && item.status !== '已結清') return false;
-      if (filterPayer !== 'ALL' && item.payer !== filterPayer) return false;
-      if (filterDebtor !== 'ALL' && item.debtor !== filterDebtor) return false;
+      
+      if (filterPayer !== 'ALL') {
+        const isPayerA = isItemPayerUserA(item.payer);
+        if (filterPayer === userA.shortName && !isPayerA) return false;
+        if (filterPayer === userB.shortName && isPayerA) return false;
+      }
+      
+      if (filterDebtor !== 'ALL') {
+        const isDebtorA = isItemDebtorUserA(item.debtor);
+        if (filterDebtor === userA.shortName && !isDebtorA) return false;
+        if (filterDebtor === userB.shortName && isDebtorA) return false;
+      }
       
       // 日期範圍篩選
       if (startDate) {
@@ -129,12 +158,14 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
     return acc + amt;
   }, 0);
 
-  const liaoAdvancedSum = filteredItems
+  const userAAdvancedSum = filteredItems
     .filter(i => i?.payer === '廖')
     .reduce((acc, i) => acc + (Number(i?.totalAmount) || 0), 0);
-  const zhouAdvancedSum = filteredItems
+  const userBAdvancedSum = filteredItems
     .filter(i => i?.payer === '周')
     .reduce((acc, i) => acc + (Number(i?.totalAmount) || 0), 0);
+  const liaoAdvancedSum = userAAdvancedSum;
+  const zhouAdvancedSum = userBAdvancedSum;
 
   const handleExportCSV = () => {
     exportSplitRecordsToCSV(filteredItems, `伴伴記_代墊明細_${new Date().toISOString().substring(0, 10)}.csv`);
@@ -227,22 +258,26 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
           {/* 付款人篩選 */}
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-bold text-[#8C8475] shrink-0">出資人：</span>
-            {(['ALL', '廖', '周'] as const).map((p) => (
+            {[
+              { key: 'ALL', label: '全部' },
+              { key: userA.shortName, label: `${userA.iconEmoji} ${userA.displayName}` },
+              { key: userB.shortName, label: `${userB.iconEmoji} ${userB.displayName}` },
+            ].map((p) => (
               <button
-                key={p}
+                key={p.key}
                 type="button"
-                onClick={() => setFilterPayer(p)}
+                onClick={() => setFilterPayer(p.key)}
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  filterPayer === p
-                    ? p === '廖'
+                  filterPayer === p.key
+                    ? p.key === userA.shortName
                       ? 'bg-sky-100 text-sky-800 border border-sky-300'
-                      : p === '周'
+                      : p.key === userB.shortName
                       ? 'bg-rose-100 text-rose-800 border border-rose-300'
                       : 'bg-[#4D4942] text-white'
                     : 'bg-[#F5F2EB] text-[#8C8475] hover:text-[#3E3A36]'
                 }`}
               >
-                {p === 'ALL' ? '全部' : p === '廖' ? '👦 廖廖' : '👧 周周'}
+                {p.label}
               </button>
             ))}
           </div>
@@ -326,12 +361,12 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
             <span className="font-mono font-bold text-[#3E3A36]">NT$ {(Number(totalFilteredExpenseSum) || 0).toLocaleString()}</span>
           </div>
           <div className="bg-sky-50/70 p-2 rounded-xl border border-sky-200/60 flex flex-col">
-            <span className="text-[10px] text-sky-800 font-semibold">廖先付小計</span>
-            <span className="font-mono font-bold text-sky-900">NT$ {(Number(liaoAdvancedSum) || 0).toLocaleString()}</span>
+            <span className="text-[10px] text-sky-800 font-semibold">{userA.displayName}先付小計</span>
+            <span className="font-mono font-bold text-sky-900">NT$ {(Number(userAAdvancedSum) || 0).toLocaleString()}</span>
           </div>
           <div className="bg-rose-50/70 p-2 rounded-xl border border-rose-200/60 flex flex-col">
-            <span className="text-[10px] text-rose-800 font-semibold">周先付小計</span>
-            <span className="font-mono font-bold text-rose-900">NT$ {(Number(zhouAdvancedSum) || 0).toLocaleString()}</span>
+            <span className="text-[10px] text-rose-800 font-semibold">{userB.displayName}先付小計</span>
+            <span className="font-mono font-bold text-rose-900">NT$ {(Number(userBAdvancedSum) || 0).toLocaleString()}</span>
           </div>
         </div>
 
@@ -377,8 +412,10 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
             const isUnsettled = item.status === '未結清';
             const totalAmt = Number(item.totalAmount) || 0;
             const debtorAmt = Number(item.debtorAmount) || (item.splitMode === 'AA平分' ? Math.round(totalAmt / 2) : totalAmt);
-            const payerLabel = item.payer === '廖' ? '廖' : '周';
-            const debtorLabel = item.debtor || (item.payer === '廖' ? '周' : '廖');
+            
+            const isPayerA = isItemPayerUserA(item.payer);
+            const payerPersona = isPayerA ? userA : userB;
+            const debtorPersona = isPayerA ? userB : userA;
 
             return (
               <div
@@ -391,11 +428,20 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
               >
                 {/* 左側詳細資訊 */}
                 <div className="flex items-start gap-3.5 min-w-0">
-                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 mt-0.5 ${
-                    item.payer === '廖' ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {payerLabel}
-                  </div>
+                  {payerPersona.avatar ? (
+                    <img
+                      src={payerPersona.avatar}
+                      alt={payerPersona.displayName}
+                      referrerPolicy="no-referrer"
+                      className="w-10 h-10 rounded-2xl object-cover ring-2 ring-white/80 shrink-0 mt-0.5 shadow-2xs"
+                    />
+                  ) : (
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 mt-0.5 ${
+                      isPayerA ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {payerPersona.shortName}
+                    </div>
+                  )}
 
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -420,7 +466,7 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
                       <span>消費總額：${(Number(totalAmt) || 0).toLocaleString()}</span>
                       <span>•</span>
                       <span className="font-bold text-rose-700">
-                        {debtorLabel} 應返還 NT$ {(Number(debtorAmt) || 0).toLocaleString()}
+                        {debtorPersona.displayName} 應返還 NT$ {(Number(debtorAmt) || 0).toLocaleString()}
                       </span>
                     </div>
 

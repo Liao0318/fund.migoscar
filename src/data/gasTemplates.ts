@@ -1224,23 +1224,63 @@ function saveTravelTrip(data) {
 
 function deleteTravelTrip(payload) {
   try {
-    var id = typeof payload === 'object' ? payload.id : payload;
+    var id = String(typeof payload === 'object' ? (payload.id || payload.tripId || '') : payload);
+    var expenseIds = (payload && typeof payload === 'object' && Array.isArray(payload.expenseIds)) ? payload.expenseIds.map(String) : [];
+    var wishIds = (payload && typeof payload === 'object' && Array.isArray(payload.wishIds)) ? payload.wishIds.map(String) : [];
+    if (!id) return { success: false, message: "無效的行程 ID" };
     var ss = getDbSpreadsheet();
-    var sheet = ss.getSheetByName("旅遊行程");
-    if (!sheet) return { success: false, message: "查無行程工作表" };
-    var lastRow = sheet.getLastRow();
-    if (lastRow <= 1) return { success: false, message: "查無行程" };
+    if (!ss) return { success: false, message: "查無試算表" };
 
-    var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-    for (var i = 0; i < ids.length; i++) {
-      if (String(ids[i][0]) === String(id)) {
-        sheet.deleteRow(i + 2);
-        return { success: true, message: "已刪除旅遊行程！" };
+    // 1. 刪除行程本體
+    var tripSheet = ss.getSheetByName("旅遊行程");
+    if (tripSheet) {
+      var lastRow = tripSheet.getLastRow();
+      if (lastRow > 1) {
+        var ids = tripSheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        for (var i = ids.length - 1; i >= 0; i--) {
+          if (String(ids[i][0]) === id) {
+            tripSheet.deleteRow(i + 2);
+          }
+        }
       }
     }
-    return { success: false, message: "查無此行程" };
+
+    // 2. 聯動刪除該行程的所有「旅遊支出明細」
+    var expSheet = ss.getSheetByName("旅遊支出明細") || ss.getSheetByName("旅遊分帳");
+    if (expSheet) {
+      var expLastRow = expSheet.getLastRow();
+      if (expLastRow > 1) {
+        var expData = expSheet.getRange(2, 1, expLastRow - 1, 2).getValues(); // col 1: id, col 2: tripId
+        // 由下往上倒序刪除，避免刪除後行號產生偏移
+        for (var j = expData.length - 1; j >= 0; j--) {
+          var rowExpId = String(expData[j][0]);
+          var rowTripId = String(expData[j][1]);
+          if (rowTripId === id || (expenseIds.length > 0 && expenseIds.indexOf(rowExpId) !== -1)) {
+            expSheet.deleteRow(j + 2);
+          }
+        }
+      }
+    }
+
+    // 3. 聯動刪除該行程的所有「旅遊心願清單」
+    var wishSheet = ss.getSheetByName("旅遊心願清單");
+    if (wishSheet) {
+      var wishLastRow = wishSheet.getLastRow();
+      if (wishLastRow > 1) {
+        var wishData = wishSheet.getRange(2, 1, wishLastRow - 1, 2).getValues();
+        for (var k = wishData.length - 1; k >= 0; k--) {
+          var rowWishId = String(wishData[k][0]);
+          var rowWishTripId = String(wishData[k][1]);
+          if (rowWishTripId === id || (wishIds.length > 0 && wishIds.indexOf(rowWishId) !== -1)) {
+            wishSheet.deleteRow(k + 2);
+          }
+        }
+      }
+    }
+
+    return { success: true, message: "已自試算表完整刪除旅遊行程及其所有關聯支出與心願明細！" };
   } catch (e) {
-    return { success: false, message: "刪除失敗：" + e.toString() };
+    return { success: false, message: "刪除行程失敗：" + e.toString() };
   }
 }
 

@@ -148,6 +148,8 @@ export function isIncomingFromPartner(n: AppNotification, currentUser?: AuthUser
 
   // 4. 比對是否包含伴侶的名字
   const partnerNames: string[] = [];
+  if (currentUser?.partnerName) partnerNames.push(currentUser.partnerName);
+  if (currentUser?.adminName) partnerNames.push(currentUser.adminName);
   if (currentRole === '廖' || currentUser?.email?.toLowerCase().includes('oscar')) {
     partnerNames.push('周沛緹', '周', '沛緹');
   } else if (currentRole === '周') {

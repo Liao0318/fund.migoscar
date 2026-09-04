@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   MessageCircle, 
@@ -32,11 +32,13 @@ import {
   ShoppingBag,
   UserCheck,
   SlidersHorizontal,
-  ChevronRight
+  ChevronRight,
+  User
 } from 'lucide-react';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
-import { AppNotification, AppNotifySettings, SmartCommandResult, SmartCommandCardData, AuthUser } from '../../types';
+import { AppNotification, AppNotifySettings, SmartCommandResult, SmartCommandCardData, AuthUser, CoupleBindingInfo } from '../../types';
 import { formatAmPmTime, isIncomingFromPartner } from '../../utils/formatters';
+import { resolveUserPersonas } from '../../utils/userPersona';
 
 export interface ChatMessage {
   id: string;
@@ -71,6 +73,7 @@ interface ChatAssistantDrawerProps {
   appMode?: 'fund' | 'split';
   notifications?: AppNotification[];
   currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
   onMarkRead?: (id: string) => void;
   onMarkAllRead?: () => void;
   onDeleteNotification?: (id: string) => void;
@@ -92,7 +95,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   {
     id: 'welcome-2',
     sender: 'assistant',
-    text: '💡 常用指令範例（可直接點擊下方快捷鍵）：\n• 廖 1200 晚餐（自動 AA 代墊記帳）\n• 周 85 珍奶（記帳並發送推播通知）\n• 存 10000 薪資（公積金存入）\n• 需要買 鮮奶 全聯（加入購物清單）\n• 查代墊 / 結餘（即時對帳狀況）',
+    text: '💡 常用指令範例（可直接點擊下方快捷鍵）：\n• 記帳：出資人 金額 品項（如：廖 1200 晚餐）\n• 存入：存 金額 項目（如：存 10000 薪資）\n• 採購：需要買 品名 地點（如：需要買 鮮奶 全聯）\n• 查詢：查代墊 / 結餘（即時對帳狀況）',
     timestamp: '剛剛',
     type: 'info'
   }
@@ -107,6 +110,7 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
   appMode = 'split',
   notifications = [],
   currentUser,
+  partnerBindingInfo,
   onMarkRead,
   onMarkAllRead,
   onDeleteNotification,
@@ -116,6 +120,10 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
   toggleNotifySetting,
   onTestNotification,
 }) => {
+  const { userA, userB } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
+
   const undoHandler = onUndo || onUndoCommandItem;
   const [activeTab, setActiveTab] = useState<'chat' | 'notifications' | 'settings'>('chat');
   const [filterMode, setFilterMode] = useState<'partner' | 'all' | 'unread'>('partner');
@@ -334,8 +342,8 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
   };
 
   const QUICK_PROMPTS = [
-    { label: '廖 1200 晚餐', cmd: '廖 1200 晚餐' },
-    { label: '周 85 珍奶', cmd: '周 85 珍奶' },
+    { label: `${userA.shortName} 1200 晚餐`, cmd: `${userA.shortName} 1200 晚餐` },
+    { label: `${userB.shortName} 85 珍奶`, cmd: `${userB.shortName} 85 珍奶` },
     { label: '存 10000 薪資', cmd: '存 10000 薪資' },
     { label: '需要買 鮮奶 全聯', cmd: '需要買 鮮奶 全聯' },
     { label: '查代墊', cmd: '查代墊' },
@@ -715,8 +723,22 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
                         )}
 
                         {isUser ? (
-                          <div className="max-w-[85%] sm:max-w-[78%] px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm bg-[#85E249] text-[#1E3A1A] font-medium rounded-br-xs">
-                            {msg.text}
+                          <div className="flex items-end gap-2 max-w-[85%] sm:max-w-[78%]">
+                            <div className="px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap break-words shadow-sm bg-[#85E249] text-[#1E3A1A] font-medium rounded-br-xs flex-1">
+                              {msg.text}
+                            </div>
+                            {currentUser?.avatar ? (
+                              <img
+                                src={currentUser.avatar}
+                                alt={currentUser.nickname || currentUser.name || 'User'}
+                                referrerPolicy="no-referrer"
+                                className="w-7 h-7 rounded-full object-cover shrink-0 ring-1 ring-white/50 mb-0.5 shadow-2xs"
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-white/20 text-white flex items-center justify-center text-xs font-bold shrink-0 mb-0.5 shadow-2xs">
+                                <User className="w-3.5 h-3.5 text-white" />
+                              </div>
+                            )}
                           </div>
                         ) : hasCardData ? (
                           renderMessageCard(msg)
@@ -981,7 +1003,9 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
                                         ? 'bg-rose-100 text-rose-800 border border-rose-200'
                                         : 'bg-amber-100 text-amber-800 border border-amber-200'
                                     }`}>
-                                      {n.actorRole === '周' ? '💖 周沛緹' : '👑 廖尹丞'}
+                                      {n.actorRole === '周' || n.actorRole?.includes('周')
+                                        ? (userB.isPendingBinding ? '⏳ 待確認伴侶' : `💖 ${userB.displayName}`)
+                                        : `👑 ${userA.displayName}`}
                                     </span>
                                   )}
                                 </div>

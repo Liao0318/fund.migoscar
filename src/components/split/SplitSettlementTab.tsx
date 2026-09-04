@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Scale, 
   CheckCircle2, 
@@ -14,16 +14,20 @@ import {
   ChevronDown,
   ChevronUp,
   Database,
-  Key
+  Key,
+  User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SplitRecordItem, SplitSummary } from '../../types';
+import { SplitRecordItem, SplitSummary, AuthUser, CoupleBindingInfo } from '../../types';
+import { resolveUserPersonas, isRecordOfUserA } from '../../utils/userPersona';
 
 interface SplitSettlementTabProps {
   summary: SplitSummary;
   items: SplitRecordItem[];
   onOpenSettleModal: () => void;
   isLoading: boolean;
+  currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
   isDbConnected?: boolean;
   onOpenGasDeploy?: () => void;
 }
@@ -43,9 +47,14 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
   items = [],
   onOpenSettleModal,
   isLoading,
+  currentUser,
+  partnerBindingInfo,
   isDbConnected = true,
   onOpenGasDeploy,
 }) => {
+  const { userA, userB } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
   const safeSummary: SplitSummary = summary || DEFAULT_SPLIT_SUMMARY;
   const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
   const unsettledItems = safeItems.filter(i => i && i.status === '未結清');
@@ -125,16 +134,28 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
 
         {/* 算式分解 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-          {/* 廖廖代墊 */}
-          <div className="p-4 rounded-2xl bg-sky-50/80 border border-sky-200/80 space-y-1">
+          {/* User A 代墊 */}
+          <div className="p-4 rounded-2xl bg-sky-50/80 border border-sky-200/80 space-y-2">
             <div className="text-[11px] font-bold text-sky-800 flex items-center justify-between">
-              <span>👦 廖廖 先墊總額</span>
-              <span className="text-[10px] bg-sky-100 px-1.5 py-0.5 rounded text-sky-700">廖出錢</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-2xs shrink-0 ring-1 ring-sky-300 bg-white flex items-center justify-center">
+                  {userA.avatar ? (
+                    <img src={userA.avatar} alt={userA.displayName} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-sky-700 text-white font-bold text-[11px] flex items-center justify-center">{userA.shortName}</div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate font-bold text-xs">{userA.displayName} 先墊總額</div>
+                  {userA.email && <div className="text-[9px] text-sky-600 font-mono truncate font-normal">{userA.email}</div>}
+                </div>
+              </div>
+              <span className="text-[10px] bg-sky-100 px-2 py-0.5 rounded-md text-sky-700 shrink-0 font-bold">{userA.shortName}出錢</span>
             </div>
-            <div className="text-xl sm:text-2xl font-black text-sky-900">
+            <div className="text-xl sm:text-2xl font-black text-sky-900 pt-1">
               NT$ {(safeSummary.zhouOwesLiao || 0).toLocaleString()}
             </div>
-            <div className="text-[10px] text-sky-700">（周周 應返還此筆）</div>
+            <div className="text-[10px] text-sky-700">（{userB.displayName} 應返還此筆）</div>
           </div>
 
           {/* 減號 / 互抵符號 */}
@@ -145,16 +166,56 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
             <span className="text-[10px] font-bold text-[#8C8475] mt-1">互相抵銷</span>
           </div>
 
-          {/* 周周代墊 */}
-          <div className="p-4 rounded-2xl bg-rose-50/80 border border-rose-200/80 space-y-1">
-            <div className="text-[11px] font-bold text-rose-800 flex items-center justify-between">
-              <span>👧 周周 先墊總額</span>
-              <span className="text-[10px] bg-rose-100 px-1.5 py-0.5 rounded text-rose-700">周出錢</span>
+          {/* User B 代墊 */}
+          <div className={`p-4 rounded-2xl border space-y-2 transition-all ${
+            userB.isPendingBinding
+              ? 'bg-neutral-50/90 border-neutral-300 border-dashed backdrop-blur-md'
+              : 'bg-rose-50/80 border-rose-200/80'
+          }`}>
+            <div className={`text-[11px] font-bold flex items-center justify-between ${
+              userB.isPendingBinding ? 'text-neutral-800' : 'text-rose-800'
+            }`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className={`w-8 h-8 rounded-full overflow-hidden border-2 border-white shadow-2xs shrink-0 flex items-center justify-center ${
+                  userB.isPendingBinding ? 'ring-1 ring-neutral-400 bg-neutral-200' : 'ring-1 ring-rose-300 bg-white'
+                }`}>
+                  {userB.isPendingBinding ? (
+                    <div className="w-full h-full bg-neutral-300 text-neutral-800 font-bold text-[10px] flex items-center justify-center">
+                      待
+                    </div>
+                  ) : userB.avatar ? (
+                    <img src={userB.avatar} alt={userB.displayName} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-rose-700 text-white font-bold text-[11px] flex items-center justify-center">{userB.shortName}</div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate font-bold text-xs">
+                    {userB.isPendingBinding ? '待確認伴侶 先墊總額' : `${userB.displayName} 先墊總額`}
+                  </div>
+                  {userB.isPendingBinding ? (
+                    <div className="text-[9px] text-neutral-500 truncate font-normal">受邀綁定後自動帶入真實姓名</div>
+                  ) : userB.email ? (
+                    <div className="text-[9px] text-rose-600 font-mono truncate font-normal">{userB.email}</div>
+                  ) : null}
+                </div>
+              </div>
+              {userB.isPendingBinding ? (
+                <span className="text-[10px] bg-neutral-900 text-white px-2 py-0.5 rounded-md shrink-0 font-bold shadow-2xs">
+                  ⏳ 待確認 (反白)
+                </span>
+              ) : (
+                <span className="text-[10px] bg-rose-100 px-2 py-0.5 rounded-md text-rose-700 shrink-0 font-bold">{userB.shortName}出錢</span>
+              )}
             </div>
-            <div className="text-xl sm:text-2xl font-black text-rose-900">
+            <div className={`text-xl sm:text-2xl font-black pt-1 ${
+              userB.isPendingBinding ? 'text-neutral-900' : 'text-rose-900'
+            }`}>
               NT$ {(safeSummary.liaoOwesZhou || 0).toLocaleString()}
             </div>
-            <div className="text-[10px] text-rose-700">（廖廖 應返還此筆）</div>
+            <div className={`text-[10px] ${userB.isPendingBinding ? 'text-neutral-600' : 'text-rose-700'}`}>
+              （{userA.displayName} 應返還此筆）
+            </div>
           </div>
         </div>
 
@@ -178,9 +239,58 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
               </p>
             </div>
           ) : (
-            <div className="py-2 space-y-1.5">
-              <div className="text-sm font-bold text-[#6E6659]">
-                由 <span className="font-black text-[#3E3A36] text-base px-2 py-0.5 rounded bg-white border border-black/5 shadow-2xs">{safeSummary.netDebtor === '廖' ? '廖廖' : '周周'}</span> 支付給 <span className="font-black text-[#3E3A36] text-base px-2 py-0.5 rounded bg-white border border-black/5 shadow-2xs">{safeSummary.netDebtor === '廖' ? '周周' : '廖廖'}</span>
+            <div className="py-2 space-y-2">
+              <div className="text-sm font-bold text-[#6E6659] flex items-center justify-center gap-2 flex-wrap">
+                <span>由</span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#E0DCD3] shadow-2xs">
+                  <div className="w-5 h-5 rounded-full overflow-hidden border border-[#D0C9BA] shrink-0 bg-[#FAF9F5]">
+                    {((safeSummary.netDebtor === '廖' ? userA.avatar : userB.avatar)) ? (
+                      <img
+                        src={(safeSummary.netDebtor === '廖' ? userA.avatar : userB.avatar)!}
+                        alt="Payer"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="w-full h-full bg-slate-700 text-white text-[9px] font-bold flex items-center justify-center">
+                        {safeSummary.netDebtor === '廖' ? userA.shortName : (userB.isPendingBinding ? '待' : userB.shortName)}
+                      </span>
+                    )}
+                  </div>
+                  <strong className="text-[#3E3A36] text-xs sm:text-sm">
+                    {safeSummary.netDebtor === '廖'
+                      ? userA.displayName
+                      : (userB.isPendingBinding ? '待確認伴侶' : userB.displayName)}
+                  </strong>
+                  {safeSummary.netDebtor !== '廖' && userB.isPendingBinding && (
+                    <span className="text-[9px] bg-neutral-800 text-white px-1.5 py-0.2 rounded font-mono">待受邀</span>
+                  )}
+                </span>
+                <span>支付給</span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#E0DCD3] shadow-2xs">
+                  <div className="w-5 h-5 rounded-full overflow-hidden border border-[#D0C9BA] shrink-0 bg-[#FAF9F5]">
+                    {((safeSummary.netDebtor === '廖' ? userB.avatar : userA.avatar)) ? (
+                      <img
+                        src={(safeSummary.netDebtor === '廖' ? userB.avatar : userA.avatar)!}
+                        alt="Payee"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="w-full h-full bg-slate-700 text-white text-[9px] font-bold flex items-center justify-center">
+                        {safeSummary.netDebtor === '廖' ? (userB.isPendingBinding ? '待' : userB.shortName) : userA.shortName}
+                      </span>
+                    )}
+                  </div>
+                  <strong className="text-[#3E3A36] text-xs sm:text-sm">
+                    {safeSummary.netDebtor === '廖'
+                      ? (userB.isPendingBinding ? '待確認伴侶' : userB.displayName)
+                      : userA.displayName}
+                  </strong>
+                  {safeSummary.netDebtor === '廖' && userB.isPendingBinding && (
+                    <span className="text-[9px] bg-neutral-800 text-white px-1.5 py-0.2 rounded font-mono">待受邀</span>
+                  )}
+                </span>
               </div>
               <div className="text-3xl sm:text-4xl font-black text-rose-600 tracking-tight">
                 NT$ {(safeSummary.netAmount || 0).toLocaleString()} 元
@@ -226,8 +336,9 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
               const totalAmt = Number(item.totalAmount) || 0;
               const debtorAmt = Number(item.debtorAmount) || (item.splitMode === 'AA平分' ? Math.round(totalAmt / 2) : totalAmt);
               const dateDisplay = item.time ? String(item.time).split(' ')[0] : '—';
-              const payerLabel = item.payer === '廖' ? '廖' : '周';
-              const debtorLabel = item.debtor || (item.payer === '廖' ? '周' : '廖');
+              const isPayerA = isRecordOfUserA(item.payer, userA, userB);
+              const payerPersona = isPayerA ? userA : userB;
+              const debtorPersona = isPayerA ? userB : userA;
 
               return (
                 <div
@@ -235,24 +346,53 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
                   className="p-3.5 rounded-2xl bg-[#FAF8F5] border border-[#E9E4DA] flex items-center justify-between gap-3 text-xs"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-[11px] shrink-0 ${
-                      item.payer === '廖' ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
-                    }`}>
-                      {payerLabel}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="font-bold text-[#3E3A36] truncate">{item.itemName || '未命名款項'}</div>
-                      <div className="text-[10px] text-[#8C8475]">
-                        總額 ${(Number(totalAmt) || 0).toLocaleString()} • {item.splitMode || 'AA平分'}
+                    <div className="w-8 h-8 rounded-full overflow-hidden border border-white shadow-2xs shrink-0 ring-1 ring-black/10 bg-white">
+                      {payerPersona.avatar ? (
+                        <img
+                          src={payerPersona.avatar}
+                          alt={payerPersona.displayName}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className={`w-full h-full flex items-center justify-center font-bold text-[11px] ${
+                          isPayerA ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
+                          {payerPersona.shortName}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-[#3E3A36] truncate max-w-[120px] min-[360px]:max-w-[170px] sm:max-w-xs" title={item.itemName || '未命名款項'}>
+                        {item.itemName || '未命名款項'}
+                      </div>
+                      <div className="text-[10px] text-[#8C8475] truncate max-w-[160px] min-[360px]:max-w-[210px] sm:max-w-none" title={`${payerPersona.displayName} 先墊 • 總額 $${(Number(totalAmt) || 0).toLocaleString()} • ${item.splitMode || 'AA平分'}`}>
+                        {payerPersona.displayName} 先墊 • 總額 ${(Number(totalAmt) || 0).toLocaleString()} • {item.splitMode || 'AA平分'}
                       </div>
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <div className="font-bold text-rose-700">
-                      {debtorLabel} 還 ${(Number(debtorAmt) || 0).toLocaleString()}
+                  <div className="text-right shrink-0 flex items-center gap-2">
+                    <div>
+                      <div className="font-bold text-rose-700 whitespace-nowrap">
+                        {debtorPersona.displayName} 還 ${(Number(debtorAmt) || 0).toLocaleString()}
+                      </div>
+                      <div className="text-[10px] text-[#A8A296] whitespace-nowrap">{dateDisplay}</div>
                     </div>
-                    <div className="text-[10px] text-[#A8A296]">{dateDisplay}</div>
+                    <div className="w-6 h-6 rounded-full overflow-hidden border border-white shadow-2xs shrink-0 ring-1 ring-black/10 bg-white hidden sm:block">
+                      {debtorPersona.avatar ? (
+                        <img
+                          src={debtorPersona.avatar}
+                          alt={debtorPersona.displayName}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center font-bold text-[9px] bg-neutral-100 text-neutral-700">
+                          {debtorPersona.shortName}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

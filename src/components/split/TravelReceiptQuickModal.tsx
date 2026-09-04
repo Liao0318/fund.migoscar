@@ -206,8 +206,8 @@ export const TravelReceiptQuickModal: React.FC<TravelReceiptQuickModalProps> = (
         debtorAmountTWD: debtorAmtTWD,
         location: storeName.trim(),
         note: it.note.trim(),
-        creatorEmail: currentUser?.email || 'oscargh3359@gmail.com',
-        createdBy: currentUser?.name || currentUser?.nickname || currentUser?.role || '廖',
+        creatorEmail: currentUser?.email || '',
+        createdBy: currentUser?.name || currentUser?.nickname || currentUser?.role || '訪客',
         syncedToSplit: false,
         createdAt: new Date().toISOString().split('T')[0]
       };

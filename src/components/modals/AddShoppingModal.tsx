@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Pencil, ShoppingBag, X, Store, MapPin, Plus } from 'lucide-react';
-import { ShoppingItem, AuthUser } from '../../types';
+import { Pencil, ShoppingBag, X, Store, MapPin, Plus, User } from 'lucide-react';
+import { ShoppingItem, AuthUser, CoupleBindingInfo } from '../../types';
+import { resolveUserPersonas } from '../../utils/userPersona';
 
 interface AddShoppingModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
   shoppingForm: ShoppingItem;
   setShoppingForm: React.Dispatch<React.SetStateAction<ShoppingItem>>;
   onSubmitShopping: (e: React.FormEvent) => void;
@@ -18,14 +20,16 @@ export const AddShoppingModal: React.FC<AddShoppingModalProps> = ({
   isOpen,
   onClose,
   currentUser,
+  partnerBindingInfo,
   shoppingForm,
   setShoppingForm,
   onSubmitShopping,
   shoppingStores = [],
   onOpenManageStores
 }) => {
-  const isCurrentUserZhou = currentUser?.role === '周' || currentUser?.name?.includes('周');
-  const myCreatorName = isCurrentUserZhou ? '周沛緹' : '廖尹丞';
+  const { userA, userB } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
   return (
     <AnimatePresence>
       {isOpen && (
@@ -247,20 +251,29 @@ export const AddShoppingModal: React.FC<AddShoppingModalProps> = ({
                   <div className="grid grid-cols-2 gap-2.5">
                     <button
                       type="button"
-                      onClick={() => setShoppingForm({ ...shoppingForm, creator: '廖尹丞' })}
+                      onClick={() => setShoppingForm({ ...shoppingForm, creator: userA.name })}
                       className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 ${
-                        shoppingForm.creator === '廖尹丞'
+                        shoppingForm.creator === userA.name || shoppingForm.creator === userA.nickname || shoppingForm.creator === '廖尹丞'
                           ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
                           : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
                       }`}
                     >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base">👦</span>
-                        <span>廖廖 (廖尹丞)</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {userA.avatar ? (
+                          <img
+                            src={userA.avatar}
+                            alt={userA.displayName}
+                            referrerPolicy="no-referrer"
+                            className="w-5 h-5 rounded-full object-cover shrink-0 border border-white/80 shadow-2xs"
+                          />
+                        ) : (
+                          <span className="text-base">{userA.iconEmoji}</span>
+                        )}
+                        <span className="truncate">{userA.displayName} ({userA.name})</span>
                       </div>
-                      {myCreatorName === '廖尹丞' && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                          shoppingForm.creator === '廖尹丞'
+                      {userA.isCurrentUser && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                          shoppingForm.creator === userA.name || shoppingForm.creator === userA.nickname || shoppingForm.creator === '廖尹丞'
                             ? 'bg-sky-800 text-sky-100'
                             : 'bg-sky-100 text-sky-700'
                         }`}>
@@ -270,20 +283,35 @@ export const AddShoppingModal: React.FC<AddShoppingModalProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setShoppingForm({ ...shoppingForm, creator: '周沛緹' })}
+                      onClick={() => setShoppingForm({ ...shoppingForm, creator: userB.name })}
                       className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 ${
-                        shoppingForm.creator === '周沛緹'
-                          ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
-                          : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
+                        shoppingForm.creator === userB.name || shoppingForm.creator === userB.nickname || shoppingForm.creator === '周沛緹' || shoppingForm.creator === '待確認' || shoppingForm.creator === '待確認伴侶'
+                          ? (userB.isPendingBinding ? 'bg-neutral-800 text-white border-neutral-900 shadow-xs' : 'bg-rose-600 text-white border-rose-700 shadow-xs')
+                          : (userB.isPendingBinding ? 'bg-neutral-50/80 border-dashed border-neutral-300 text-neutral-600 hover:bg-white' : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white')
                       }`}
                     >
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base">👧</span>
-                        <span>周周 (周沛緹)</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {userB.avatar ? (
+                          <img
+                            src={userB.avatar}
+                            alt={userB.displayName}
+                            referrerPolicy="no-referrer"
+                            className="w-5 h-5 rounded-full object-cover shrink-0 border border-white/80 shadow-2xs"
+                          />
+                        ) : (
+                          <span className="text-base">{userB.iconEmoji}</span>
+                        )}
+                        <span className="truncate">
+                          {userB.isPendingBinding ? '待確認伴侶 (等待受邀)' : `${userB.displayName} (${userB.name})`}
+                        </span>
                       </div>
-                      {myCreatorName === '周沛緹' && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                          shoppingForm.creator === '周沛緹'
+                      {userB.isPendingBinding ? (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold shrink-0 bg-neutral-900 text-white border border-neutral-700">
+                          待受邀
+                        </span>
+                      ) : userB.isCurrentUser && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                          shoppingForm.creator === userB.name || shoppingForm.creator === userB.nickname
                             ? 'bg-rose-800 text-rose-100'
                             : 'bg-rose-100 text-rose-700'
                         }`}>

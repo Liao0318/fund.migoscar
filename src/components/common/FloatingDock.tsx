@@ -32,12 +32,12 @@ export const FloatingDock: React.FC<FloatingDockProps> = ({
         onClick={() => setActiveTab('home')}
         className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 transition-all duration-200 cursor-pointer w-full ${
           activeTab === 'home' 
-            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-[#8C8475] scale-105 font-semibold') 
+            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-[#8C8475] scale-105 font-bold') 
             : 'text-[#A39E92] hover:text-[#5C564E]'
         }`}
       >
         <Home className="w-4 h-4 sm:w-5 sm:h-5" />
-        <span className="text-[9px] sm:text-[10px]">首頁</span>
+        <span className="text-[10px] sm:text-[11px] font-medium leading-tight whitespace-nowrap px-0.5">首頁</span>
       </button>
 
       {/* Tab 2: 歷史流水帳 / 代墊明細 */}
@@ -45,12 +45,12 @@ export const FloatingDock: React.FC<FloatingDockProps> = ({
         onClick={() => setActiveTab('history')}
         className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 transition-all duration-200 cursor-pointer w-full relative ${
           activeTab === 'history' 
-            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-[#8C8475] scale-105 font-semibold') 
+            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-[#8C8475] scale-105 font-bold') 
             : 'text-[#A39E92] hover:text-[#5C564E]'
         }`}
       >
         <List className="w-4 h-4 sm:w-5 sm:h-5" />
-        <span className="text-[9px] sm:text-[10px]">
+        <span className="text-[10px] sm:text-[11px] font-medium leading-tight whitespace-nowrap px-0.5">
           {appMode === 'split' ? '代墊明細' : '帳目明細'}
         </span>
         {appMode === 'split' && effectiveUnsettled > 0 && (
@@ -80,7 +80,7 @@ export const FloatingDock: React.FC<FloatingDockProps> = ({
         onClick={() => setActiveTab('notebook')}
         className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 transition-all duration-200 cursor-pointer w-full relative ${
           activeTab === 'notebook' 
-            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-amber-800 scale-105 font-semibold') 
+            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-amber-800 scale-105 font-bold') 
             : 'text-[#A39E92] hover:text-[#5C564E]'
         }`}
       >
@@ -89,7 +89,7 @@ export const FloatingDock: React.FC<FloatingDockProps> = ({
         ) : (
           <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5" />
         )}
-        <span className="text-[9px] sm:text-[10px]">
+        <span className="text-[10px] sm:text-[11px] font-medium leading-tight whitespace-nowrap px-0.5">
           {appMode === 'split' ? '旅遊分帳' : '購物記事'}
         </span>
         {appMode === 'fund' && effectiveShopping > 0 && (
@@ -104,12 +104,12 @@ export const FloatingDock: React.FC<FloatingDockProps> = ({
         onClick={() => setActiveTab('settlement')}
         className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 transition-all duration-200 cursor-pointer w-full ${
           activeTab === 'settlement' 
-            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-[#8C8475] scale-105 font-semibold') 
+            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-[#8C8475] scale-105 font-bold') 
             : 'text-[#A39E92] hover:text-[#5C564E]'
         }`}
       >
         <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
-        <span className="text-[9px] sm:text-[10px]">
+        <span className="text-[10px] sm:text-[11px] font-medium leading-tight whitespace-nowrap px-0.5">
           {appMode === 'split' ? '結算對帳' : '月底對帳'}
         </span>
       </button>

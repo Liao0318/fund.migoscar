@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   ShoppingBag, 
   Plus, 
@@ -17,10 +17,12 @@ import {
   Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { AuthUser, CoupleBindingInfo } from '../../types';
+import { resolveUserPersonas } from '../../utils/userPersona';
 
 export interface SplitWishItem {
   id: string;
-  requester: '廖' | '周' | '共同';
+  requester: string;
   itemName: string;
   store: string;
   estimatedPrice?: number;
@@ -35,6 +37,8 @@ interface SplitNotebookTabProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   isDbConnected?: boolean;
   onOpenGasDeploy?: () => void;
+  currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
 }
 
 export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
@@ -42,7 +46,13 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
   showToast,
   isDbConnected = true,
   onOpenGasDeploy,
+  currentUser,
+  partnerBindingInfo,
 }) => {
+  const { userA, userB } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
+
   const [wishlist, setWishlist] = useState<SplitWishItem[]>(() => {
     try {
       const isDbConfigured = Boolean(localStorage.getItem('muji_gas_web_url') || (typeof window !== 'undefined' && (window as any).google?.script?.run));
@@ -59,7 +69,7 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
     return [];
   });
 
-  const [filterRequester, setFilterRequester] = useState<'ALL' | '廖' | '周'>('ALL');
+  const [filterRequester, setFilterRequester] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<'ALL' | '待代買' | '已買好'>('待代買');
 
   if (!isDbConnected) {
@@ -94,7 +104,7 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
 
   // 新增 Modal
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [requester, setRequester] = useState<'廖' | '周' | '共同'>('周');
+  const [requester, setRequester] = useState<string>(userB.shortName);
   const [itemName, setItemName] = useState('');
   const [store, setStore] = useState('');
   const [estimatedPrice, setEstimatedPrice] = useState('');
@@ -121,33 +131,35 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
     }
 
     const newItem: SplitWishItem = {
-      id: 'wish-' + Date.now(),
+      id: `wish-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       requester,
       itemName: itemName.trim(),
-      store: store.trim() || '隨意',
-      estimatedPrice: estimatedPrice ? parseFloat(estimatedPrice) || undefined : undefined,
-      deadline: deadline.trim() || '無期限',
-      note: note.trim(),
+      store: store.trim() || '不限/隨意',
+      estimatedPrice: estimatedPrice ? Number(estimatedPrice) : undefined,
+      deadline: deadline.trim() || undefined,
+      note: note.trim() || undefined,
       status: '待代買',
-      createdAt: new Date().toISOString().split('T')[0]
+      createdAt: new Date().toLocaleString('zh-TW', { hour12: false }),
     };
 
     const updated = [newItem, ...wishlist];
     saveWishlist(updated);
-    setIsAddOpen(false);
+    showToast(`✨ 已新增代買心願：${newItem.itemName}`, 'success');
+
+    // 重設表單
     setItemName('');
     setStore('');
     setEstimatedPrice('');
     setDeadline('');
     setNote('');
-    showToast(`已新增代買心願：${newItem.itemName}`, 'success');
+    setIsAddOpen(false);
   };
 
   const handleToggleStatus = (id: string) => {
     const updated = wishlist.map((item) => {
       if (item.id === id) {
-        const nextStatus: '待代買' | '已買好' = item.status === '待代買' ? '已買好' : '待代買';
-        return { ...item, status: nextStatus };
+        const nextStatus = item.status === '待代買' ? '已買好' : '待代買';
+        return { ...item, status: nextStatus as '待代買' | '已買好' };
       }
       return item;
     });
@@ -155,15 +167,25 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
   };
 
   const handleDeleteItem = (id: string) => {
-    const updated = wishlist.filter(i => i.id !== id);
+    const updated = wishlist.filter((item) => item.id !== id);
     saveWishlist(updated);
-    showToast('已移除該項代買許願', 'info');
+    showToast('已刪除該代買項目', 'info');
   };
 
-  const handleStartConvert = (item: SplitWishItem) => {
+  const isUserARequester = (reqStr?: string) => {
+    const r = (reqStr || '').trim();
+    return r === userA.shortName || r === userA.name || r === userA.displayName || r === '廖';
+  };
+
+  const isUserBRequester = (reqStr?: string) => {
+    const r = (reqStr || '').trim();
+    return r === userB.shortName || r === userB.name || r === userB.displayName || r === '周';
+  };
+
+  const handleOpenConvert = (item: SplitWishItem) => {
     setConvertingItem(item);
-    // 預設由另一方先代付
-    const defaultPayer: '廖' | '周' = item.requester === '周' ? '廖' : '周';
+    // 預設由對方代墊
+    const defaultPayer: '廖' | '周' = isUserBRequester(item.requester) ? '廖' : '周';
     setConvertPayer(defaultPayer);
     setConvertActualAmount(item.estimatedPrice ? String(item.estimatedPrice) : '');
   };
@@ -171,92 +193,99 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
   const handleConfirmConvert = (e: React.FormEvent) => {
     e.preventDefault();
     if (!convertingItem) return;
-    const num = parseFloat(convertActualAmount);
-    if (isNaN(num) || num <= 0) {
-      showToast('請輸入有效實際代付金額', 'error');
+    const amount = Number(convertActualAmount);
+    if (!amount || amount <= 0) {
+      showToast('請輸入有效的消費金額', 'error');
       return;
     }
 
-    // 標記為已買好
-    const updated = wishlist.map((item) => {
-      if (item.id === convertingItem.id) {
-        return { ...item, status: '已買好' as const };
-      }
-      return item;
-    });
-    saveWishlist(updated);
-
+    // 呼叫父層新增代墊紀錄
     onConvertToSplit({
-      itemName: convertingItem.itemName,
-      totalAmount: num,
-      payer: convertPayer
+      itemName: `[代買] ${convertingItem.itemName}${convertingItem.store ? ` (${convertingItem.store})` : ''}`,
+      totalAmount: amount,
+      payer: convertPayer,
     });
 
+    // 標記原願望為已買好
+    handleToggleStatus(convertingItem.id);
     setConvertingItem(null);
-    showToast(`已成功轉入代墊記帳：${convertingItem.itemName}（${convertPayer} 代墊 $${num}）`, 'success');
+    showToast(`🎉 已成功將「${convertingItem.itemName}」轉為代墊帳目！`, 'success');
   };
 
   const filteredItems = wishlist.filter((item) => {
     if (filterStatus !== 'ALL' && item.status !== filterStatus) return false;
-    if (filterRequester !== 'ALL' && item.requester !== filterRequester && item.requester !== '共同') return false;
+    if (filterRequester !== 'ALL') {
+      if (filterRequester === userA.shortName && !isUserARequester(item.requester)) return false;
+      if (filterRequester === userB.shortName && !isUserBRequester(item.requester)) return false;
+      if (filterRequester === '共同' && item.requester !== '共同') return false;
+    }
     return true;
   });
 
-  return (
-    <div className="space-y-4 sm:space-y-6 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
-      {/* 橫幅 Banner */}
-      <div className="bg-gradient-to-r from-rose-800 to-rose-900 text-rose-50 rounded-3xl p-5 sm:p-7 shadow-md relative overflow-hidden">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-rose-400/20 via-transparent to-transparent pointer-events-none" />
-        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg sm:text-2xl font-bold text-white tracking-tight">
-              代買與心願記事
-            </h2>
-            <p className="text-rose-200/90 text-xs sm:text-sm mt-1 max-w-lg leading-relaxed font-light">
-              紀錄需對方順路代買的項目，買好後可直接轉為代墊記帳。
-            </p>
-          </div>
+  const pendingCount = wishlist.filter((i) => i.status === '待代買').length;
+  const doneCount = wishlist.filter((i) => i.status === '已買好').length;
 
-          <button
-            type="button"
-            onClick={() => setIsAddOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-white text-rose-900 hover:bg-rose-50 font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
-          >
-            <Plus className="w-4 h-4 text-rose-700" />
-            <span>新增代買心願</span>
-          </button>
+  return (
+    <div className="space-y-4 sm:space-y-5 max-w-4xl mx-auto pb-4 sm:pb-6 font-sans">
+      {/* 頂部功能橫幅 */}
+      <div className="bg-white/70 backdrop-blur-md p-4 sm:px-6 sm:py-5 rounded-2xl border border-[#E9E5DC] shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-[#3E3A36] flex items-center gap-2">
+              <span>🛍️ 代買清單與記事</span>
+            </h2>
+            <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 text-[10px] font-bold border border-rose-200">
+              待買 {pendingCount} 件
+            </span>
+          </div>
+          <p className="text-xs text-[#8C8475] mt-0.5">
+            順路代買、心願清單與隨手筆記。買好後可一鍵無縫轉入代墊帳目！
+          </p>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setIsAddOpen(true)}
+          className="px-4 py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 self-start sm:self-auto"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>＋ 新增代買項目</span>
+        </button>
       </div>
 
       {/* 篩選切換列 */}
-      <div className="bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-[#EBE7DF] shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        <div className="flex items-center p-1 bg-[#F5F2EB] rounded-xl text-xs font-bold">
+      <div className="bg-white/80 backdrop-blur-md p-3.5 rounded-2xl border border-[#EAE6DD] shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center bg-[#F5F2EB] p-1 rounded-xl text-xs font-bold gap-1">
           <button
             type="button"
             onClick={() => setFilterStatus('待代買')}
-            className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
               filterStatus === '待代買'
                 ? 'bg-white text-rose-800 shadow-xs'
                 : 'text-[#8C8475] hover:text-[#3E3A36]'
             }`}
           >
-            待代買 ({wishlist.filter(i => i.status === '待代買').length})
+            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+            <span>待代買 ({pendingCount})</span>
           </button>
+
           <button
             type="button"
             onClick={() => setFilterStatus('已買好')}
-            className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
               filterStatus === '已買好'
                 ? 'bg-white text-emerald-800 shadow-xs'
                 : 'text-[#8C8475] hover:text-[#3E3A36]'
             }`}
           >
-            已買好 ({wishlist.filter(i => i.status === '已買好').length})
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>已買好 ({doneCount})</span>
           </button>
+
           <button
             type="button"
             onClick={() => setFilterStatus('ALL')}
-            className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
               filterStatus === 'ALL'
                 ? 'bg-white text-[#3E3A36] shadow-xs'
                 : 'text-[#8C8475] hover:text-[#3E3A36]'
@@ -266,24 +295,29 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[11px] font-bold text-[#8C8475]">許願人：</span>
-          {(['ALL', '廖', '周'] as const).map((r) => (
+          {[
+            { key: 'ALL', label: '全部' },
+            { key: userA.shortName, label: `${userA.iconEmoji} ${userA.displayName}` },
+            { key: userB.shortName, label: `${userB.iconEmoji} ${userB.displayName}` },
+            { key: '共同', label: '👫 共同' }
+          ].map((r) => (
             <button
-              key={r}
+              key={r.key}
               type="button"
-              onClick={() => setFilterRequester(r)}
+              onClick={() => setFilterRequester(r.key)}
               className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                filterRequester === r
-                  ? r === '廖'
+                filterRequester === r.key
+                  ? r.key === userA.shortName
                     ? 'bg-sky-100 text-sky-800 border border-sky-300'
-                    : r === '周'
+                    : r.key === userB.shortName
                     ? 'bg-rose-100 text-rose-800 border border-rose-300'
                     : 'bg-[#4D4942] text-white'
                   : 'bg-[#F5F2EB] text-[#8C8475] hover:text-[#3E3A36]'
               }`}
             >
-              {r === 'ALL' ? '全部' : r === '廖' ? '廖廖' : '周周'}
+              {r.label}
             </button>
           ))}
         </div>
@@ -309,6 +343,9 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {filteredItems.map((item) => {
             const isDone = item.status === '已買好';
+            const isReqA = isUserARequester(item.requester);
+            const isReqB = isUserBRequester(item.requester);
+            const reqLabel = isReqA ? `${userA.displayName}想要` : isReqB ? `${userB.displayName}想要` : '共同';
 
             return (
               <div
@@ -323,13 +360,13 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                        item.requester === '廖'
+                        isReqA
                           ? 'bg-sky-100 text-sky-800'
-                          : item.requester === '周'
+                          : isReqB
                           ? 'bg-rose-100 text-rose-800'
                           : 'bg-amber-100 text-amber-800'
                       }`}>
-                        {item.requester === '廖' ? '廖想要' : item.requester === '周' ? '周想要' : '共同'}
+                        {reqLabel}
                       </span>
 
                       <span className="px-2 py-0.5 rounded-md bg-[#F4F1EA] text-[#6E6659] text-[10px] font-semibold flex items-center gap-1">
@@ -352,53 +389,48 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
                     </button>
                   </div>
 
-                  <h4 className={`text-sm sm:text-base font-bold text-[#3E3A36] ${isDone ? 'line-through text-[#A39E93]' : ''}`}>
-                    {item.itemName}
-                  </h4>
+                  <div className="min-w-0 flex-1">
+                    <h4 className={`text-sm font-bold truncate max-w-[200px] min-[360px]:max-w-[250px] sm:max-w-md ${isDone ? 'line-through text-[#8C8475]' : 'text-[#3E3A36]'}`} title={item.itemName}>
+                      {item.itemName}
+                    </h4>
+                    {item.note && (
+                      <p className="text-xs text-[#7A7366] mt-1 bg-[#FAF8F5] p-2 rounded-xl border border-[#EDE8DE]">
+                        📝 {item.note}
+                      </p>
+                    )}
+                  </div>
+                </div>
 
-                  <div className="text-xs text-[#7A7366] flex items-center gap-3 flex-wrap">
-                    {item.estimatedPrice !== undefined && item.estimatedPrice !== null && (
-                      <span className="font-semibold text-rose-700">
-                        預估 NT$ {(Number(item.estimatedPrice) || 0).toLocaleString()}
+                <div className="pt-2 border-t border-[#F0EBE1] flex items-center justify-between text-[11px] text-[#8C8475]">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {item.estimatedPrice && (
+                      <span className="font-bold text-rose-700">
+                        預估：${item.estimatedPrice.toLocaleString()}
                       </span>
                     )}
                     {item.deadline && (
-                      <span className="text-[#8C8475] flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
+                      <span className="text-[#8C8475] flex items-center gap-0.5">
+                        <Clock className="w-3 h-3 text-amber-600" />
                         <span>{item.deadline}</span>
                       </span>
                     )}
                   </div>
 
-                  {item.note && (
-                    <div className="text-[11px] text-[#8C8475] bg-[#FAF8F3] p-2 rounded-lg border border-[#EDE8DE]">
-                      📝 {item.note}
-                    </div>
-                  )}
-                </div>
-
-                {/* 底部操作 */}
-                <div className="flex items-center justify-between border-t border-[#F2EEE4] pt-2.5">
-                  <div className="text-[10px] text-[#A8A296]">
-                    登錄於 {item.createdAt}
-                  </div>
-
                   <div className="flex items-center gap-1.5">
-                    {/* 一鍵轉代墊 */}
                     <button
                       type="button"
-                      onClick={() => handleStartConvert(item)}
-                      className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 text-[11px] font-bold border border-rose-200 transition-all flex items-center gap-1 cursor-pointer active:scale-95"
-                      title="代買完成，直接轉入代墊帳目"
+                      onClick={() => handleOpenConvert(item)}
+                      className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-lg font-bold text-[10px] transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                      title="代買完成，轉入代墊分帳借還系統"
                     >
                       <ArrowUpRight className="w-3 h-3" />
-                      <span>轉代墊記帳</span>
+                      <span>轉記代墊</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => handleDeleteItem(item.id)}
-                      className="p-1.5 text-[#A8A296] hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                      className="p-1 text-[#A09A8F] hover:text-rose-600 rounded-md transition-colors cursor-pointer"
                       title="刪除"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -411,7 +443,7 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
         </div>
       )}
 
-      {/* 新增代買許願 Modal */}
+      {/* 新增心願 Modal */}
       <AnimatePresence>
         {isAddOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
@@ -423,7 +455,7 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
             >
               <div className="flex items-center justify-between border-b border-[#EDE8DC] p-5 pb-3 shrink-0 bg-[#FAF9F5]">
                 <h3 className="text-sm sm:text-base font-bold text-[#3E3A36] flex items-center gap-2">
-                  <span>🎁 新增代買心願</span>
+                  <span>🛍️ 新增代買許願項目</span>
                 </h3>
                 <button
                   type="button"
@@ -440,22 +472,26 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
                   <div>
                     <label className="block text-xs font-bold text-[#6E6659] mb-1.5">許願人（誰想要）</label>
                     <div className="grid grid-cols-3 gap-2">
-                      {(['周', '廖', '共同'] as const).map((r) => (
+                      {[
+                        { key: userB.shortName, label: `${userB.iconEmoji} ${userB.displayName}`, color: 'rose' },
+                        { key: userA.shortName, label: `${userA.iconEmoji} ${userA.displayName}`, color: 'sky' },
+                        { key: '共同', label: '👫 共同', color: 'amber' }
+                      ].map((r) => (
                         <button
-                          key={r}
+                          key={r.key}
                           type="button"
-                          onClick={() => setRequester(r)}
+                          onClick={() => setRequester(r.key)}
                           className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                            requester === r
-                              ? r === '周'
+                            requester === r.key
+                              ? r.color === 'rose'
                                 ? 'bg-rose-600 text-white border-rose-700'
-                                : r === '廖'
+                                : r.color === 'sky'
                                 ? 'bg-sky-600 text-white border-sky-700'
                                 : 'bg-amber-600 text-white border-amber-700'
                               : 'bg-white text-[#6E6659] border-[#DDD8CD]'
                           }`}
                         >
-                          {r === '周' ? '👧 周周' : r === '廖' ? '👦 廖廖' : '👫 共同'}
+                          {r.label}
                         </button>
                       ))}
                     </div>
@@ -574,7 +610,7 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
                   <div className="bg-rose-50/80 p-3 rounded-2xl border border-rose-200/80 text-xs text-rose-950 space-y-1">
                     <div className="font-bold">轉入品項：{convertingItem.itemName}</div>
                     <div className="text-[11px] text-rose-800">
-                      原許願人：{convertingItem.requester === '周' ? '👧 周周' : '👦 廖廖'}
+                      原許願人：{isUserBRequester(convertingItem.requester) ? `${userB.iconEmoji} ${userB.displayName}` : `${userA.iconEmoji} ${userA.displayName}`}
                     </div>
                   </div>
 
@@ -590,7 +626,7 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
                             : 'bg-white text-[#6E6659] border-[#DDD8CD]'
                         }`}
                       >
-                        👦 廖廖 先代墊
+                        {userA.iconEmoji} {userA.displayName} 先代墊
                       </button>
                       <button
                         type="button"
@@ -601,7 +637,7 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
                             : 'bg-white text-[#6E6659] border-[#DDD8CD]'
                         }`}
                       >
-                        👧 周周 先代墊
+                        {userB.iconEmoji} {userB.displayName} 先代墊
                       </button>
                     </div>
                   </div>

@@ -2,12 +2,12 @@ export interface SplitRecordItem {
   id: string;
   rowNumber?: number;
   time: string;
-  payer: '廖' | '周';
+  payer: '廖' | '周' | string;
   splitMode: 'AA平分' | '全額代付' | '自訂金額';
   itemName: string;
   totalAmount: number;
   splitResult: string;
-  debtor: '廖' | '周';
+  debtor: '廖' | '周' | string;
   debtorAmount: number;
   status: '未結清' | '已結清';
   settledTime?: string;
@@ -17,7 +17,7 @@ export interface SplitRecordItem {
 export interface SplitSummary {
   liaoOwesZhou: number;
   zhouOwesLiao: number;
-  netDebtor: '廖' | '周' | 'none';
+  netDebtor: '廖' | '周' | 'none' | string;
   netAmount: number;
   summaryText: string;
   unsettledCount: number;
@@ -75,7 +75,7 @@ export interface TravelExpenseItem {
   note?: string;
   syncedToSplit: boolean;
   createdAt: string;
-  creatorEmail?: string; // 登錄者 Google Gmail ID (例如: oscargh3359@gmail.com)
+  creatorEmail?: string; // 登錄者 Google 帳戶 Email
   createdBy?: string;    // 登錄者姓名/角色
   userEmail?: string;    // 相容別名
   lastModifiedEmail?: string; // 最後修改者 Email
@@ -87,8 +87,8 @@ export interface TravelWishItem {
   itemName: string;
   category: string;
   estimatedAmountTWD?: number;
-  addedBy: '廖' | '周' | '共同';
-  status: '待預訂' | '已完成';
+  addedBy: '廖' | '周' | '共同' | string;
+  status: '待預訂' | '已完成' | string;
   note?: string;
   creatorEmail?: string; // 登錄者 Google Gmail ID
   createdBy?: string;
@@ -214,18 +214,32 @@ export interface PartnerInviteData {
   inviteCode: string; // e.g. "BB-8924"
   adminEmail: string;
   adminName: string;
-  adminRole?: '廖' | '周' | 'admin';
+  adminNickname?: string;
+  adminAvatar?: string;
+  adminRole?: '廖' | '周' | 'admin' | string;
   gasWebUrl: string;
   deploySheetUrl?: string;
   createdAt: string;
 }
 
+export type NicknameLengthPreference = '1-char' | '2-char';
+
 export interface CoupleBindingInfo {
   adminEmail: string;
   adminName: string;
+  adminNickname?: string;
+  adminNickname1Char?: string;
+  adminNickname2Char?: string;
+  adminNicknameLengthPreference?: NicknameLengthPreference;
+  adminAvatar?: string;
   partnerEmail?: string;
   partnerName?: string;
-  partnerRole?: '廖' | '周';
+  partnerNickname?: string;
+  partnerNickname1Char?: string;
+  partnerNickname2Char?: string;
+  partnerNicknameLengthPreference?: NicknameLengthPreference;
+  partnerAvatar?: string;
+  partnerRole?: '廖' | '周' | string;
   inviteCode: string;
   gasWebUrl?: string;
   deploySheetUrl?: string;
@@ -237,6 +251,9 @@ export interface AuthUser {
   id: string;
   name: string;
   nickname?: string;
+  nickname1Char?: string; // 單字暱稱 (例如: "廖"、"周"、"丞")
+  nickname2Char?: string; // 雙字暱稱 (例如: "廖廖"、"周周"、"尹丞")
+  nicknameLengthPreference?: NicknameLengthPreference; // 偏好顯示字數：'1-char' (單字) 或 '2-char' (雙字)
   email: string;
   avatar?: string;
   role?: '廖' | '周' | 'admin' | 'guest';

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -61,6 +61,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { exportFundRecordsToCSV } from './utils/exportCsv';
 import { formatAmPmTime, isTodayNotification, isIncomingFromPartner, getShoppingItemDisplayTime } from './utils/formatters';
 import { sendNativeNotification } from './utils/nativeNotify';
+import { resolveUserPersonas } from './utils/userPersona';
 import { CODE_GS_TEMPLATE, INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from './data/gasTemplates';
 import { SplitDebtView } from './components/SplitDebtView';
 import { SplitHomeTab } from './components/split/SplitHomeTab';
@@ -105,7 +106,8 @@ import {
   SmartCommandResult, 
   AuthUser,
   PartnerInviteData,
-  CoupleBindingInfo
+  CoupleBindingInfo,
+  NicknameLengthPreference
 } from './types';
 import { 
   generateRandomInviteCode,
@@ -226,6 +228,15 @@ const isMonthReconciled = (month: string, list: string[]): boolean => {
 export default function App() {
   const [records, setRecords] = useState<RecordItem[]>(() => {
     try {
+      const isGuest = localStorage.getItem('banban_is_guest_mode') === 'true';
+      const authUser = localStorage.getItem('banban_auth_user');
+      const isSandbox = localStorage.getItem('banban_is_sandbox_mode') === 'true';
+      
+      // 訪客模式或未登入（非沙盒測試模式）：預設為空乾淨狀態，數值全部為 0
+      if (isGuest || (!authUser && !isSandbox)) {
+        return [];
+      }
+
       const saved = localStorage.getItem('muji_ledger_data');
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -252,9 +263,9 @@ export default function App() {
           });
         }
       }
-      return INITIAL_RECORDS;
+      return isSandbox ? INITIAL_RECORDS : [];
     } catch (e) {
-      return INITIAL_RECORDS;
+      return [];
     }
   });
   // 模式狀態：'fund' (公積金模式) ｜ 'split' (代墊借還模式)
@@ -291,6 +302,12 @@ export default function App() {
   // ------------------- 代墊借還 (Split Debt) 狀態與函式 -------------------
   const [splitItems, setSplitItems] = useState<SplitRecordItem[]>(() => {
     try {
+      const isGuest = localStorage.getItem('banban_is_guest_mode') === 'true';
+      const authUser = localStorage.getItem('banban_auth_user');
+      const isSandbox = localStorage.getItem('banban_is_sandbox_mode') === 'true';
+      if (isGuest || (!authUser && !isSandbox)) {
+        return [];
+      }
       const saved = localStorage.getItem('banban_split_records');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
@@ -299,27 +316,26 @@ export default function App() {
   });
 
   const [splitSummary, setSplitSummary] = useState<SplitSummary>(() => {
+    const emptySummary = {
+      liaoOwesZhou: 0,
+      zhouOwesLiao: 0,
+      netDebtor: 'none' as const,
+      netAmount: 0,
+      summaryText: '目前雙方已結清 💖',
+      unsettledCount: 0,
+      settledCount: 0
+    };
     try {
+      const isGuest = localStorage.getItem('banban_is_guest_mode') === 'true';
+      const authUser = localStorage.getItem('banban_auth_user');
+      const isSandbox = localStorage.getItem('banban_is_sandbox_mode') === 'true';
+      if (isGuest || (!authUser && !isSandbox)) {
+        return emptySummary;
+      }
       const saved = localStorage.getItem('banban_split_summary');
-      return saved ? JSON.parse(saved) : {
-        liaoOwesZhou: 0,
-        zhouOwesLiao: 0,
-        netDebtor: 'none',
-        netAmount: 0,
-        summaryText: '目前雙方已結清 💖',
-        unsettledCount: 0,
-        settledCount: 0
-      };
+      return saved ? JSON.parse(saved) : emptySummary;
     } catch (e) {
-      return {
-        liaoOwesZhou: 0,
-        zhouOwesLiao: 0,
-        netDebtor: 'none',
-        netAmount: 0,
-        summaryText: '目前雙方已結清 💖',
-        unsettledCount: 0,
-        settledCount: 0
-      };
+      return emptySummary;
     }
   });
 
@@ -386,6 +402,12 @@ export default function App() {
 
   // ------------------- 購物記事 (Notebook / Shopping List) 狀態 -------------------
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>(() => {
+    const isGuest = localStorage.getItem('banban_is_guest_mode') === 'true';
+    const authUser = localStorage.getItem('banban_auth_user');
+    const isSandbox = localStorage.getItem('banban_is_sandbox_mode') === 'true';
+    if (isGuest || (!authUser && !isSandbox)) {
+      return [];
+    }
     const local = localStorage.getItem('muji_shopping_items');
     if (local) {
       try {
@@ -398,7 +420,7 @@ export default function App() {
         }
       } catch (e) {}
     }
-    return INITIAL_SHOPPING_ITEMS;
+    return isSandbox ? INITIAL_SHOPPING_ITEMS : [];
   });
   const [shoppingStores, setShoppingStores] = useState<string[]>(INITIAL_STORES);
   const [shoppingFilter, setShoppingFilter] = useState<'all' | 'need' | 'want' | 'done'>('all');
@@ -443,6 +465,11 @@ export default function App() {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.email) {
           parsed.id = parsed.email; // 統一使用 Gmail 帳號作為用戶識別 ID，不使用亂數
+          const cleanEmail = parsed.email.trim().toLowerCase();
+          const boundNickname = localStorage.getItem(`banban_user_nickname_${cleanEmail}`);
+          if (boundNickname) {
+            parsed.nickname = boundNickname;
+          }
         }
         return parsed;
       }
@@ -457,12 +484,48 @@ export default function App() {
     return false;
   });
 
+  const [isGuestMode, setIsGuestMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('banban_is_guest_mode') === 'true';
+    } catch (e) {}
+    return false;
+  });
+
   const isUserProfileModalOpen_deprecated = false;
   const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
   const [isUnifiedSettingsModalOpen, setIsUnifiedSettingsModalOpen] = useState(false);
 
-  const isCurrentUserZhou = currentUser?.role === '周' || currentUser?.name?.includes('周') || currentUser?.nickname?.includes('周');
-  const defaultPayerName = isCurrentUserZhou ? '周沛緹' : '廖尹丞';
+  // 💌 伴侶邀請代碼與情侶雙向綁定狀態
+  const [currentInviteCode, setCurrentInviteCode] = useState<string>(() => {
+    return getActiveInviteCode()?.inviteCode || generateRandomInviteCode();
+  });
+  const [partnerBindingInfo, setPartnerBindingInfo] = useState<CoupleBindingInfo | null>(() => {
+    const isGuest = localStorage.getItem('banban_is_guest_mode') === 'true';
+    const authUser = localStorage.getItem('banban_auth_user');
+    if (isGuest || !authUser) return null;
+    return getPartnerBindingInfo();
+  });
+
+  const { userA, userB, currentUserPersona, partnerPersona } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
+
+  const isCurrentUserZhou = currentUserPersona?.roleKey === 'userB' || currentUser?.role === '周' || currentUser?.name?.includes('周') || currentUser?.nickname?.includes('周');
+  const defaultPayerName = currentUserPersona?.name || (isCurrentUserZhou ? userB.name : userA.name);
+
+  const isUserAPayer = useCallback((p?: string) => {
+    if (!p) return false;
+    const clean = p.trim();
+    return clean === userA.name || clean === userA.displayName || clean === userA.shortName || clean.includes(userA.shortName) || clean === '廖尹丞' || clean === '廖';
+  }, [userA]);
+
+  const isUserBPayer = useCallback((p?: string) => {
+    if (!p) return false;
+    const clean = p.trim();
+    return clean === userB.name || clean === userB.displayName || clean === userB.shortName || clean.includes(userB.shortName) || clean === '周沛緹' || clean === '周';
+  }, [userB]);
+
+  const [splitNotebookSubTab, setSplitNotebookSubTab] = useState<'travel' | 'wishlist'>('travel');
 
   const [isExchangeRatesCollapsed, setIsExchangeRatesCollapsed] = useState<boolean>(() => {
     try {
@@ -470,14 +533,6 @@ export default function App() {
     } catch (e) {
       return false;
     }
-  });
-
-  // 💌 伴侶邀請代碼與情侶雙向綁定狀態
-  const [currentInviteCode, setCurrentInviteCode] = useState<string>(() => {
-    return getActiveInviteCode()?.inviteCode || generateRandomInviteCode();
-  });
-  const [partnerBindingInfo, setPartnerBindingInfo] = useState<CoupleBindingInfo | null>(() => {
-    return getPartnerBindingInfo();
   });
 
   const handleGenerateNewInviteCode = () => {
@@ -499,7 +554,7 @@ export default function App() {
   const handleCopyInviteShare = () => {
     const activeInvite = getActiveInviteCode() || {
       inviteCode: currentInviteCode,
-      adminEmail: currentUser?.email || 'admin@gmail.com',
+      adminEmail: currentUser?.email || '',
       adminName: currentUser?.name || '主管理員',
       gasWebUrl: gasWebUrl,
       deploySheetUrl: deploySheetUrl,
@@ -529,12 +584,25 @@ export default function App() {
     initialCloudGasUrl?: string,
     initialCloudSheetUrl?: string
   ) => {
+    const cleanEmail = (user.email || '').trim().toLowerCase();
+    let boundNickname = user.nickname || '';
+    if (!boundNickname && cleanEmail) {
+      try {
+        boundNickname = localStorage.getItem(`banban_user_nickname_${cleanEmail}`) || '';
+      } catch (e) {}
+    }
+
     const cleanUser: AuthUser = {
       ...user,
-      id: user.email || user.id
+      id: user.email || user.id,
+      nickname: boundNickname || user.nickname
     };
     setCurrentUser(cleanUser);
     setIsSandboxMode(false);
+    setIsGuestMode(false);
+    try {
+      localStorage.setItem('banban_is_guest_mode', 'false');
+    } catch (e) {}
 
     // 1. 若網址自帶伴侶邀請碼或已傳入邀請資訊，直接執行伴侶自動綁定
     if (partnerInvite && partnerInvite.inviteCode) {
@@ -551,7 +619,7 @@ export default function App() {
       }
 
       const bindingData: CoupleBindingInfo = {
-        adminEmail: partnerInvite.adminEmail || 'admin@gmail.com',
+        adminEmail: partnerInvite.adminEmail || '',
         adminName: partnerInvite.adminName || '主管理員',
         partnerEmail: user.email,
         partnerName: user.name,
@@ -565,6 +633,7 @@ export default function App() {
 
       const enhancedPartner: AuthUser = {
         ...user,
+        nickname: boundNickname || user.nickname,
         userRole: 'partner',
         adminEmail: partnerInvite.adminEmail,
         adminName: partnerInvite.adminName,
@@ -575,12 +644,14 @@ export default function App() {
       saveUserCloudConfig(user.email, {
         email: user.email,
         name: user.name,
+        nickname: boundNickname || user.nickname,
         gasWebUrl: activeGas,
         deploySheetUrl: activeSheet,
         inviteCode: partnerInvite.inviteCode
       });
 
-      showToast(`💖 歡迎 ${user.name}！已自動加入伴侶帳本 (${partnerInvite.adminName || '管理員'})`, 'success');
+      const displayWelcomeName = boundNickname || user.name;
+      showToast(`💖 歡迎 ${displayWelcomeName}！已自動加入伴侶帳本 (${partnerInvite.adminName || '管理員'})`, 'success');
       try {
         localStorage.setItem('banban_auth_user', JSON.stringify(enhancedPartner));
         localStorage.setItem('banban_is_sandbox_mode', 'false');
@@ -600,9 +671,10 @@ export default function App() {
         try { localStorage.setItem('muji_deploy_sheet_url', existingBinding.deploySheetUrl); } catch (e) {}
       }
       setPartnerBindingInfo(existingBinding);
-      showToast(`💖 歡迎回來，${user.name}！已載入伴侶帳本 (${existingBinding.adminName || '管理員'})`, 'success');
+      const displayWelcomeName = boundNickname || user.name;
+      showToast(`💖 歡迎回來，${displayWelcomeName}！已載入伴侶帳本 (${existingBinding.adminName || '管理員'})`, 'success');
       try {
-        localStorage.setItem('banban_auth_user', JSON.stringify({ ...user, userRole: 'partner' }));
+        localStorage.setItem('banban_auth_user', JSON.stringify({ ...user, nickname: boundNickname || user.nickname, userRole: 'partner' }));
         localStorage.setItem('banban_is_sandbox_mode', 'false');
       } catch (e) {}
       return;
@@ -615,6 +687,14 @@ export default function App() {
     try {
       const cloudConfig = await getUserCloudConfig(user.email);
       if (cloudConfig) {
+        if (cloudConfig.nickname && !boundNickname) {
+          boundNickname = cloudConfig.nickname;
+          cleanUser.nickname = boundNickname;
+          setCurrentUser({ ...cleanUser, nickname: boundNickname });
+          if (cleanEmail) {
+            try { localStorage.setItem(`banban_user_nickname_${cleanEmail}`, boundNickname); } catch (e) {}
+          }
+        }
         if (cloudConfig.gasWebUrl && !activeGas) {
           activeGas = cloudConfig.gasWebUrl;
           setGasWebUrl(cloudConfig.gasWebUrl);
@@ -640,6 +720,7 @@ export default function App() {
       saveUserCloudConfig(user.email, {
         email: user.email,
         name: user.name,
+        nickname: boundNickname || user.nickname,
         gasWebUrl: activeGas,
         deploySheetUrl: activeSheet
       });
@@ -653,10 +734,12 @@ export default function App() {
         createdAt: new Date().toISOString()
       });
 
-      showToast(`👑 歡迎回來，${user.name}！已自動同步 Google 帳號綁定的 API 資料庫`, 'success');
+      const displayWelcomeName = boundNickname || user.name;
+      showToast(`👑 歡迎回來，${displayWelcomeName}！已自動同步 Google 帳號綁定的 API 資料庫`, 'success');
     } else {
       // 4. 尚未綁定任何 API 或伴侶：自動開啟初次引導彈窗，詢問要「輸入伴侶邀請碼」還是「建立 API 資料庫」
-      showToast(`👑 歡迎 ${user.name}！請選擇帳本加入方式`, 'info');
+      const displayWelcomeName = boundNickname || user.name;
+      showToast(`👑 歡迎 ${displayWelcomeName}！請選擇帳本加入方式`, 'info');
       setTimeout(() => {
         setIsDatabaseOnboardingOpen(true);
       }, 500);
@@ -690,7 +773,7 @@ export default function App() {
     }
 
     const bindingData: CoupleBindingInfo = {
-      adminEmail: resolved.adminEmail || 'admin@gmail.com',
+      adminEmail: resolved.adminEmail || '',
       adminName: resolved.adminName || '主管理員',
       partnerEmail: currentUser?.email || '',
       partnerName: currentUser?.name || '伴侶',
@@ -744,30 +827,103 @@ export default function App() {
     };
     setCurrentUser(devUser);
     setIsSandboxMode(true);
+    setIsGuestMode(false);
     try {
       localStorage.setItem('banban_auth_user', JSON.stringify(devUser));
       localStorage.setItem('banban_is_sandbox_mode', 'true');
+      localStorage.setItem('banban_is_guest_mode', 'false');
     } catch (e) {}
     showToast('🧪 已切換為「開發人員測試沙盒模式」', 'info');
   };
 
-  const handleLogout = () => {
+  const handleEnterGuestMode = () => {
     setCurrentUser(null);
+    setPartnerBindingInfo(null);
     setIsSandboxMode(false);
+    setIsGuestMode(true);
+    setRecords([]);
+    setSplitItems([]);
+    setSplitSummary({
+      liaoOwesZhou: 0,
+      zhouOwesLiao: 0,
+      netDebtor: 'none',
+      netAmount: 0,
+      summaryText: '目前雙方已結清 💖',
+      unsettledCount: 0,
+      settledCount: 0
+    });
+    setShoppingItems([]);
     try {
       localStorage.removeItem('banban_auth_user');
-      localStorage.removeItem('banban_is_sandbox_mode');
+      localStorage.setItem('banban_is_sandbox_mode', 'false');
+      localStorage.setItem('banban_is_guest_mode', 'true');
+      window.dispatchEvent(new CustomEvent('travel-data-updated', {
+        detail: { trips: [], expenses: [], wishlist: [] }
+      }));
     } catch (e) {}
-    showToast('已登出 Google 帳戶', 'info');
+    showToast('📱 已進入「訪客模式」，所有數值已歸零', 'info');
+  };
+
+  const handleReturnToLoginPortal = () => {
+    setCurrentUser(null);
+    setPartnerBindingInfo(null);
+    setIsSandboxMode(false);
+    setIsGuestMode(false);
+    setIsUnifiedSettingsModalOpen(false);
+    setRecords([]);
+    setSplitItems([]);
+    setSplitSummary({
+      liaoOwesZhou: 0,
+      zhouOwesLiao: 0,
+      netDebtor: 'none',
+      netAmount: 0,
+      summaryText: '目前雙方已結清 💖',
+      unsettledCount: 0,
+      settledCount: 0
+    });
+    setShoppingItems([]);
+    try {
+      localStorage.removeItem('banban_auth_user');
+      localStorage.setItem('banban_is_sandbox_mode', 'false');
+      localStorage.setItem('banban_is_guest_mode', 'false');
+      window.dispatchEvent(new CustomEvent('travel-data-updated', {
+        detail: { trips: [], expenses: [], wishlist: [] }
+      }));
+    } catch (e) {}
+    showToast('歡迎回到 Google 帳號登入主畫面', 'info');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setPartnerBindingInfo(null);
+    setIsSandboxMode(false);
+    setIsGuestMode(true);
+    setIsUnifiedSettingsModalOpen(false);
+    setRecords([]);
+    setSplitItems([]);
+    setSplitSummary({
+      liaoOwesZhou: 0,
+      zhouOwesLiao: 0,
+      netDebtor: 'none',
+      netAmount: 0,
+      summaryText: '目前雙方已結清 💖',
+      unsettledCount: 0,
+      settledCount: 0
+    });
+    setShoppingItems([]);
+    try {
+      localStorage.removeItem('banban_auth_user');
+      localStorage.setItem('banban_is_sandbox_mode', 'false');
+      localStorage.setItem('banban_is_guest_mode', 'true');
+      window.dispatchEvent(new CustomEvent('travel-data-updated', {
+        detail: { trips: [], expenses: [], wishlist: [] }
+      }));
+    } catch (e) {}
+    showToast('已登出 Google 帳號，進入訪客模式', 'info');
   };
 
   const handleSwitchAccount = () => {
-    setCurrentUser(null);
-    setIsSandboxMode(false);
-    try {
-      localStorage.removeItem('banban_auth_user');
-      localStorage.removeItem('banban_is_sandbox_mode');
-    } catch (e) {}
+    handleReturnToLoginPortal();
   };
 
   const handleToggleSandboxMode = (enabled: boolean) => {
@@ -778,7 +934,12 @@ export default function App() {
     showToast(enabled ? '已切換為「開發人員沙盒測試模式」' : '已關閉沙盒模式，切換為「正式連線模式」', 'info');
   };
 
-  const handleUpdateNickname = (newNickname: string): boolean => {
+  const handleUpdateNickname = (
+    newNickname: string,
+    lengthPreference?: NicknameLengthPreference,
+    nickname1Char?: string,
+    nickname2Char?: string
+  ): boolean => {
     const trimmed = newNickname.trim();
     if (!trimmed || trimmed.length >= 3) {
       showToast('暱稱字數需少於 3 個字 (1~2 個字)', 'error');
@@ -786,24 +947,42 @@ export default function App() {
     }
     if (!currentUser) return false;
 
+    const chosenPref = lengthPreference || (trimmed.length === 1 ? '1-char' : '2-char');
+    const final1Char = nickname1Char?.trim() || (trimmed.length === 1 ? trimmed : currentUser.nickname1Char || trimmed[0]);
+    const final2Char = nickname2Char?.trim() || (trimmed.length === 2 ? trimmed : currentUser.nickname2Char || trimmed);
+    const effectiveNickname = chosenPref === '1-char' ? final1Char : final2Char;
+
     const updatedUser: AuthUser = {
       ...currentUser,
-      nickname: trimmed
+      nickname: effectiveNickname,
+      nicknameLengthPreference: chosenPref,
+      nickname1Char: final1Char,
+      nickname2Char: final2Char
     };
     setCurrentUser(updatedUser);
     try {
       localStorage.setItem('banban_auth_user', JSON.stringify(updatedUser));
+      if (currentUser.email) {
+        const cleanEmail = currentUser.email.trim().toLowerCase();
+        localStorage.setItem(`banban_user_nickname_${cleanEmail}`, effectiveNickname);
+        localStorage.setItem(`banban_user_nickname_length_${cleanEmail}`, chosenPref);
+        localStorage.setItem(`banban_user_nickname_1char_${cleanEmail}`, final1Char);
+        localStorage.setItem(`banban_user_nickname_2char_${cleanEmail}`, final2Char);
+      }
     } catch (e) {}
 
     if (currentUser.email) {
       saveUserCloudConfig(currentUser.email, {
-        nickname: trimmed,
+        nickname: effectiveNickname,
+        nicknameLengthPreference: chosenPref,
+        nickname1Char: final1Char,
+        nickname2Char: final2Char,
         email: currentUser.email,
         name: currentUser.name
       });
     }
 
-    showToast(`✨ 已成功將右上角顯示暱稱改為「${trimmed}」！`, 'success');
+    showToast(`✨ 稱呼顯示已切換為「${effectiveNickname}」（${chosenPref === '1-char' ? '單字模式' : '雙字模式'}）！`, 'success');
     return true;
   };
 
@@ -821,6 +1000,10 @@ export default function App() {
         setCurrentUser(updatedUser);
         try {
           localStorage.setItem('banban_auth_user', JSON.stringify(updatedUser));
+          if (currentUser.email) {
+            const cleanEmail = currentUser.email.trim().toLowerCase();
+            localStorage.setItem(`banban_user_avatar_${cleanEmail}`, profile.avatar);
+          }
         } catch (e) {}
 
         if (currentUser.email) {
@@ -879,10 +1062,23 @@ export default function App() {
   const [isSyncingGas, setIsSyncingGas] = useState(false);
 
   const isDbConnected = Boolean(
+    isGuestMode ||
     (gasWebUrl && gasWebUrl.trim().startsWith('http')) ||
     (typeof window !== 'undefined' && (window as any).google?.script?.run) ||
     isSandboxMode
   );
+
+  const handleOpenGasDeploy = () => {
+    if (isGuestMode || !currentUser) {
+      showToast('🔒 本機離線模式不支援登入或綁定 Google 試算表金鑰，請先登入 Google 帳號！', 'info');
+      return;
+    }
+    if (currentUser?.userRole === 'partner') {
+      showToast('🔒 API 與 Code.gs 設定由主管理員控管，伴侶端可直接記帳同步。', 'info');
+      return;
+    }
+    setIsDeployModalOpen(true);
+  };
 
   const renderDbUnconnectedState = (
     title = "尚未連線至資料庫",
@@ -908,7 +1104,7 @@ export default function App() {
         <div className="pt-2">
           <button
             type="button"
-            onClick={() => setIsDeployModalOpen(true)}
+            onClick={handleOpenGasDeploy}
             className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
           >
             <Key className="w-4 h-4" />
@@ -921,9 +1117,9 @@ export default function App() {
 
   // ------------------- Google Apps Script / Web App API 整合核心 -------------------
   const callGasApi = async (action: string, payload?: any): Promise<any> => {
-    // 若處於開發人員沙盒模式，不對外部 GAS 進行網路呼叫，直接回傳本地回退旗標
-    if (isSandboxMode) {
-      return { success: false, isLocalFallback: true, isSandbox: true };
+    // 若處於開發人員沙盒模式或訪客模式，不對外部 GAS 進行網路呼叫，直接回傳本地回退旗標
+    if (isSandboxMode || isGuestMode || !currentUser) {
+      return { success: false, isLocalFallback: true, isSandbox: isSandboxMode, isGuest: isGuestMode };
     }
 
     // 1. 原生 Google Apps Script iframe 環境
@@ -1151,16 +1347,35 @@ export default function App() {
     try {
       const res = await callGasApi('getTravelData');
       if (res && res.success) {
-        if (Array.isArray(res.trips)) {
-          localStorage.setItem('banban_travel_trips', JSON.stringify(res.trips));
-        }
-        if (Array.isArray(res.expenses)) {
-          localStorage.setItem('banban_travel_expenses', JSON.stringify(res.expenses));
-        }
-        if (Array.isArray(res.wishlist)) {
-          localStorage.setItem('banban_travel_wishlist', JSON.stringify(res.wishlist));
-        }
-        window.dispatchEvent(new CustomEvent('travel-data-updated', { detail: res }));
+        let delTrips = new Set<string>();
+        let delExpenses = new Set<string>();
+        let delWishes = new Set<string>();
+        try {
+          const t = localStorage.getItem('banban_deleted_trip_ids');
+          if (t) delTrips = new Set(JSON.parse(t));
+          const e = localStorage.getItem('banban_deleted_expense_ids');
+          if (e) delExpenses = new Set(JSON.parse(e));
+          const w = localStorage.getItem('banban_deleted_wish_ids');
+          if (w) delWishes = new Set(JSON.parse(w));
+        } catch (e) {}
+
+        const cleanTrips = Array.isArray(res.trips) 
+          ? res.trips.filter((t: any) => !delTrips.has(t.id)) 
+          : [];
+        const cleanExpenses = Array.isArray(res.expenses) 
+          ? res.expenses.filter((e: any) => !delExpenses.has(e.id) && !delTrips.has(e.tripId)) 
+          : [];
+        const cleanWishlist = Array.isArray(res.wishlist) 
+          ? res.wishlist.filter((w: any) => !delWishes.has(w.id) && !delTrips.has(w.tripId)) 
+          : [];
+
+        localStorage.setItem('banban_travel_trips', JSON.stringify(cleanTrips));
+        localStorage.setItem('banban_travel_expenses', JSON.stringify(cleanExpenses));
+        localStorage.setItem('banban_travel_wishlist', JSON.stringify(cleanWishlist));
+
+        window.dispatchEvent(new CustomEvent('travel-data-updated', { 
+          detail: { ...res, trips: cleanTrips, expenses: cleanExpenses, wishlist: cleanWishlist } 
+        }));
         if (!silent) showToast('旅遊分帳資料已同步更新！', 'success');
       }
     } catch (err) {
@@ -1169,14 +1384,16 @@ export default function App() {
   };
 
   const handleAddSplitRecord = async (data: {
-    payer: '廖' | '周';
+    payer: '廖' | '周' | string;
     itemName: string;
     totalAmount: number;
     splitMode: 'AA平分' | '全額代付' | '自訂金額';
     customOweAmount?: number;
     note?: string;
   }) => {
-    const otherPerson = data.payer === '廖' ? '周' : '廖';
+    const isPayerB = isUserBPayer(data.payer) || data.payer === '周' || data.payer === userB.name || data.payer === userB.displayName || data.payer === userB.shortName;
+    const resolvedPayer: '廖' | '周' = isPayerB ? '周' : '廖';
+    const otherPerson = resolvedPayer === '廖' ? '周' : '廖';
     let debtorAmt = Math.round(data.totalAmount / 2);
     if (data.splitMode === '全額代付') {
       debtorAmt = data.totalAmount;
@@ -1187,14 +1404,17 @@ export default function App() {
     const now = new Date();
     const timeStr = formatAmPmTime(now);
 
+    const payerDisplayName = resolvedPayer === '廖' ? userA.displayName : userB.displayName;
+    const debtorDisplayName = otherPerson === '廖' ? userA.displayName : userB.displayName;
+
     const newItem: SplitRecordItem = {
       id: 'split-' + Date.now(),
       time: timeStr,
-      payer: data.payer,
+      payer: resolvedPayer,
       splitMode: data.splitMode,
       itemName: data.itemName,
       totalAmount: data.totalAmount,
-      splitResult: `${otherPerson} 應返還 ${data.payer} NT$ ${(Number(debtorAmt) || 0).toLocaleString()}`,
+      splitResult: `${debtorDisplayName} 應返還 ${payerDisplayName} NT$ ${(Number(debtorAmt) || 0).toLocaleString()}`,
       debtor: otherPerson,
       debtorAmount: debtorAmt,
       status: '未結清',
@@ -1204,7 +1424,7 @@ export default function App() {
     const updated = [newItem, ...splitItems];
     setSplitItems(updated);
     calculateLocalSplitSummary(updated);
-    showToast(`已成功記錄代墊：${newItem.itemName}（${otherPerson === '廖' ? '廖廖' : '周周'} 需返還 $${debtorAmt}）`, 'success');
+    showToast(`已成功記錄代墊：${newItem.itemName}（${otherPerson === '廖' ? userA.displayName : userB.displayName} 需返還 $${debtorAmt}）`, 'success');
 
     if (gasWebUrl) {
       try {
@@ -1320,6 +1540,10 @@ export default function App() {
   const [copiedCodeType, setCopiedCodeType] = useState<'codeGs' | 'indexHtml' | 'splitHtml' | null>(null);
 
   const saveDeployConfig = () => {
+    if (isGuestMode || !currentUser) {
+      showToast('🔒 本機體驗模式不可登入或綁定試算表金鑰，請先登入 Google 帳號！', 'error');
+      return;
+    }
     const cleanSheet = deploySheetUrl.trim();
     const cleanGas = gasWebUrl.trim();
 
@@ -1421,66 +1645,109 @@ export default function App() {
     });
   };
 
-  // 取得最新各國即時匯率 API (以台幣 TWD 為基礎交叉換算)
+  // 取得最新各國即時匯率 API (優先內部 API 代理 -> 國際匯率 API -> 離線基準/快取)
   const fetchLiveExchangeRates = async (showToastNotice = false, isBackground = false) => {
     if (!isBackground) setIsRateLoading(true);
     setRateFetchError(false);
-    try {
-      const res = await fetch('https://open.er-api.com/v6/latest/TWD');
-      if (!res.ok) throw new Error('Primary API HTTP error');
-      const data = await res.json();
-      if (data && data.result === 'success' && data.rates) {
-        const newRates: Record<string, number> = { TWD: 1 };
-        CURRENCIES.forEach(c => {
-          if (c.code === 'TWD') {
-            newRates['TWD'] = 1;
-          } else if (data.rates[c.code]) {
-            const twdPerUnit = 1 / data.rates[c.code];
-            newRates[c.code] = Number(twdPerUnit.toFixed(4));
-          } else {
-            newRates[c.code] = c.defaultRate;
-          }
-        });
-        setExchangeRates(newRates);
-        const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
-        setRatesLastUpdated(nowStr);
+
+    const applyRatesFromData = (rates: Record<string, number>, sourceLabel: string) => {
+      const newRates: Record<string, number> = { TWD: 1 };
+      CURRENCIES.forEach(c => {
+        if (c.code === 'TWD') {
+          newRates['TWD'] = 1;
+        } else if (rates[c.code] && rates[c.code] > 0) {
+          const val = rates[c.code];
+          newRates[c.code] = Number((1 / val).toFixed(4));
+        } else {
+          newRates[c.code] = c.defaultRate;
+        }
+      });
+      setExchangeRates(newRates);
+      const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
+      setRatesLastUpdated(nowStr);
+      try {
         localStorage.setItem('muji_exchange_rates', JSON.stringify({ rates: newRates, updated: nowStr }));
-        if (showToastNotice) showToast('⚡ 已即時更新台灣銀行/國際匯率市場最新數據！', 'success');
-        return;
+      } catch (e) {}
+      if (showToastNotice) showToast(`⚡ 已即時更新${sourceLabel}各國最新匯率！`, 'success');
+    };
+
+    // 1. 優先嘗試同源代理 API (避開瀏覽器跨網域限制與 CORS)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch('/api/exchange-rates', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.rates) {
+          applyRatesFromData(data.rates, '基準市場');
+          if (!isBackground) setIsRateLoading(false);
+          return;
+        }
       }
-    } catch (err) {
-      console.warn('Primary exchange rate API failed, trying backup...', err);
+    } catch (e) {
+      // 靜默嘗試下一管道
     }
 
+    // 2. 嘗試主要公開匯率 API
     try {
-      const resBackup = await fetch('https://api.exchangerate-api.com/v4/latest/TWD');
-      if (!resBackup.ok) throw new Error('Backup API HTTP error');
-      const dataB = await resBackup.json();
-      if (dataB && dataB.rates) {
-        const newRates: Record<string, number> = { TWD: 1 };
-        CURRENCIES.forEach(c => {
-          if (c.code === 'TWD') {
-            newRates['TWD'] = 1;
-          } else if (dataB.rates[c.code]) {
-            newRates[c.code] = Number((1 / dataB.rates[c.code]).toFixed(4));
-          } else {
-            newRates[c.code] = c.defaultRate;
-          }
-        });
-        setExchangeRates(newRates);
-        const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
-        setRatesLastUpdated(nowStr);
-        localStorage.setItem('muji_exchange_rates', JSON.stringify({ rates: newRates, updated: nowStr }));
-        if (showToastNotice) showToast('⚡ 已透過備用伺服器更新各國即時匯率！', 'success');
-        return;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch('https://open.er-api.com/v6/latest/TWD', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.result === 'success' && data.rates) {
+          applyRatesFromData(data.rates, '國際匯市');
+          if (!isBackground) setIsRateLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      // 靜默嘗試備用 API
+    }
+
+    // 3. 嘗試備用公開匯率 API
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const resBackup = await fetch('https://api.exchangerate-api.com/v4/latest/TWD', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (resBackup.ok) {
+        const dataB = await resBackup.json();
+        if (dataB && dataB.rates) {
+          applyRatesFromData(dataB.rates, '備用伺服器');
+          if (!isBackground) setIsRateLoading(false);
+          return;
+        }
       }
     } catch (err2) {
-      console.error('All exchange rate APIs failed, using cached/default rates', err2);
-      setRateFetchError(true);
-      if (showToastNotice) showToast('無法連線取得最新匯率，目前採用離線基準匯率', 'info');
-    } finally {
-      if (!isBackground) setIsRateLoading(false);
+      // 離線或外部網路阻擋
     }
+
+    // 4. 全部外網 API 未回應時：平滑退回本機快取或預設基準匯率（不拋出錯誤）
+    try {
+      const saved = localStorage.getItem('muji_exchange_rates');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.rates) {
+          setExchangeRates({ ...DEFAULT_RATES_MAP, ...parsed.rates });
+          if (parsed.updated) setRatesLastUpdated(parsed.updated);
+        }
+      } else {
+        setExchangeRates({ ...DEFAULT_RATES_MAP });
+      }
+    } catch (e) {
+      setExchangeRates({ ...DEFAULT_RATES_MAP });
+    }
+
+    if (showToastNotice) {
+      setRateFetchError(true);
+      showToast('目前處於離線環境，已啟用基準牌告匯率', 'info');
+    } else {
+      setRateFetchError(false);
+    }
+    if (!isBackground) setIsRateLoading(false);
   };
 
   // 系統初始化載入與每 10 秒自動輪詢（即時匯率自動更新 + 雙人即時協同同步）
@@ -2073,15 +2340,27 @@ export default function App() {
       .replace(/兩百/g, '200')
       .replace(/一百/g, '100');
 
+    // 構建成員名稱的正則匹配模式 (動態相容預設名、暱稱與身分)
+    const userANames = Array.from(new Set(['廖', '尹丞', userA.shortName, userA.displayName, userA.name].filter(Boolean))).map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const userBNames = Array.from(new Set(['周', '沛緹', userB.shortName, userB.displayName, userB.name].filter(Boolean))).map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const allNamesPattern = [...userANames, ...userBNames].join('|');
+
+    const isUserBName = (k?: string) => {
+      if (!k) return false;
+      const clean = k.trim();
+      return clean === '周' || clean === '沛緹' || clean === userB.name || clean === userB.displayName || clean === userB.shortName;
+    };
+
     // 2. 存入公積金 / 固定收入 (例如: "存 10000 薪資", "廖 存 5000", "存入公積金 3000")
-    const incMatch = normalized.match(/^(?:存入|存|公積金|入帳|轉入|收入)\s*(廖|周|尹丞|沛緹)?\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i) ||
-                     normalized.match(/^(廖|周|尹丞|沛緹)\s*(?:存入|存|入帳)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i) ||
-                     normalized.match(/^(廖|周|尹丞|沛緹)?(?:存入|存)\s*([0-9\.]+)\s*(?:元|塊)?\s*(.*)$/i);
+    const incRegex1 = new RegExp(`^(?:存入|存|公積金|入帳|轉入|收入)\\s*(${allNamesPattern})?\\s*([0-9\\.]+)\\s*(?:元|塊|NT|NTD)?\\s*(.*)$`, 'i');
+    const incRegex2 = new RegExp(`^(${allNamesPattern})\\s*(?:存入|存|入帳)\\s*([0-9\\.]+)\\s*(?:元|塊|NT|NTD)?\\s*(.*)$`, 'i');
+    const incRegex3 = new RegExp(`^(${allNamesPattern})?(?:存入|存)\\s*([0-9\\.]+)\\s*(?:元|塊)?\\s*(.*)$`, 'i');
+    const incMatch = normalized.match(incRegex1) || normalized.match(incRegex2) || normalized.match(incRegex3);
     if (incMatch) {
-      const payerKey = incMatch[1] || '廖';
+      const payerKey = incMatch[1];
       const amt = parseFloat(incMatch[2]) || 0;
       const desc = incMatch[3]?.trim() || '公積金存入';
-      const payerName = (payerKey === '周' || payerKey === '沛緹') ? '周沛緹' : '廖尹丞';
+      const payerName = payerKey ? (isUserBName(payerKey) ? userB.name : userA.name) : (currentUserPersona?.name || userA.name);
 
       if (amt > 0) {
         const todayStr = new Date().toISOString().split('T')[0];
@@ -2135,10 +2414,11 @@ export default function App() {
     }
 
     // 3. 代墊支出指令 (例如: "廖 1200 晚餐", "周 85 飲料", "廖代墊晚餐1200", "周買了珍奶85元")
-    const expMatch = normalized.match(/^(廖|周|尹丞|沛緹)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i) ||
-                     normalized.match(/^(廖|周|尹丞|沛緹)\s*(?:代墊了|代墊|付了|付|買了|買)\s*(.*?)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?$/i) ||
-                     normalized.match(/^(廖|周|尹丞|沛緹)\s*(?:代墊了|代墊|付了|付|買了|買)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i) ||
-                     normalized.match(/^(?:代墊|支出)\s*(廖|周|尹丞|沛緹)\s*([0-9\.]+)\s*(?:元|塊|NT|NTD)?\s*(.*)$/i);
+    const expRegex1 = new RegExp(`^(${allNamesPattern})\\s*([0-9\\.]+)\\s*(?:元|塊|NT|NTD)?\\s*(.*)$`, 'i');
+    const expRegex2 = new RegExp(`^(${allNamesPattern})\\s*(?:代墊了|代墊|付了|付|買了|買)\\s*(.*?)\\s*([0-9\\.]+)\\s*(?:元|塊|NT|NTD)?$`, 'i');
+    const expRegex3 = new RegExp(`^(${allNamesPattern})\\s*(?:代墊了|代墊|付了|付|買了|買)\\s*([0-9\\.]+)\\s*(?:元|塊|NT|NTD)?\\s*(.*)$`, 'i');
+    const expRegex4 = new RegExp(`^(?:代墊|支出)\\s*(${allNamesPattern})\\s*([0-9\\.]+)\\s*(?:元|塊|NT|NTD)?\\s*(.*)$`, 'i');
+    const expMatch = normalized.match(expRegex1) || normalized.match(expRegex2) || normalized.match(expRegex3) || normalized.match(expRegex4);
     if (expMatch) {
       let payerKey = expMatch[1];
       let amt = 0;
@@ -2152,8 +2432,10 @@ export default function App() {
         amt = parseFloat(expMatch[3]) || 0;
       }
 
-      const payer: '廖' | '周' = (payerKey === '周' || payerKey === '沛緹') ? '周' : '廖';
+      const payer: '廖' | '周' = isUserBName(payerKey) ? '周' : '廖';
       const debtorAmt = Math.round(amt / 2);
+      const payerDisp = payer === '廖' ? userA.displayName : userB.displayName;
+      const otherDisp = payer === '廖' ? userB.displayName : userA.displayName;
 
       if (amt > 0) {
         const createdSplit = await handleAddSplitRecord({
@@ -2164,8 +2446,6 @@ export default function App() {
           customOweAmount: debtorAmt,
           note: 'App 智慧指令快捷建立'
         });
-        const payerDisp = payer === '廖' ? '廖廖' : '周周';
-        const otherDisp = payer === '廖' ? '周周' : '廖廖';
         addNotificationAndSave(
           '💳 代墊記帳成功',
           `${payerDisp} 代墊「${desc}」NT$ ${amt.toLocaleString()}（對方應返還 $${debtorAmt.toLocaleString()}）`,
@@ -2228,7 +2508,7 @@ export default function App() {
           store: storeName,
           deadline: '儘快',
           status: '待購買',
-          creator: '廖尹丞',
+          creator: (currentUserPersona?.name || defaultPayerName) as any,
           createdTime: formatAmPmTime(new Date()),
           note: 'App 智慧指令快捷新增'
         };
@@ -2274,7 +2554,7 @@ export default function App() {
     return {
       success: false,
       type: 'error',
-      replyText: '⚠️ **未能辨識指令格式**\n\n您可以直接輸入或說出：\n• **「廖 1200 晚餐」** 👉 記錄廖廖代墊\n• **「周 85 珍奶」** 👉 記錄周周代墊\n• **「存 10000 薪資」** 👉 記錄公積金存入\n• **「需要買 鮮奶 全聯」** 👉 加入購物清單\n• **「查代墊」** 👉 查看最新欠款對帳\n• **「今日通知」** 👉 檢視今日即時通知'
+      replyText: `⚠️ **未能辨識指令格式**\n\n您可以直接輸入或說出：\n• **「${userA.shortName} 1200 晚餐」** 👉 記錄${userA.displayName}代墊\n• **「${userB.shortName} 85 珍奶」** 👉 記錄${userB.displayName}代墊\n• **「存 10000 薪資」** 👉 記錄公積金存入\n• **「需要買 鮮奶 全聯」** 👉 加入購物清單\n• **「查代墊」** 👉 查看最新欠款對帳\n• **「今日通知」** 👉 檢視今日即時通知`
     };
   };
 // ------------------- 自訂雙鍵對話確認 Modal -------------------
@@ -2295,8 +2575,18 @@ export default function App() {
   // 初始化與本機 LocalStorage 綁定
   useEffect(() => {
     // 1. 載入對帳流水帳紀錄
+    const isGuest = localStorage.getItem('banban_is_guest_mode') === 'true';
+    const authUser = localStorage.getItem('banban_auth_user');
     const isDbConfigured = Boolean(localStorage.getItem('muji_gas_web_url') || (typeof window !== 'undefined' && (window as any).google?.script?.run));
     const isSandbox = localStorage.getItem('banban_is_sandbox_mode') === 'true';
+
+    // 訪客模式或未登入（且非沙盒測試模式）：強制數值全部歸零
+    if (isGuest || (!authUser && !isSandbox)) {
+      setRecords([]);
+      setSettlementMonth('');
+      setReconciledMonths([]);
+      return;
+    }
 
     const saved = localStorage.getItem('muji_ledger_data');
     let loadedRecords: RecordItem[] = [];
@@ -2485,6 +2775,43 @@ export default function App() {
       setIsAppLoaded(true);
     }, 1500);
     return () => clearTimeout(timer);
+  }, []);
+
+  // 📱 支援由螢幕最左邊緣向右滑動手勢以喚出側邊設定選單
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+    let isEdgeStart = false;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      // 僅當觸控起點位於螢幕最左邊緣 (<= 35px)
+      isEdgeStart = startX <= 35;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!isEdgeStart || e.changedTouches.length !== 1) return;
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const diffX = endX - startX;
+      const diffY = Math.abs(endY - startY);
+
+      // 由左往右滑動超過 40px，且垂直偏移小於 60px
+      if (diffX > 40 && diffY < 60) {
+        setIsUnifiedSettingsModalOpen(true);
+      }
+      isEdgeStart = false;
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
   }, []);
 
   // 判斷此通知是否為發給當前使用者的（由伴侶或系統發送：我記帳對方收到通知，他記帳我的手機收到通知）
@@ -2817,28 +3144,28 @@ export default function App() {
 
   const liaoLatestTotal = React.useMemo(() => {
     return records
-      .filter(r => r.month === latestMonth && r.payer === '廖尹丞' && r.type.includes('支出'))
+      .filter(r => r.month === latestMonth && isUserAPayer(r.payer) && r.type.includes('支出'))
       .reduce((sum, r) => sum + r.amount, 0);
-  }, [records, latestMonth]);
+  }, [records, latestMonth, isUserAPayer]);
 
   const zhouLatestTotal = React.useMemo(() => {
     return records
-      .filter(r => r.month === latestMonth && r.payer === '周沛緹' && r.type.includes('支出'))
+      .filter(r => r.month === latestMonth && isUserBPayer(r.payer) && r.type.includes('支出'))
       .reduce((sum, r) => sum + r.amount, 0);
-  }, [records, latestMonth]);
+  }, [records, latestMonth, isUserBPayer]);
 
   // 全域所有月份的累計代墊 (相容舊有狀態)
   const liaoTotal = React.useMemo(() => {
     return records
-      .filter(r => r.payer === '廖尹丞' && r.type.includes('支出'))
+      .filter(r => isUserAPayer(r.payer) && r.type.includes('支出'))
       .reduce((sum, r) => sum + r.amount, 0);
-  }, [records]);
+  }, [records, isUserAPayer]);
 
   const zhouTotal = React.useMemo(() => {
     return records
-      .filter(r => r.payer === '周沛緹' && r.type.includes('支出'))
+      .filter(r => isUserBPayer(r.payer) && r.type.includes('支出'))
       .reduce((sum, r) => sum + r.amount, 0);
-  }, [records]);
+  }, [records, isUserBPayer]);
 
   // 2. 計算全域所有月份累計（不分月份）已撥款給雙方後，剩下的總額度 (公積金實際餘額與銷帳前 Quota 試算)
   const overallStats = React.useMemo(() => {
@@ -2882,9 +3209,9 @@ export default function App() {
         stats[m].income += r.amount;
       } else if (r.type.includes('支出')) {
         stats[m].expenses += r.amount;
-        if (r.payer === '廖尹丞') {
+        if (isUserAPayer(r.payer)) {
           stats[m].liaoExp += r.amount;
-        } else if (r.payer === '周沛緹') {
+        } else if (isUserBPayer(r.payer)) {
           stats[m].zhouExp += r.amount;
         }
       }
@@ -3020,12 +3347,13 @@ export default function App() {
   }, [records, monthlyBalances, smartAlerts, hasShownLoadAlert]);
 
 
-  // 若未登入 Google 帳號且非沙盒測試模式，顯示 Google 帳號登入入口
-  if (!currentUser && !isSandboxMode) {
+  // 若未登入 Google 帳號且非沙盒測試模式，且非本機訪客模式，顯示 Google 帳號登入入口
+  if (!currentUser && !isSandboxMode && !isGuestMode) {
     return (
       <GoogleAuthPortal
         onLogin={handleGoogleLogin}
         onEnterDevSandbox={handleEnterDevSandbox}
+        onEnterGuestMode={handleEnterGuestMode}
       />
     );
   }
@@ -3055,6 +3383,7 @@ export default function App() {
         unsettledSplitCount={splitSummary.unsettledCount}
         onOpenTravelCalculator={() => setShowTravelCalculatorModal(true)}
         onOpenSettings={() => setIsUnifiedSettingsModalOpen(true)}
+        onReturnToLoginPortal={handleReturnToLoginPortal}
         onOpenNotifySettings={() => setIsAppNotifyModalOpen(true)}
         unreadNotificationCount={incomingUnreadCount}
         pendingQueueCount={pendingSyncQueue.length}
@@ -3135,7 +3464,9 @@ export default function App() {
                   onExecuteSmartCommand={handleExecuteSmartCommand}
                   onOpenChatAssistant={() => setIsChatAssistantOpen(true)}
                   isDbConnected={isDbConnected}
-                  onOpenGasDeploy={() => setIsDeployModalOpen(true)}
+                  onOpenGasDeploy={handleOpenGasDeploy}
+                  currentUser={currentUser}
+                  partnerBindingInfo={partnerBindingInfo}
                 />
               ) : (
                 !isDbConnected ? (
@@ -3489,7 +3820,9 @@ export default function App() {
                   onDeleteItem={handleDeleteSplitRecord}
                   onOpenAdd={() => setIsSplitAddOpen(true)}
                   isDbConnected={isDbConnected}
-                  onOpenGasDeploy={() => setIsDeployModalOpen(true)}
+                  onOpenGasDeploy={handleOpenGasDeploy}
+                  currentUser={currentUser}
+                  partnerBindingInfo={partnerBindingInfo}
                 />
               ) : (
                 !isDbConnected ? (
@@ -3598,8 +3931,8 @@ export default function App() {
                       className="w-full px-3 py-2.5 rounded-xl bg-white/70 border border-[#DDD9CE] text-xs text-[#3E3A36] focus:outline-none focus:border-[#8C8475] cursor-pointer"
                     >
                       <option value="all">👤 所有出資/來源</option>
-                      <option value="廖尹丞">廖尹丞</option>
-                      <option value="周沛緹">周沛緹</option>
+                      <option value={userA.name}>{userA.displayName} ({userA.name})</option>
+                      <option value={userB.name}>{userB.isPendingBinding ? '待確認伴侶 (等待受邀)' : `${userB.displayName} (${userB.name})`}</option>
                       <option value="共同帳戶">共同帳戶</option>
                     </select>
                   </div>
@@ -3794,7 +4127,7 @@ export default function App() {
                               </span>
                             </div>
                             
-                            <h4 className="text-sm font-semibold text-[#3E3A36] leading-snug break-words">{r.item}</h4>
+                            <h4 className="text-sm font-semibold text-[#3E3A36] leading-snug truncate max-w-[170px] min-[360px]:max-w-[220px] sm:max-w-md" title={r.item}>{r.item}</h4>
                             
                             <div className="flex items-center gap-1 text-[11px] text-[#8C8475]">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#8C8475] shrink-0" />
@@ -3844,7 +4177,9 @@ export default function App() {
                   onOpenSettleModal={() => setIsSplitSettleModalOpen(true)}
                   isLoading={isSplitLoading}
                   isDbConnected={isDbConnected}
-                  onOpenGasDeploy={() => setIsDeployModalOpen(true)}
+                  onOpenGasDeploy={handleOpenGasDeploy}
+                  currentUser={currentUser}
+                  partnerBindingInfo={partnerBindingInfo}
                 />
               ) : (
                 !isDbConnected ? (
@@ -3929,46 +4264,146 @@ export default function App() {
                 {/* 雙邊結算數字看板 (僅計算該指定核銷月份之累計數字) */}
                 {(() => {
                   const compLiaoMonthTotal = records
-                    .filter(r => r.month === settlementMonth && r.payer === '廖尹丞' && r.type.includes('支出'))
+                    .filter(r => r.month === settlementMonth && isUserAPayer(r.payer) && r.type.includes('支出'))
                     .reduce((sum, r) => sum + r.amount, 0);
 
                   const compZhouMonthTotal = records
-                    .filter(r => r.month === settlementMonth && r.payer === '周沛緹' && r.type.includes('支出'))
+                    .filter(r => r.month === settlementMonth && isUserBPayer(r.payer) && r.type.includes('支出'))
                     .reduce((sum, r) => sum + r.amount, 0);
 
                   return (
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-5">
-                        {/* 廖尹丞 卡片 */}
-                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-4 sm:p-5 border-l-4 border-[#8C8475] shadow-2xs border-[#EBE8E0] relative overflow-hidden flex flex-col justify-between min-h-[7.5rem]">
-                          <div className="absolute right-3 top-3 text-[#E6E3DB] opacity-35 pointer-events-none">
-                            <User className="w-12 h-12 sm:w-14 sm:h-14" />
+                        {/* userA 卡片 */}
+                        <div className="bg-white/80 backdrop-blur-md rounded-2xl p-4 sm:p-5 border-l-4 border-[#8C8475] shadow-2xs border-[#EBE8E0] relative overflow-hidden flex flex-col justify-between min-h-[8rem]">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="relative shrink-0">
+                                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border-2 border-white shadow-md ring-2 ring-[#8C8475]/30 bg-[#FAF9F5] flex items-center justify-center">
+                                  {userA.avatar ? (
+                                    <img
+                                      src={userA.avatar}
+                                      alt={userA.displayName}
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-amber-700 to-amber-900 text-white font-black text-lg sm:text-xl flex items-center justify-center">
+                                      {userA.shortName}
+                                    </div>
+                                  )}
+                                </div>
+                                {userA.email && (
+                                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-full border border-amber-200 shadow-2xs flex items-center justify-center text-[9px] font-bold text-amber-800" title={`Google 帳號: ${userA.email}`}>
+                                    G
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-[10px] uppercase font-bold tracking-wider text-[#A59F94]">{userA.romanizedName}</p>
+                                <h3 className="text-xs sm:text-sm font-bold text-[#3E3A36] mt-0.5 truncate">{userA.displayName} • {settlementMonth} 代墊總額</h3>
+                                {userA.email && (
+                                  <p className="text-[10px] text-[#8C8475] font-mono truncate">{userA.email}</p>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-[10px] uppercase font-bold tracking-wider text-[#A59F94]">Liao Yin-Cheng</p>
-                            <h3 className="text-xs font-semibold text-[#4A4641] mt-0.5">廖尹丞 • {settlementMonth} 代墊總額</h3>
-                          </div>
-                          <div className="mt-2">
-                            <div className="text-lg sm:text-xl font-light text-[#3E3A36] font-mono leading-none break-words">
-                              $ <span className="text-xl sm:text-2xl font-bold">{(Number(compLiaoMonthTotal) || 0).toLocaleString('zh-TW')}</span> 元
+                          <div className="mt-3 pt-2 border-t border-[#F2EFE8] flex items-baseline justify-between">
+                            <span className="text-[10px] text-[#8C8475] font-medium">代墊款累計</span>
+                            <div className="text-lg sm:text-xl font-normal text-[#3E3A36] font-sans tabular-nums leading-none break-words">
+                              $ <span className="text-xl sm:text-2xl font-black">{(Number(compLiaoMonthTotal) || 0).toLocaleString('zh-TW')}</span> 元
                             </div>
                           </div>
                         </div>
 
-                        {/* 周沛緹 卡片 */}
-                        <div className="bg-white/70 backdrop-blur-md rounded-2xl p-4 sm:p-5 border-l-4 border-[#C1B79E] shadow-2xs border-[#EBE8E0] relative overflow-hidden flex flex-col justify-between min-h-[7.5rem]">
-                          <div className="absolute right-3 top-3 text-[#E6E3DB] opacity-35 pointer-events-none">
-                            <User className="w-12 h-12 sm:w-14 sm:h-14" />
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase font-bold tracking-wider text-[#A59F94]">Chou Pei-Ti</p>
-                            <h3 className="text-xs font-semibold text-[#4A4641] mt-0.5">周沛緹 • {settlementMonth} 代墊總額</h3>
-                          </div>
-                          <div className="mt-2">
-                            <div className="text-lg sm:text-xl font-light text-[#3E3A36] font-mono leading-none break-words">
-                              $ <span className="text-xl sm:text-2xl font-bold">{(Number(compZhouMonthTotal) || 0).toLocaleString('zh-TW')}</span> 元
+                        {/* userB 卡片 */}
+                        <div className={`rounded-2xl p-4 sm:p-5 border-l-4 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[8.5rem] transition-all ${
+                          userB.isPendingBinding
+                            ? 'bg-neutral-50/90 border-l-neutral-400 border border-neutral-300/80 border-dashed backdrop-blur-md'
+                            : 'bg-white/80 border-l-[#C1B79E] border-[#EBE8E0] backdrop-blur-md'
+                        }`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="relative shrink-0">
+                                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border-2 border-white shadow-md flex items-center justify-center ${
+                                  userB.isPendingBinding
+                                    ? 'ring-2 ring-neutral-400/50 bg-neutral-200/80 text-neutral-600'
+                                    : 'ring-2 ring-[#C1B79E]/40 bg-[#FAF9F5]'
+                                }`}>
+                                  {userB.isPendingBinding ? (
+                                    <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-neutral-200 to-neutral-300 text-neutral-700 font-bold">
+                                      <span className="text-base font-black">待</span>
+                                      <span className="text-[8px] tracking-tighter text-neutral-500 font-medium">未綁定</span>
+                                    </div>
+                                  ) : userB.avatar ? (
+                                    <img
+                                      src={userB.avatar}
+                                      alt={userB.displayName}
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-rose-600 to-rose-800 text-white font-black text-lg sm:text-xl flex items-center justify-center">
+                                      {userB.shortName}
+                                    </div>
+                                  )}
+                                </div>
+                                {userB.email && !userB.isPendingBinding && (
+                                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-full border border-rose-200 shadow-2xs flex items-center justify-center text-[9px] font-bold text-rose-800" title={`Google 帳號: ${userB.email}`}>
+                                    G
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="text-[10px] uppercase font-bold tracking-wider text-[#A59F94]">{userB.romanizedName}</p>
+                                  {userB.isPendingBinding && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-neutral-900 text-white shadow-2xs">
+                                      ⏳ 待確認 (反白)
+                                    </span>
+                                  )}
+                                </div>
+                                <h3 className="text-xs sm:text-sm font-bold text-[#3E3A36] mt-0.5 truncate">
+                                  {userB.isPendingBinding ? (
+                                    <span className="text-neutral-800 font-extrabold">
+                                      待確認伴侶 • {settlementMonth} 代墊總額
+                                    </span>
+                                  ) : (
+                                    `${userB.displayName} • ${settlementMonth} 代墊總額`
+                                  )}
+                                </h3>
+                                {userB.isPendingBinding ? (
+                                  <p className="text-[10px] text-neutral-500 mt-0.5 leading-snug">
+                                    女朋友確認受邀綁定後，將自動取消反白並換上其真實名字與 Google 照
+                                  </p>
+                                ) : (
+                                  userB.email && (
+                                    <p className="text-[10px] text-[#8C8475] font-mono truncate">{userB.email}</p>
+                                  )
+                                )}
+                              </div>
                             </div>
                           </div>
+                          <div className="mt-3 pt-2 border-t border-[#F2EFE8] flex items-baseline justify-between">
+                            <span className="text-[10px] text-[#8C8475] font-medium">
+                              {userB.isPendingBinding ? '代墊款累計（待確認）' : '代墊款累計'}
+                            </span>
+                            <div className="text-lg sm:text-xl font-normal text-[#3E3A36] font-sans tabular-nums leading-none break-words">
+                              $ <span className="text-xl sm:text-2xl font-black">{(Number(compZhouMonthTotal) || 0).toLocaleString('zh-TW')}</span> 元
+                            </div>
+                          </div>
+                          {userB.isPendingBinding && currentUser && !isGuestMode && (
+                            <div className="mt-2 pt-1.5 border-t border-dashed border-neutral-200 flex items-center justify-between text-[10px]">
+                              <span className="text-neutral-500">尚未綁定另一半</span>
+                              <button
+                                type="button"
+                                onClick={() => setIsUnifiedSettingsModalOpen(true)}
+                                className="font-bold text-neutral-800 hover:text-black underline flex items-center gap-1 cursor-pointer"
+                              >
+                                發送邀請碼給另一半 ➔
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -3990,18 +4425,39 @@ export default function App() {
                             ) : (
                               <div className="space-y-2 text-xs text-[#3E3A36]">
                                 {compLiaoMonthTotal > 0 && (
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#8C8475] shrink-0" />
-                                    <span>公積金應撥款給 <strong>廖尹丞</strong>：</span>
-                                    <span className="font-mono font-bold text-sm text-[#8C5E24] underline decoration-wavy">$ {(Number(compLiaoMonthTotal) || 0).toLocaleString('zh-TW')}</span>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="w-6 h-6 rounded-full overflow-hidden border border-[#D0C9BA] shrink-0 bg-[#FAF9F5] shadow-2xs">
+                                      {userA.avatar ? (
+                                        <img src={userA.avatar} alt={userA.displayName} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <span className="w-full h-full bg-[#8C8475] text-white text-[10px] font-bold flex items-center justify-center">{userA.shortName}</span>
+                                      )}
+                                    </div>
+                                    <span>公積金應撥款給 <strong>{userA.displayName}</strong>：</span>
+                                    <span className="font-sans tabular-nums font-bold text-sm text-[#8C5E24] underline decoration-wavy">$ {(Number(compLiaoMonthTotal) || 0).toLocaleString('zh-TW')}</span>
                                     <span>元</span>
                                   </div>
                                 )}
                                 {compZhouMonthTotal > 0 && (
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-[#8C8475] shrink-0" />
-                                    <span>公積金應撥款給 <strong>周沛緹</strong>：</span>
-                                    <span className="font-mono font-bold text-sm text-[#8C5E24] underline decoration-wavy">$ {(Number(compZhouMonthTotal) || 0).toLocaleString('zh-TW')}</span>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="w-6 h-6 rounded-full overflow-hidden border border-[#D0C9BA] shrink-0 bg-[#FAF9F5] shadow-2xs flex items-center justify-center">
+                                      {userB.isPendingBinding ? (
+                                        <span className="w-full h-full bg-neutral-300 text-neutral-800 text-[10px] font-bold flex items-center justify-center">待</span>
+                                      ) : userB.avatar ? (
+                                        <img src={userB.avatar} alt={userB.displayName} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <span className="w-full h-full bg-[#C1B79E] text-white text-[10px] font-bold flex items-center justify-center">{userB.shortName}</span>
+                                      )}
+                                    </div>
+                                    <span>
+                                      公積金應撥款給{' '}
+                                      <strong>{userB.isPendingBinding ? '待確認伴侶' : userB.displayName}</strong>
+                                      {userB.isPendingBinding && (
+                                        <span className="ml-1 text-[9px] bg-neutral-900 text-white px-1.5 py-0.2 rounded font-bold">待確認</span>
+                                      )}
+                                      ：
+                                    </span>
+                                    <span className="font-sans tabular-nums font-bold text-sm text-[#8C5E24] underline decoration-wavy">$ {(Number(compZhouMonthTotal) || 0).toLocaleString('zh-TW')}</span>
                                     <span>元</span>
                                   </div>
                                 )}
@@ -4023,19 +4479,28 @@ export default function App() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* 廖尹丞的明細 */}
+                    {/* userA 的明細 */}
                     <div className="bg-white/60 backdrop-blur-md rounded-2xl p-5 border border-[#EEEDE3] space-y-3 shadow-xs">
                       <div className="flex items-center justify-between border-b border-[#F2F1EC] pb-2 font-medium text-xs text-[#5C564E] whitespace-nowrap">
-                        <span>廖尹丞 的代墊細目</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full overflow-hidden border border-[#DDD8CD] shrink-0 bg-[#FAF9F5] shadow-2xs">
+                            {userA.avatar ? (
+                              <img src={userA.avatar} alt={userA.displayName} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="w-full h-full bg-[#8C8475] text-white text-[10px] font-bold flex items-center justify-center">{userA.shortName}</span>
+                            )}
+                          </div>
+                          <span>{userA.displayName} 的代墊細目</span>
+                        </div>
                         <span className="font-mono font-bold text-[#8C8475] whitespace-nowrap">
-                          {records.filter(r => r.month === settlementMonth && r.payer === '廖尹丞' && r.type.includes('支出')).length} 筆
+                          {records.filter(r => r.month === settlementMonth && isUserAPayer(r.payer) && r.type.includes('支出')).length} 筆
                         </span>
                       </div>
                       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                        {records.filter(r => r.month === settlementMonth && r.payer === '廖尹丞' && r.type.includes('支出')).length === 0 ? (
-                          <div className="text-center py-8 text-[11px] text-[#A59F94] font-light whitespace-nowrap">本月份無廖尹丞之代墊</div>
+                        {records.filter(r => r.month === settlementMonth && isUserAPayer(r.payer) && r.type.includes('支出')).length === 0 ? (
+                          <div className="text-center py-8 text-[11px] text-[#A59F94] font-light whitespace-nowrap">本月份無{userA.displayName}之代墊</div>
                         ) : (
-                          records.filter(r => r.month === settlementMonth && r.payer === '廖尹丞' && r.type.includes('支出')).map(r => (
+                          records.filter(r => r.month === settlementMonth && isUserAPayer(r.payer) && r.type.includes('支出')).map(r => (
                             <div key={r.id} className="flex justify-between items-center text-xs bg-[#FAF9F5]/50 hover:bg-white p-2.5 rounded-xl transition-all border border-[#F2EDE1] gap-2">
                               <div className="space-y-0.5 flex-grow min-w-0 pr-1">
                                 <div className="font-bold text-[#3E3A36] leading-snug truncate">{r.item}</div>
@@ -4057,26 +4522,50 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* 周沛緹的明細 */}
-                    <div className="bg-white/60 backdrop-blur-md rounded-2xl p-5 border border-[#EEEDE3] space-y-3 shadow-xs">
+                    {/* userB 的明細 */}
+                    <div className={`backdrop-blur-md rounded-2xl p-5 border space-y-3 shadow-xs transition-all ${
+                      userB.isPendingBinding
+                        ? 'bg-neutral-50/70 border-neutral-300/80 border-dashed'
+                        : 'bg-white/60 border-[#EEEDE3]'
+                    }`}>
                       <div className="flex items-center justify-between border-b border-[#F2F1EC] pb-2 font-medium text-xs text-[#5C564E] whitespace-nowrap">
-                        <span>周沛緹 的代墊細目</span>
-                        <span className="font-mono font-bold text-[#8C8475] whitespace-nowrap">
-                          {records.filter(r => r.month === settlementMonth && r.payer === '周沛緹' && r.type.includes('支出')).length} 筆
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full overflow-hidden border border-[#DDD8CD] shrink-0 bg-[#FAF9F5] shadow-2xs flex items-center justify-center">
+                            {userB.isPendingBinding ? (
+                              <span className="w-full h-full bg-neutral-300 text-neutral-800 text-[10px] font-bold flex items-center justify-center">待</span>
+                            ) : userB.avatar ? (
+                              <img src={userB.avatar} alt={userB.displayName} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="w-full h-full bg-[#C1B79E] text-white text-[10px] font-bold flex items-center justify-center">{userB.shortName}</span>
+                            )}
+                          </div>
+                          <span>
+                            {userB.isPendingBinding ? '待確認伴侶 (等待受邀)' : userB.displayName} 的代墊細目
+                          </span>
+                          {userB.isPendingBinding && (
+                            <span className="text-[9px] bg-neutral-900 text-white px-1.5 py-0.2 rounded font-bold shadow-2xs">
+                              反白待定
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-sans tabular-nums font-bold text-[#8C8475] whitespace-nowrap">
+                          {records.filter(r => r.month === settlementMonth && isUserBPayer(r.payer) && r.type.includes('支出')).length} 筆
                         </span>
                       </div>
                       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                        {records.filter(r => r.month === settlementMonth && r.payer === '周沛緹' && r.type.includes('支出')).length === 0 ? (
-                          <div className="text-center py-8 text-[11px] text-[#A59F94] font-light whitespace-nowrap">本月份無周沛緹之代墊</div>
+                        {records.filter(r => r.month === settlementMonth && isUserBPayer(r.payer) && r.type.includes('支出')).length === 0 ? (
+                          <div className="text-center py-8 text-[11px] text-[#A59F94] font-light whitespace-nowrap">
+                            本月份無{userB.isPendingBinding ? '待確認伴侶' : userB.displayName}之代墊
+                          </div>
                         ) : (
-                          records.filter(r => r.month === settlementMonth && r.payer === '周沛緹' && r.type.includes('支出')).map(r => (
+                          records.filter(r => r.month === settlementMonth && isUserBPayer(r.payer) && r.type.includes('支出')).map(r => (
                             <div key={r.id} className="flex justify-between items-center text-xs bg-[#FAF9F5]/50 hover:bg-white p-2.5 rounded-xl transition-all border border-[#F2EDE1] gap-2">
                               <div className="space-y-0.5 flex-grow min-w-0 pr-1">
                                 <div className="font-bold text-[#3E3A36] leading-snug truncate">{r.item}</div>
-                                <div className="font-mono text-[9px] text-[#9A948C] whitespace-nowrap">📅 {r.date || `${r.month}-01`}</div>
+                                <div className="font-sans tabular-nums text-[9px] text-[#9A948C] whitespace-nowrap">📅 {r.date || `${r.month}-01`}</div>
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
-                                <span className="font-mono font-bold text-[#4D4942] whitespace-nowrap">$ {(Number(r?.amount) || 0).toLocaleString('zh-TW')}</span>
+                                <span className="font-sans tabular-nums font-bold text-[#4D4942] whitespace-nowrap">$ {(Number(r?.amount) || 0).toLocaleString('zh-TW')}</span>
                                 <button 
                                   onClick={() => handleDelete(r.id)}
                                   className="text-[#A59F94] hover:text-[#C55757] p-1.5 rounded-lg hover:bg-red-50 hover:border-red-100 transition-all border border-transparent cursor-pointer"
@@ -4113,24 +4602,73 @@ export default function App() {
             {/* 🛒 購物清單 (生活模式) / ✈️ 旅遊分帳 (代墊借還模式) */}
             {activeTab === 'notebook' && (
               appMode === 'split' ? (
-                <SplitTravelTab
-                  key="split-travel"
-                  currentUser={currentUser}
-                  gasWebUrl={gasWebUrl}
-                  callGasApi={callGasApi}
-                  enqueueSyncItem={enqueueSyncItem}
-                  onConvertToSplit={(item) => {
-                    handleAddSplitRecord({
-                      payer: item.payer,
-                      itemName: item.itemName,
-                      totalAmount: item.totalAmount,
-                      splitMode: 'AA平分'
-                    });
-                  }}
-                  showToast={showToast}
-                  isDbConnected={isDbConnected}
-                  onOpenGasDeploy={() => setIsDeployModalOpen(true)}
-                />
+                <div className="space-y-4">
+                  <div className="flex justify-center">
+                    <div className="inline-flex p-1 bg-[#EBE8E0]/70 rounded-2xl border border-[#DDD9CE]">
+                      <button
+                        type="button"
+                        onClick={() => setSplitNotebookSubTab('travel')}
+                        className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          splitNotebookSubTab === 'travel'
+                            ? 'bg-white text-[#3E3A36] shadow-2xs'
+                            : 'text-[#8C8475] hover:text-[#5C564E]'
+                        }`}
+                      >
+                        ✈️ 旅遊多幣別專案
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSplitNotebookSubTab('wishlist')}
+                        className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          splitNotebookSubTab === 'wishlist'
+                            ? 'bg-white text-[#3E3A36] shadow-2xs'
+                            : 'text-[#8C8475] hover:text-[#5C564E]'
+                        }`}
+                      >
+                        🛍️ 待代買願望清單
+                      </button>
+                    </div>
+                  </div>
+
+                  {splitNotebookSubTab === 'travel' ? (
+                    <SplitTravelTab
+                      key="split-travel"
+                      currentUser={currentUser}
+                      partnerBindingInfo={partnerBindingInfo}
+                      gasWebUrl={gasWebUrl}
+                      callGasApi={callGasApi}
+                      enqueueSyncItem={enqueueSyncItem}
+                      onConvertToSplit={(item) => {
+                        handleAddSplitRecord({
+                          payer: item.payer,
+                          itemName: item.itemName,
+                          totalAmount: item.totalAmount,
+                          splitMode: 'AA平分'
+                        });
+                      }}
+                      showToast={showToast}
+                      isDbConnected={isDbConnected}
+                      onOpenGasDeploy={handleOpenGasDeploy}
+                    />
+                  ) : (
+                    <SplitNotebookTab
+                      key="split-wishlist"
+                      currentUser={currentUser}
+                      partnerBindingInfo={partnerBindingInfo}
+                      onConvertToSplit={(item) => {
+                        handleAddSplitRecord({
+                          payer: item.payer,
+                          itemName: item.itemName,
+                          totalAmount: item.totalAmount,
+                          splitMode: 'AA平分'
+                        });
+                      }}
+                      showToast={showToast}
+                      isDbConnected={isDbConnected}
+                      onOpenGasDeploy={handleOpenGasDeploy}
+                    />
+                  )}
+                </div>
               ) : (
                 !isDbConnected ? (
                   renderDbUnconnectedState(
@@ -4392,7 +4930,7 @@ export default function App() {
                                 </button>
 
                                 <div className="flex-1 min-w-0">
-                                  <h4 className={`text-sm font-semibold text-[#3E3A36] ${isDone ? 'line-through text-[#8C8475]' : ''}`}>
+                                  <h4 className={`text-sm font-semibold text-[#3E3A36] truncate max-w-[180px] min-[360px]:max-w-[240px] sm:max-w-md ${isDone ? 'line-through text-[#8C8475]' : ''}`} title={item.item}>
                                     {item.item}
                                   </h4>
 
@@ -4498,10 +5036,10 @@ export default function App() {
                   ) : (
                     <>
                       <div className="text-[10px] sm:text-xs text-white/90 whitespace-nowrap hidden sm:block">
-                        廖代墊: <span className="font-mono font-bold text-rose-300">$ {(Number(splitSummary?.zhouOwesLiao) || 0).toLocaleString()}</span>
+                        {userA.shortName}代墊: <span className="font-mono font-bold text-rose-300">$ {(Number(splitSummary?.zhouOwesLiao) || 0).toLocaleString()}</span>
                       </div>
                       <div className="text-[10px] sm:text-xs text-white/90 whitespace-nowrap hidden sm:block">
-                        周代墊: <span className="font-mono font-bold text-rose-300">$ {(Number(splitSummary?.liaoOwesZhou) || 0).toLocaleString()}</span>
+                        {userB.shortName}代墊: <span className="font-mono font-bold text-rose-300">$ {(Number(splitSummary?.liaoOwesZhou) || 0).toLocaleString()}</span>
                       </div>
 
                       {/* 淨結算方向按鈕，點擊可直接開啟對帳彈窗 */}
@@ -4513,12 +5051,12 @@ export default function App() {
                       >
                         {splitSummary?.netDebtor === '周' ? (
                           <span className="bg-rose-500/25 hover:bg-rose-500/40 text-rose-200 border border-rose-500/40 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex items-center gap-1">
-                            <span>周應還廖</span>
+                            <span>{userB.shortName}應還{userA.shortName}</span>
                             <span className="font-mono text-white">$ {(Number(splitSummary?.netAmount) || 0).toLocaleString()}</span>
                           </span>
                         ) : splitSummary?.netDebtor === '廖' ? (
                           <span className="bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex items-center gap-1">
-                            <span>廖應還周</span>
+                            <span>{userA.shortName}應還{userB.shortName}</span>
                             <span className="font-mono text-white">$ {(Number(splitSummary?.netAmount) || 0).toLocaleString()}</span>
                           </span>
                         ) : (
@@ -4552,10 +5090,10 @@ export default function App() {
                 </div>
                 <div className="flex gap-2 sm:gap-3.5 items-center shrink-0">
                   <div className="text-[11px] sm:text-xs text-white whitespace-nowrap">
-                    L: <span className="font-mono font-bold text-[#EFC38E]">$ {(Number(liaoLatestTotal) || 0).toLocaleString('zh-TW')}</span>
+                    {userA.shortName}: <span className="font-mono font-bold text-[#EFC38E]">$ {(Number(liaoLatestTotal) || 0).toLocaleString('zh-TW')}</span>
                   </div>
                   <div className="text-[11px] sm:text-xs text-white whitespace-nowrap">
-                    P: <span className="font-mono font-bold text-[#EFC38E]">$ {(Number(zhouLatestTotal) || 0).toLocaleString('zh-TW')}</span>
+                    {userB.shortName}: <span className="font-mono font-bold text-[#EFC38E]">$ {(Number(zhouLatestTotal) || 0).toLocaleString('zh-TW')}</span>
                   </div>
                   
                   {/* 關閉按鈕 */}
@@ -4631,15 +5169,11 @@ export default function App() {
         isOpen={isUnifiedSettingsModalOpen}
         onClose={() => setIsUnifiedSettingsModalOpen(false)}
         currentUser={currentUser}
+        isGuestMode={isGuestMode}
         onLogout={handleLogout}
         onSwitchAccount={handleSwitchAccount}
-        onOpenGasDeploy={() => {
-          if (currentUser?.userRole === 'partner') {
-            showToast('🔒 API 與 Code.gs 設定由主管理員控管，伴侶端可直接記帳同步。', 'info');
-          } else {
-            setIsDeployModalOpen(true);
-          }
-        }}
+        onLoginGoogle={handleReturnToLoginPortal}
+        onOpenGasDeploy={handleOpenGasDeploy}
         gasWebUrl={gasWebUrl}
         deploySheetUrl={deploySheetUrl}
         isSandboxMode={isSandboxMode}
@@ -4663,20 +5197,6 @@ export default function App() {
         isOpen={showLoadAlertModal}
         onClose={() => setShowLoadAlertModal(false)}
         smartAlerts={smartAlerts}
-      />
-
-      {/* Google 帳戶與個人設定 Modal */}
-      <UserProfileModal
-        isOpen={isUserProfileModalOpen}
-        onClose={() => setIsUserProfileModalOpen(false)}
-        currentUser={currentUser}
-        onLogout={handleLogout}
-        onSwitchAccount={handleSwitchAccount}
-        onOpenGasDeploy={() => setIsDeployModalOpen(true)}
-        isSandboxMode={isSandboxMode}
-        onToggleSandboxMode={handleToggleSandboxMode}
-        gasWebUrl={gasWebUrl}
-        deploySheetUrl={deploySheetUrl}
       />
 
       {/* 🛠️ 自訂極簡無印風雙鍵對話確認 Modal */}
@@ -4733,6 +5253,8 @@ export default function App() {
         onAddSplit={handleAddSplitRecord}
         onSubmit={handleAddSplitRecord}
         showToast={showToast}
+        currentUser={currentUser}
+        partnerBindingInfo={partnerBindingInfo}
       />
 
       <SplitSettleModal
@@ -4741,6 +5263,8 @@ export default function App() {
         summary={splitSummary}
         onConfirmSettle={handleSettleAllSplitRecords}
         onSettle={handleSettleAllSplitRecords}
+        currentUser={currentUser}
+        partnerBindingInfo={partnerBindingInfo}
       />
 
       {/* 快速新增項目 Modal (含記帳代墊與購物記事雙模式) */}
@@ -4873,13 +5397,7 @@ export default function App() {
           currentUser={currentUser}
           onLogout={handleLogout}
           onSwitchAccount={handleSwitchAccount}
-          onOpenGasDeploy={() => {
-            if (currentUser?.userRole === 'partner') {
-              showToast('🔒 API 與 Code.gs 部署權限僅限主管理員可調整。', 'info');
-            } else {
-              setIsDeployModalOpen(true);
-            }
-          }}
+          onOpenGasDeploy={handleOpenGasDeploy}
           isSandboxMode={isSandboxMode}
           onToggleSandboxMode={handleToggleSandboxMode}
           gasWebUrl={gasWebUrl}
@@ -4932,6 +5450,8 @@ export default function App() {
           isSandboxMode={isSandboxMode}
           onToggleSandboxMode={handleToggleSandboxMode}
           currentUser={currentUser}
+          isGuestMode={isGuestMode}
+          onSwitchAccount={handleSwitchAccount}
           onOpenInviteManager={() => setIsUserProfileModalOpen(true)}
           inviteCode={currentInviteCode}
         />

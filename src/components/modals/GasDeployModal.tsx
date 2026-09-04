@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Sliders, Heart, Crown, Share2, Cloud, Database } from 'lucide-react';
+import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Sliders, Heart, Crown, Share2, Cloud, Database, AlertCircle } from 'lucide-react';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { AuthUser } from '../../types';
 
@@ -21,6 +21,8 @@ interface GasDeployModalProps {
   isSandboxMode?: boolean;
   onToggleSandboxMode?: (enabled: boolean) => void;
   currentUser?: AuthUser | null;
+  isGuestMode?: boolean;
+  onSwitchAccount?: () => void;
   onOpenInviteManager?: () => void;
   inviteCode?: string;
 }
@@ -42,6 +44,8 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
   isSandboxMode = false,
   onToggleSandboxMode,
   currentUser,
+  isGuestMode = false,
+  onSwitchAccount,
   onOpenInviteManager,
   inviteCode
 }) => {
@@ -85,11 +89,51 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
             {/* Modal 內容區 */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 text-left">
               {/* 輸入設定區卡片 */}
-              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
-                <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5 border-b border-[#F2EDE1] pb-2">
-                  <Settings className="w-4 h-4 text-amber-800" />
-                  <span>試算表與 Web App 連線設定</span>
-                </h4>
+              {(!currentUser || isGuestMode) ? (
+                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Settings className="w-4 h-4 text-stone-500" />
+                      <span className="text-xs font-extrabold text-[#3E3A36]">試算表與 Web App 連線設定</span>
+                    </div>
+                    <span className="text-[10px] bg-stone-100 text-stone-700 font-bold px-2 py-0.5 rounded-full border border-stone-200">
+                      本機單機體驗模式
+                    </span>
+                  </div>
+
+                  <div className="bg-[#FAF8F5] p-4 rounded-2xl border border-[#EDE7D9] space-y-2.5 text-xs">
+                    <div className="flex items-center gap-2 font-bold text-amber-900">
+                      <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span>本機模式體驗中，不可登入或設定試算表金鑰</span>
+                    </div>
+                    <p className="text-[11px] text-[#7A7366] leading-relaxed">
+                      您目前正以「本機體驗模式」使用系統，所有日常記帳、代墊與旅遊紀錄均直接保存在本機手機/瀏覽器中。在未登入 Google 帳號的情況下，系統不開放輸入、登入或掛接 Google 試算表金鑰。
+                    </p>
+                    <p className="text-[11px] text-[#7A7366] leading-relaxed">
+                      若您想要使用 Google 試算表作為後端資料庫並享有雙向即時對帳與情侶共同記帳，請先登入 Google 帳號以解鎖設定！
+                    </p>
+                  </div>
+
+                  {onSwitchAccount && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onSwitchAccount();
+                      }}
+                      className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-[0.99]"
+                    >
+                      <Cloud className="w-3.5 h-3.5 text-amber-200" />
+                      <span>登入 Google 帳號以解鎖試算表金鑰連線</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
+                  <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5 border-b border-[#F2EDE1] pb-2">
+                    <Settings className="w-4 h-4 text-amber-800" />
+                    <span>試算表與 Web App 連線設定</span>
+                  </h4>
 
                 <div className="space-y-3">
                   {/* Google Sheet URL */}
@@ -296,6 +340,7 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
 
                 </div>
               </div>
+              )}
 
               {/* 代碼複製與預覽區 */}
               <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-3 shadow-2xs">

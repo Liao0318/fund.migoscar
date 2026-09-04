@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Bell } from 'lucide-react';
+import { Sparkles, Bell, LogIn, Menu } from 'lucide-react';
 import { BrandLogo } from './BrandLogo.tsx';
 import { AuthUser } from '../../types';
 
@@ -12,6 +12,7 @@ interface HeaderProps {
   unsettledSplitCount: number;
   onOpenTravelCalculator: () => void;
   onOpenSettings: () => void;
+  onReturnToLoginPortal?: () => void;
   pendingQueueCount?: number;
   currentUser?: AuthUser | null;
   isSandboxMode?: boolean;
@@ -30,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
   unsettledSplitCount,
   onOpenTravelCalculator,
   onOpenSettings,
+  onReturnToLoginPortal,
   onOpenNotifySettings,
   unreadNotificationCount = 0,
   pendingQueueCount = 0,
@@ -44,12 +46,23 @@ export const Header: React.FC<HeaderProps> = ({
         {/* 頂部主列：品牌識別與功能操作 */}
         <div className="flex items-center justify-between gap-2">
           
-          {/* 左側：品牌 Logo 與名稱 */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            <BrandLogo className="w-7.5 h-7.5 sm:w-9 sm:h-9 shrink-0 select-none drop-shadow-2xs rounded-xl" />
+          {/* 左側：側邊選單按鈕與品牌 Logo */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            {/* 側邊選單 Hamburger 觸發鈕 (由左往右滑出) */}
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-[#F4F0E6] hover:bg-[#EAE4D8] text-[#5C564E] hover:text-[#3E3A36] border border-[#E0DBD0] flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
+              title="開啟側邊選單設定 (亦可由螢幕左邊緣向右滑動)"
+              aria-label="開啟側邊選單設定"
+            >
+              <Menu className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+            </button>
+
+            <BrandLogo className="w-7 h-7 sm:w-8.5 sm:h-8.5 shrink-0 select-none drop-shadow-2xs rounded-xl" />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <h1 className="text-sm sm:text-lg font-black tracking-tight text-[#3E3A36] leading-none flex items-center gap-1">
+                <h1 className="text-sm sm:text-lg font-black text-[#3E3A36] leading-tight flex items-center gap-1">
                   伴伴記<span className="text-rose-500 text-xs sm:text-base animate-pulse">❤️</span>
                 </h1>
                 {isSandboxMode && (
@@ -59,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 )}
               </div>
-              <p className="hidden sm:block text-[10px] text-[#8C8475] font-medium tracking-wide mt-0.5">雙人公積金與代墊分帳</p>
+              <p className="hidden sm:block text-[10px] text-[#8C8475] font-normal mt-0.5 leading-none">雙人公積金與代墊分帳</p>
             </div>
           </div>
 
@@ -145,13 +158,23 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* ⚙️ 設定 / 使用者頭像 */}
+            {/* ⚙️ 設定 / 使用者頭像或訪客登入 */}
             <button
               type="button"
-              onClick={onOpenSettings}
-              className="h-8.5 pl-1.5 pr-2.5 sm:px-3 rounded-xl bg-white hover:bg-[#F7F5EE] text-[#3E3A36] border border-[#DDD7C9] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 relative font-bold text-xs"
-              title="開啟系統設定與帳戶中心 (Google帳號、金鑰、備份、手機安裝)"
-              aria-label="系統設定"
+              onClick={() => {
+                if (!currentUser && onReturnToLoginPortal) {
+                  onReturnToLoginPortal();
+                } else {
+                  onOpenSettings();
+                }
+              }}
+              className={`h-8.5 px-2.5 sm:px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 relative font-bold text-xs ${
+                currentUser
+                  ? 'bg-white hover:bg-[#F7F5EE] text-[#3E3A36] border border-[#DDD7C9]'
+                  : 'bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-950 border border-amber-300 ring-1 ring-amber-200/50'
+              }`}
+              title={currentUser ? '開啟側邊設定與帳戶中心' : '目前為訪客模式（未登入）• 點擊返回初始登入主畫面'}
+              aria-label={currentUser ? '側邊設定' : '返回登入畫面'}
             >
               {currentUser?.avatar ? (
                 <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-[#D5D0C3] ring-1 ring-rose-300">
@@ -162,13 +185,18 @@ export const Header: React.FC<HeaderProps> = ({
                     referrerPolicy="no-referrer"
                   />
                 </div>
-              ) : (
+              ) : currentUser ? (
                 <span className="text-sm">⚙️</span>
+              ) : (
+                <LogIn className="w-3.5 h-3.5 text-amber-800 shrink-0" />
               )}
-              <span className="text-xs font-extrabold text-[#3E3A36]">
-                {currentUser?.nickname || currentUser?.name || '設定'}
+              <span
+                className="text-xs font-black truncate max-w-[65px] min-[360px]:max-w-[90px] sm:max-w-[120px]"
+                title={currentUser ? (currentUser.nickname || currentUser.name) : '訪客 (登入)'}
+              >
+                {currentUser ? (currentUser.nickname || currentUser.name) : '訪客 (登入)'}
               </span>
-              {(!gasWebUrl || pendingQueueCount > 0) && (
+              {(!gasWebUrl || pendingQueueCount > 0) && currentUser && (
                 <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-500 border-2 border-white animate-pulse" />
               )}
             </button>
@@ -190,14 +218,14 @@ export const Header: React.FC<HeaderProps> = ({
                   window.location.hash = '';
                 }
               }}
-              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
+              className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 min-w-0 ${
                 appMode === 'fund'
                   ? 'bg-white text-[#3E3A36] shadow-xs border border-[#DCD6C9]'
                   : 'text-[#8C8475] hover:text-[#3E3A36]'
               }`}
             >
-              <span>🌸</span>
-              <span>公積金模式</span>
+              <span className="shrink-0">🌸</span>
+              <span className="truncate whitespace-nowrap">公積金模式</span>
             </button>
 
             <button
@@ -209,16 +237,16 @@ export const Header: React.FC<HeaderProps> = ({
                 } catch (e) {}
                 window.location.hash = '/split';
               }}
-              className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 relative active:scale-95 ${
+              className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 relative active:scale-95 min-w-0 ${
                 appMode === 'split'
                   ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white shadow-xs'
                   : 'text-[#8C8475] hover:text-[#3E3A36]'
               }`}
             >
-              <span>💳</span>
-              <span>代墊借還</span>
+              <span className="shrink-0">💳</span>
+              <span className="truncate whitespace-nowrap">代墊借還</span>
               {unsettledSplitCount > 0 && (
-                <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center ${
+                <span className={`min-w-[16px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center shrink-0 ${
                   appMode === 'split' ? 'bg-white text-rose-700' : 'bg-rose-500 text-white'
                 }`}>
                   {unsettledSplitCount}

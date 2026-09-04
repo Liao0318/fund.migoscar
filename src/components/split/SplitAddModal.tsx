@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Plus, 
   X, 
@@ -9,11 +9,14 @@ import {
   Receipt
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SplitRecordItem } from '../../types';
+import { SplitRecordItem, AuthUser, CoupleBindingInfo } from '../../types';
+import { resolveUserPersonas } from '../../utils/userPersona';
 
 interface SplitAddModalProps {
   isOpen: boolean;
   onClose: () => void;
+  currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
   initialData?: {
     payer?: '廖' | '周';
     itemName?: string;
@@ -42,12 +45,18 @@ interface SplitAddModalProps {
 export const SplitAddModal: React.FC<SplitAddModalProps> = ({
   isOpen,
   onClose,
+  currentUser,
+  partnerBindingInfo,
   initialData,
   onAddSplit,
   onSubmit,
   showToast,
 }) => {
-  const [payer, setPayer] = useState<'廖' | '周'>(initialData?.payer || '廖');
+  const { userA, userB } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
+
+  const [payer, setPayer] = useState<'廖' | '周'>(initialData?.payer || (userB.isCurrentUser ? '周' : '廖'));
   const [itemName, setItemName] = useState(initialData?.itemName || '');
   const [totalAmount, setTotalAmount] = useState(initialData?.totalAmount ? String(initialData.totalAmount) : '');
   const [splitMode, setSplitMode] = useState<'AA平分' | '全額代付' | '自訂金額'>('AA平分');
@@ -109,8 +118,10 @@ export const SplitAddModal: React.FC<SplitAddModalProps> = ({
     setNote('');
   };
 
-  const otherPerson = payer === '廖' ? '周周' : '廖廖';
-  const myPerson = payer === '廖' ? '廖廖' : '周周';
+  const otherPersona = payer === '廖' ? userB : userA;
+  const myPersona = payer === '廖' ? userA : userB;
+  const otherPerson = otherPersona.displayName;
+  const myPerson = myPersona.displayName;
   const numAmt = parseFloat(totalAmount) || 0;
   let previewOwe = Math.round(numAmt / 2);
   if (splitMode === '全額代付') previewOwe = numAmt;
@@ -160,27 +171,53 @@ export const SplitAddModal: React.FC<SplitAddModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setPayer('廖')}
-                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 ${
                         payer === '廖'
                           ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
                           : 'bg-white text-[#6E6659] border-[#DDD8CD] hover:bg-[#F5F2EB]'
                       }`}
                     >
-                      <span className="text-base">👦</span>
-                      <span>廖廖 先出錢</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {userA.avatar ? (
+                          <img src={userA.avatar} alt={userA.displayName} referrerPolicy="no-referrer" className="w-5 h-5 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <span className="text-base">{userA.iconEmoji}</span>
+                        )}
+                        <span className="truncate">{userA.displayName} 先出錢</span>
+                      </div>
+                      {userA.isCurrentUser && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                          payer === '廖' ? 'bg-sky-800 text-sky-100' : 'bg-sky-100 text-sky-700'
+                        }`}>
+                          您
+                        </span>
+                      )}
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setPayer('周')}
-                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 ${
                         payer === '周'
                           ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
                           : 'bg-white text-[#6E6659] border-[#DDD8CD] hover:bg-[#F5F2EB]'
                       }`}
                     >
-                      <span className="text-base">👧</span>
-                      <span>周周 先出錢</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {userB.avatar ? (
+                          <img src={userB.avatar} alt={userB.displayName} referrerPolicy="no-referrer" className="w-5 h-5 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <span className="text-base">{userB.iconEmoji}</span>
+                        )}
+                        <span className="truncate">{userB.displayName} 先出錢</span>
+                      </div>
+                      {userB.isCurrentUser && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
+                          payer === '周' ? 'bg-rose-800 text-rose-100' : 'bg-rose-100 text-rose-700'
+                        }`}>
+                          您
+                        </span>
+                      )}
                     </button>
                   </div>
                 </div>

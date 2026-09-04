@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   Plus, 
   ArrowRightLeft, 
@@ -15,15 +15,19 @@ import {
   Heart,
   MessageCircle,
   Database,
-  Key
+  Key,
+  User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SplitRecordItem, SplitSummary, SmartCommandResult } from '../../types';
+import { SplitRecordItem, SplitSummary, SmartCommandResult, AuthUser, CoupleBindingInfo } from '../../types';
+import { resolveUserPersonas, formatPayerDisplayName } from '../../utils/userPersona';
 
 interface SplitHomeTabProps {
   summary: SplitSummary;
   recentItems: SplitRecordItem[];
   isLoading: boolean;
+  currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
   onRefresh: () => void;
   onOpenAdd: () => void;
   onGoToHistory: () => void;
@@ -49,6 +53,8 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
   summary = DEFAULT_SPLIT_SUMMARY,
   recentItems = [],
   isLoading,
+  currentUser,
+  partnerBindingInfo,
   onRefresh,
   onOpenAdd,
   onGoToHistory,
@@ -59,6 +65,9 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
   isDbConnected = true,
   onOpenGasDeploy,
 }) => {
+  const { userA, userB } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
   const [quickInput, setQuickInput] = React.useState('');
   const [isSubmittingQuick, setIsSubmittingQuick] = React.useState(false);
   const [quickMsg, setQuickMsg] = React.useState<string | null>(null);
@@ -143,7 +152,7 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
             title="重新同步代墊資料"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-rose-500' : ''}`} />
-            <span>{isLoading ? '同步中...' : '同步資料'}</span>
+            <span>同步資料</span>
           </button>
         </div>
       </div>
@@ -193,12 +202,12 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
             ) : (
               <div className="pt-2 space-y-1">
                 <div className="text-xs sm:text-sm font-bold text-[#6E6659] flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-lg bg-white/90 text-[#3E3A36] border border-black/5 font-extrabold">
-                    {safeSummary.netDebtor === '廖' ? '廖廖' : '周周'}
+                  <span className="px-2 py-0.5 rounded-lg bg-white/90 text-[#3E3A36] border border-black/5 font-extrabold flex items-center gap-1">
+                    {safeSummary.netDebtor === '廖' ? userA.displayName : userB.displayName}
                   </span>
                   <span>應返還給</span>
-                  <span className="px-2 py-0.5 rounded-lg bg-white/90 text-[#3E3A36] border border-black/5 font-extrabold">
-                    {safeSummary.netDebtor === '廖' ? '周周' : '廖廖'}
+                  <span className="px-2 py-0.5 rounded-lg bg-white/90 text-[#3E3A36] border border-black/5 font-extrabold flex items-center gap-1">
+                    {safeSummary.netDebtor === '廖' ? userB.displayName : userA.displayName}
                   </span>
                 </div>
                 <div className="text-3xl sm:text-4xl font-black tracking-tight text-rose-600 flex items-baseline gap-1.5 pt-1">
@@ -239,48 +248,66 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
 
       {/* 雙人代墊統計小卡 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* 廖廖代墊卡片 */}
+        {/* User A 代墊卡片 */}
         <div className="bg-white/80 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-[#EBE7DF] shadow-2xs flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-sky-100 text-sky-800 flex items-center justify-center text-xl shadow-xs font-black">
-              👦
-            </div>
-            <div>
-              <div className="text-[11px] font-bold text-[#8C8475]">廖廖 先墊總額</div>
+          <div className="flex items-center gap-3.5 min-w-0">
+            {userA.avatar ? (
+              <img
+                src={userA.avatar}
+                alt={userA.displayName}
+                referrerPolicy="no-referrer"
+                className="w-11 h-11 rounded-2xl object-cover border border-white shadow-xs shrink-0 ring-1 ring-sky-200"
+              />
+            ) : (
+              <div className="w-11 h-11 rounded-2xl bg-sky-100 text-sky-800 flex items-center justify-center text-xl shadow-xs font-black shrink-0">
+                {userA.iconEmoji}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold text-[#8C8475] truncate">{userA.displayName} 先墊總額</div>
               <div className="text-lg sm:text-xl font-black text-[#3E3A36] mt-0.5">
                 NT$ {(safeSummary.zhouOwesLiao || 0).toLocaleString()}
               </div>
-              <div className="text-[10px] text-sky-700 font-medium">
-                {(safeSummary.zhouOwesLiao || 0) > 0 ? `周周 需返還 $${(safeSummary.zhouOwesLiao || 0).toLocaleString()}` : '目前無待還'}
+              <div className="text-[10px] text-sky-700 font-medium truncate">
+                {(safeSummary.zhouOwesLiao || 0) > 0 ? `${userB.displayName} 需返還 $${(safeSummary.zhouOwesLiao || 0).toLocaleString()}` : '目前無待還'}
               </div>
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <span className="inline-block px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 text-[10px] font-bold border border-sky-200">
-              廖代付
+              {userA.shortName}代付
             </span>
           </div>
         </div>
 
-        {/* 周周代墊卡片 */}
+        {/* User B 代墊卡片 */}
         <div className="bg-white/80 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-[#EBE7DF] shadow-2xs flex items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-800 flex items-center justify-center text-xl shadow-xs font-black">
-              👧
-            </div>
-            <div>
-              <div className="text-[11px] font-bold text-[#8C8475]">周周 先墊總額</div>
+          <div className="flex items-center gap-3.5 min-w-0">
+            {userB.avatar ? (
+              <img
+                src={userB.avatar}
+                alt={userB.displayName}
+                referrerPolicy="no-referrer"
+                className="w-11 h-11 rounded-2xl object-cover border border-white shadow-xs shrink-0 ring-1 ring-rose-200"
+              />
+            ) : (
+              <div className="w-11 h-11 rounded-2xl bg-rose-100 text-rose-800 flex items-center justify-center text-xl shadow-xs font-black shrink-0">
+                {userB.iconEmoji}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold text-[#8C8475] truncate">{userB.displayName} 先墊總額</div>
               <div className="text-lg sm:text-xl font-black text-[#3E3A36] mt-0.5">
                 NT$ {(safeSummary.liaoOwesZhou || 0).toLocaleString()}
               </div>
-              <div className="text-[10px] text-rose-700 font-medium">
-                {(safeSummary.liaoOwesZhou || 0) > 0 ? `廖廖 需返還 $${(safeSummary.liaoOwesZhou || 0).toLocaleString()}` : '目前無待還'}
+              <div className="text-[10px] text-rose-700 font-medium truncate">
+                {(safeSummary.liaoOwesZhou || 0) > 0 ? `${userA.displayName} 需返還 $${(safeSummary.liaoOwesZhou || 0).toLocaleString()}` : '目前無待還'}
               </div>
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right shrink-0">
             <span className="inline-block px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[10px] font-bold border border-rose-200">
-              周代付
+              {userB.shortName}代付
             </span>
           </div>
         </div>
@@ -337,35 +364,35 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
                       {payerLabel}
                     </div>
 
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs sm:text-sm font-bold text-[#3E3A36] truncate">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                        <span className="text-xs sm:text-sm font-bold text-[#3E3A36] truncate max-w-[110px] min-[360px]:max-w-[150px] sm:max-w-[220px]" title={item.itemName || '未命名款項'}>
                           {item.itemName || '未命名款項'}
                         </span>
-                        <span className="px-2 py-0.5 rounded-md bg-white border border-[#E0DCD3] text-[10px] font-semibold text-[#7A7366]">
+                        <span className="px-2 py-0.5 rounded-md bg-white border border-[#E0DCD3] text-[10px] font-semibold text-[#7A7366] shrink-0 whitespace-nowrap">
                           {item.splitMode || 'AA平分'}
                         </span>
                         {isUnsettled ? (
-                          <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
+                          <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold shrink-0 whitespace-nowrap">
                             未結清
                           </span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-bold">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[9px] font-bold shrink-0 whitespace-nowrap">
                             已結清
                           </span>
                         )}
                       </div>
 
-                      <div className="text-[11px] text-[#8C8475] mt-0.5 flex items-center gap-2">
-                        <span>總額 ${(Number(totalAmt) || 0).toLocaleString()}</span>
-                        <span>•</span>
-                        <span className="font-semibold text-rose-700">
+                      <div className="text-[11px] text-[#8C8475] mt-0.5 flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                        <span className="shrink-0 whitespace-nowrap">總額 ${(Number(totalAmt) || 0).toLocaleString()}</span>
+                        <span className="shrink-0">•</span>
+                        <span className="font-semibold text-rose-700 shrink-0 whitespace-nowrap truncate max-w-[130px] min-[360px]:max-w-[170px] sm:max-w-none" title={`${debtorLabel} 需返還 $${(Number(debtorAmt) || 0).toLocaleString()}`}>
                           {debtorLabel} 需返還 ${(Number(debtorAmt) || 0).toLocaleString()}
                         </span>
                         {item.note && (
                           <>
-                            <span>•</span>
-                            <span className="truncate max-w-[120px] text-[#A09A8F]">📝 {item.note}</span>
+                            <span className="shrink-0">•</span>
+                            <span className="truncate max-w-[80px] min-[360px]:max-w-[120px] sm:max-w-[160px] text-[#A09A8F]" title={item.note}>📝 {item.note}</span>
                           </>
                         )}
                       </div>
