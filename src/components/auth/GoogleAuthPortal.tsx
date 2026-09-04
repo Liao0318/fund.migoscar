@@ -18,7 +18,10 @@ import {
   signInWithGooglePopup, 
   requestGoogleOAuthToken
 } from '../../utils/googleOAuthService';
-import { resolveInviteCodeOrToken } from '../../utils/partnerInvite';
+import { 
+  resolveInviteCodeOrToken, 
+  fetchInviteCodeOnline 
+} from '../../utils/partnerInvite';
 import { getUserCloudConfig } from '../../utils/userConfigService';
 
 interface GoogleAuthPortalProps {
@@ -37,13 +40,14 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
   // 伴侶邀請碼輸入與偵測狀態
   const [manualInviteCode, setManualInviteCode] = useState<string>('');
   const [detectedInvite, setDetectedInvite] = useState<PartnerInviteData | null>(null);
+  const [isValidatingCode, setIsValidatingCode] = useState<boolean>(false);
   const [inviteStatus, setInviteStatus] = useState<{
     valid: boolean;
     message: string;
     data: PartnerInviteData | null;
   } | null>(null);
 
-  const handleCodeChange = (code: string) => {
+  const handleCodeChange = async (code: string) => {
     setManualInviteCode(code);
     if (!code.trim()) {
       setInviteStatus(null);
@@ -52,38 +56,57 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
     }
     const clean = code.trim();
     const resolved = resolveInviteCodeOrToken(clean);
-    if (resolved) {
+    if (resolved && resolved.gasWebUrl && resolved.adminEmail) {
       setDetectedInvite(resolved);
       setInviteStatus({
         valid: true,
         message: `已成功識別伴侶【${resolved.adminName || '主管理員'}】的帳本邀請！`,
         data: resolved
       });
+      return;
+    }
+
+    // 若本地解析為回退預設值，嘗試線上從 Firestore 取得最新管理員綁定資料庫設定
+    const isCodePattern = /^BB-[A-Z0-9]{4,8}$/i.test(clean) || /^[A-Z0-9]{4,8}$/i.test(clean);
+    if (isCodePattern) {
+      const formattedCode = clean.toUpperCase().startsWith('BB-') ? clean.toUpperCase() : `BB-${clean.toUpperCase()}`;
+      setIsValidatingCode(true);
+      try {
+        const cloudResolved = await fetchInviteCodeOnline(formattedCode);
+        if (cloudResolved && cloudResolved.gasWebUrl) {
+          setDetectedInvite(cloudResolved);
+          setInviteStatus({
+            valid: true,
+            message: `已成功識別伴侶【${cloudResolved.adminName || '主管理員'}】的帳本邀請！`,
+            data: cloudResolved
+          });
+          setIsValidatingCode(false);
+          return;
+        }
+      } catch (e) {}
+      setIsValidatingCode(false);
+
+      const fallback: PartnerInviteData = resolved || {
+        inviteCode: formattedCode,
+        adminEmail: '',
+        adminName: '另一半',
+        gasWebUrl: '',
+        deploySheetUrl: '',
+        createdAt: new Date().toISOString()
+      };
+      setDetectedInvite(fallback);
+      setInviteStatus({
+        valid: true,
+        message: `已填妥邀請碼 ${formattedCode}，完成登入後將自動建立情侶配對！`,
+        data: fallback
+      });
     } else {
-      if (/^BB-[A-Z0-9]{4,8}$/i.test(clean) || /^[A-Z0-9]{4,8}$/i.test(clean)) {
-        const formattedCode = clean.toUpperCase().startsWith('BB-') ? clean.toUpperCase() : `BB-${clean.toUpperCase()}`;
-        const fallback: PartnerInviteData = {
-          inviteCode: formattedCode,
-          adminEmail: '',
-          adminName: '另一半',
-          gasWebUrl: '',
-          deploySheetUrl: '',
-          createdAt: new Date().toISOString()
-        };
-        setDetectedInvite(fallback);
-        setInviteStatus({
-          valid: true,
-          message: `已填妥邀請碼 ${formattedCode}，完成登入後將自動配對！`,
-          data: fallback
-        });
-      } else {
-        setDetectedInvite(null);
-        setInviteStatus({
-          valid: false,
-          message: '邀請碼格式不符（例如：BB-XXXX 或貼上專屬邀請連結）',
-          data: null
-        });
-      }
+      setDetectedInvite(null);
+      setInviteStatus({
+        valid: false,
+        message: '邀請碼格式不符（例如：BB-XXXX 或直接貼上專屬邀請連結）',
+        data: null
+      });
     }
   };
 

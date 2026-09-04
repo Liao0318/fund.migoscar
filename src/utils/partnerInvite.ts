@@ -1,4 +1,6 @@
 import { PartnerInviteData, CoupleBindingInfo } from '../types';
+import { db, isFirestoreAvailable } from './googleOAuthService';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 const REGISTRY_STORAGE_KEY = 'banban_invite_registry';
 const ACTIVE_INVITE_STORAGE_KEY = 'banban_active_invite';
@@ -42,7 +44,7 @@ export function decodeInvitePayload(token: string): PartnerInviteData | null {
     }
     const jsonStr = decodeURIComponent(atob(base64));
     const parsed = JSON.parse(jsonStr);
-    if (parsed && parsed.inviteCode) {
+    if (parsed && (parsed.inviteCode || parsed.adminEmail)) {
       return parsed as PartnerInviteData;
     }
     return null;
@@ -53,16 +55,31 @@ export function decodeInvitePayload(token: string): PartnerInviteData | null {
 }
 
 /**
- * 儲存邀請碼至本地註冊表
+ * 儲存邀請碼至本地註冊表，並同步至 Firestore 雲端（跨裝置支援）
  */
-export function saveActiveInviteCode(invite: PartnerInviteData): void {
+export async function saveActiveInviteCode(invite: PartnerInviteData): Promise<void> {
   try {
     localStorage.setItem(ACTIVE_INVITE_STORAGE_KEY, JSON.stringify(invite));
     const existing = getInviteRegistry();
     existing[invite.inviteCode.toUpperCase()] = invite;
     localStorage.setItem(REGISTRY_STORAGE_KEY, JSON.stringify(existing));
   } catch (e) {
-    console.error('Error saving active invite code', e);
+    console.error('Error saving active invite code locally', e);
+  }
+
+  // 雲端 Firestore 同步
+  if (isFirestoreAvailable() && db && invite.inviteCode) {
+    try {
+      const codeKey = invite.inviteCode.toUpperCase();
+      const inviteRef = doc(db, 'partner_invites', codeKey);
+      await setDoc(inviteRef, {
+        ...invite,
+        inviteCode: codeKey,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Firestore saveActiveInviteCode sync failed:', err);
+    }
   }
 }
 
@@ -95,18 +112,36 @@ export function getInviteRegistry(): Record<string, PartnerInviteData> {
 }
 
 /**
- * 儲存伴侶綁定資訊
+ * 儲存伴侶綁定資訊 (雙軌：本地 + Firestore)
  */
-export function savePartnerBindingInfo(info: CoupleBindingInfo): void {
+export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<void> {
   try {
     localStorage.setItem(PARTNER_BINDING_STORAGE_KEY, JSON.stringify(info));
   } catch (e) {
-    console.error('Error saving partner binding info', e);
+    console.error('Error saving partner binding info locally', e);
+  }
+
+  if (isFirestoreAvailable() && db) {
+    try {
+      const cleanAdmin = (info.adminEmail || '').trim().toLowerCase();
+      const cleanPartner = (info.partnerEmail || '').trim().toLowerCase();
+      
+      if (cleanAdmin) {
+        const adminBindRef = doc(db, 'couple_bindings', cleanAdmin);
+        await setDoc(adminBindRef, info, { merge: true });
+      }
+      if (cleanPartner) {
+        const partnerBindRef = doc(db, 'couple_bindings', cleanPartner);
+        await setDoc(partnerBindRef, info, { merge: true });
+      }
+    } catch (err) {
+      console.warn('Firestore savePartnerBindingInfo failed:', err);
+    }
   }
 }
 
 /**
- * 讀取伴侶綁定資訊
+ * 讀取伴侶綁定資訊 (本地快取)
  */
 export function getPartnerBindingInfo(): CoupleBindingInfo | null {
   try {
@@ -117,26 +152,60 @@ export function getPartnerBindingInfo(): CoupleBindingInfo | null {
 }
 
 /**
- * 解除伴侶綁定紀錄
+ * 從 Firestore 或本地讀取最新伴侶綁定資訊
  */
-export function removePartnerBinding(): void {
-  try {
-    localStorage.removeItem(PARTNER_BINDING_STORAGE_KEY);
-  } catch (e) {}
+export async function fetchPartnerBindingInfoOnline(email?: string): Promise<CoupleBindingInfo | null> {
+  const local = getPartnerBindingInfo();
+  if (!email) return local;
+  
+  const cleanEmail = email.trim().toLowerCase();
+  if (isFirestoreAvailable() && db) {
+    try {
+      const bindRef = doc(db, 'couple_bindings', cleanEmail);
+      const snap = await getDoc(bindRef);
+      if (snap.exists()) {
+        const data = snap.data() as CoupleBindingInfo;
+        if (data) {
+          savePartnerBindingInfo(data);
+          return data;
+        }
+      }
+    } catch (e) {}
+  }
+  return local;
 }
 
 /**
- * 根據邀請碼或 Token 搜尋邀請資訊
+ * 解除伴侶綁定紀錄
+ */
+export async function removePartnerBinding(email?: string): Promise<void> {
+  const cached = getPartnerBindingInfo();
+  try {
+    localStorage.removeItem(PARTNER_BINDING_STORAGE_KEY);
+  } catch (e) {}
+
+  if (isFirestoreAvailable() && db) {
+    try {
+      const adminEmail = (cached?.adminEmail || email || '').trim().toLowerCase();
+      const partnerEmail = (cached?.partnerEmail || '').trim().toLowerCase();
+      if (adminEmail) {
+        await deleteDoc(doc(db, 'couple_bindings', adminEmail));
+      }
+      if (partnerEmail) {
+        await deleteDoc(doc(db, 'couple_bindings', partnerEmail));
+      }
+    } catch (err) {}
+  }
+}
+
+/**
+ * 根據邀請碼或 Token 搜尋邀請資訊（同步解析本地與 Token）
  */
 export function resolveInviteCodeOrToken(input: string): PartnerInviteData | null {
   if (!input) return null;
   const clean = input.trim();
 
-  // 1. 若 input 本身為 Base64 Token
-  const fromToken = decodeInvitePayload(clean);
-  if (fromToken) return fromToken;
-
-  // 2. 若 input 包含 URL (例如 https://.../?invite=xxx 或 ?code=xxx)
+  // 1. 若 input 包含 URL (例如 https://.../?invite=xxx 或 #invite=xxx)
   try {
     if (clean.includes('invite=') || clean.includes('code=')) {
       const url = new URL(clean.startsWith('http') ? clean : `https://dummy.local/${clean}`);
@@ -152,9 +221,16 @@ export function resolveInviteCodeOrToken(input: string): PartnerInviteData | nul
     }
   } catch (e) {}
 
+  // 2. 若 input 本身為 Base64 Token
+  const fromToken = decodeInvitePayload(clean);
+  if (fromToken) return fromToken;
+
   // 3. 從本地註冊表比對
   const registry = getInviteRegistry();
-  const upper = clean.toUpperCase();
+  const upper = clean.toUpperCase().startsWith('BB-') ? clean.toUpperCase() : `BB-${clean.toUpperCase()}`;
+  if (registry[clean.toUpperCase()]) {
+    return registry[clean.toUpperCase()];
+  }
   if (registry[upper]) {
     return registry[upper];
   }
@@ -164,18 +240,18 @@ export function resolveInviteCodeOrToken(input: string): PartnerInviteData | nul
     const active = localStorage.getItem(ACTIVE_INVITE_STORAGE_KEY);
     if (active) {
       const parsed = JSON.parse(active);
-      if (parsed && parsed.inviteCode && parsed.inviteCode.toUpperCase() === upper) {
+      if (parsed && parsed.inviteCode && (parsed.inviteCode.toUpperCase() === clean.toUpperCase() || parsed.inviteCode.toUpperCase() === upper)) {
         return parsed;
       }
     }
   } catch (e) {}
 
-  // 5. 若格式符合 BB-XXXX 但在註冊表中尚未登錄 (跨裝置容錯)
+  // 5. 若格式符合 BB-XXXX 但在本地尚未登錄 (跨裝置短碼暫存回退)
   if (/^BB-[A-Z0-9]{4,8}$/i.test(upper)) {
     return {
       inviteCode: upper,
       adminEmail: '',
-      adminName: '主管理員',
+      adminName: '另一半',
       gasWebUrl: localStorage.getItem('muji_gas_web_url') || '',
       deploySheetUrl: localStorage.getItem('muji_deploy_sheet_url') || localStorage.getItem('muji_spreadsheet_url') || '',
       createdAt: new Date().toISOString()
@@ -183,6 +259,38 @@ export function resolveInviteCodeOrToken(input: string): PartnerInviteData | nul
   }
 
   return null;
+}
+
+/**
+ * 線上非同步解析邀請碼（優先查詢 Firestore 雲端資料庫，讓伴侶在全新裝置上輸入 6 碼短碼即可自動繼承 API 與試算表）
+ */
+export async function fetchInviteCodeOnline(input: string): Promise<PartnerInviteData | null> {
+  const localResolved = resolveInviteCodeOrToken(input);
+  if (localResolved && localResolved.gasWebUrl && localResolved.adminEmail) {
+    return localResolved;
+  }
+
+  const clean = input.trim().toUpperCase();
+  const formattedCode = clean.startsWith('BB-') ? clean : `BB-${clean}`;
+
+  if (isFirestoreAvailable() && db) {
+    try {
+      const inviteRef = doc(db, 'partner_invites', formattedCode);
+      const snap = await getDoc(inviteRef);
+      if (snap.exists()) {
+        const cloudInvite = snap.data() as PartnerInviteData;
+        if (cloudInvite && cloudInvite.inviteCode) {
+          // 快取至本地
+          saveActiveInviteCode(cloudInvite);
+          return cloudInvite;
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore fetchInviteCodeOnline failed:', err);
+    }
+  }
+
+  return localResolved;
 }
 
 /**

@@ -116,6 +116,8 @@ import {
   getActiveInviteCode,
   getPartnerBindingInfo,
   savePartnerBindingInfo,
+  fetchPartnerBindingInfoOnline,
+  fetchInviteCodeOnline,
   removePartnerBinding,
   createShareableInviteCard,
   resolveInviteCodeOrToken
@@ -605,8 +607,49 @@ export default function App() {
       localStorage.setItem('banban_is_guest_mode', 'false');
     } catch (e) {}
 
-    // 1. 若網址自帶伴侶邀請碼或已傳入邀請資訊，直接執行伴侶自動綁定
+    // 1. 若登入時自帶伴侶邀請碼或已傳入邀請資訊
     if (partnerInvite && partnerInvite.inviteCode) {
+      const inviteAdminEmail = (partnerInvite.adminEmail || '').trim().toLowerCase();
+      
+      // 🛡️ 防自我配對保護：若登入者自身即為該邀請碼的發起管理者
+      if (cleanEmail && inviteAdminEmail && cleanEmail === inviteAdminEmail) {
+        const activeGas = partnerInvite.gasWebUrl || localStorage.getItem('muji_gas_web_url') || gasWebUrl || '';
+        const activeSheet = partnerInvite.deploySheetUrl || localStorage.getItem('muji_deploy_sheet_url') || deploySheetUrl || '';
+        
+        if (activeGas) {
+          setGasWebUrl(activeGas);
+          try { localStorage.setItem('muji_gas_web_url', activeGas); } catch (e) {}
+        }
+        if (activeSheet) {
+          setDeploySheetUrl(activeSheet);
+          try { localStorage.setItem('muji_deploy_sheet_url', activeSheet); } catch (e) {}
+        }
+
+        const adminUser: AuthUser = {
+          ...cleanUser,
+          userRole: 'admin',
+          role: 'admin'
+        };
+        setCurrentUser(adminUser);
+        saveUserCloudConfig(user.email, {
+          email: user.email,
+          name: user.name,
+          nickname: boundNickname || user.nickname,
+          gasWebUrl: activeGas,
+          deploySheetUrl: activeSheet,
+          inviteCode: partnerInvite.inviteCode
+        });
+
+        const displayWelcomeName = boundNickname || user.name;
+        showToast(`👑 歡迎回來，${displayWelcomeName}！已載入您的主管理員帳本與 API 資料庫`, 'success');
+        try {
+          localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
+          localStorage.setItem('banban_is_sandbox_mode', 'false');
+        } catch (e) {}
+        return;
+      }
+
+      // 💖 真正伴侶登入配對流程
       const activeGas = partnerInvite.gasWebUrl || localStorage.getItem('muji_gas_web_url') || gasWebUrl || '';
       const activeSheet = partnerInvite.deploySheetUrl || localStorage.getItem('muji_deploy_sheet_url') || deploySheetUrl || '';
       
@@ -629,20 +672,21 @@ export default function App() {
         deploySheetUrl: activeSheet,
         boundAt: new Date().toISOString()
       };
-      savePartnerBindingInfo(bindingData);
+      await savePartnerBindingInfo(bindingData);
       setPartnerBindingInfo(bindingData);
 
       const enhancedPartner: AuthUser = {
         ...user,
         nickname: boundNickname || user.nickname,
         userRole: 'partner',
+        role: user.role === '廖' ? '廖' : '周',
         adminEmail: partnerInvite.adminEmail,
         adminName: partnerInvite.adminName,
         inviteCode: partnerInvite.inviteCode
       };
       setCurrentUser(enhancedPartner);
 
-      saveUserCloudConfig(user.email, {
+      await saveUserCloudConfig(user.email, {
         email: user.email,
         name: user.name,
         nickname: boundNickname || user.nickname,
@@ -652,7 +696,7 @@ export default function App() {
       });
 
       const displayWelcomeName = boundNickname || user.name;
-      showToast(`💖 歡迎 ${displayWelcomeName}！已自動加入伴侶帳本 (${partnerInvite.adminName || '管理員'})`, 'success');
+      showToast(`💖 歡迎 ${displayWelcomeName}！已成功配對並同步伴侶帳本 (${partnerInvite.adminName || '管理員'})`, 'success');
       try {
         localStorage.setItem('banban_auth_user', JSON.stringify(enhancedPartner));
         localStorage.setItem('banban_is_sandbox_mode', 'false');
@@ -660,26 +704,39 @@ export default function App() {
       return;
     }
 
-    // 2. 檢查先前是否已曾綁定為伴侶
-    const existingBinding = getPartnerBindingInfo();
-    if (existingBinding && existingBinding.partnerEmail && existingBinding.partnerEmail.toLowerCase() === user.email.toLowerCase()) {
-      if (existingBinding.gasWebUrl) {
-        setGasWebUrl(existingBinding.gasWebUrl);
-        try { localStorage.setItem('muji_gas_web_url', existingBinding.gasWebUrl); } catch (e) {}
+    // 2. 檢查雲端/本地是否已有伴侶配對紀錄
+    try {
+      const existingBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
+      if (existingBinding && existingBinding.partnerEmail && existingBinding.partnerEmail.toLowerCase() === cleanEmail) {
+        if (existingBinding.gasWebUrl) {
+          setGasWebUrl(existingBinding.gasWebUrl);
+          try { localStorage.setItem('muji_gas_web_url', existingBinding.gasWebUrl); } catch (e) {}
+        }
+        if (existingBinding.deploySheetUrl) {
+          setDeploySheetUrl(existingBinding.deploySheetUrl);
+          try { localStorage.setItem('muji_deploy_sheet_url', existingBinding.deploySheetUrl); } catch (e) {}
+        }
+        setPartnerBindingInfo(existingBinding);
+
+        const enhancedPartner: AuthUser = {
+          ...cleanUser,
+          userRole: 'partner',
+          role: cleanUser.role === '廖' ? '廖' : '周',
+          adminEmail: existingBinding.adminEmail,
+          adminName: existingBinding.adminName,
+          inviteCode: existingBinding.inviteCode
+        };
+        setCurrentUser(enhancedPartner);
+
+        const displayWelcomeName = boundNickname || user.name;
+        showToast(`💖 歡迎回來，${displayWelcomeName}！已載入伴侶帳本 (${existingBinding.adminName || '管理員'})`, 'success');
+        try {
+          localStorage.setItem('banban_auth_user', JSON.stringify(enhancedPartner));
+          localStorage.setItem('banban_is_sandbox_mode', 'false');
+        } catch (e) {}
+        return;
       }
-      if (existingBinding.deploySheetUrl) {
-        setDeploySheetUrl(existingBinding.deploySheetUrl);
-        try { localStorage.setItem('muji_deploy_sheet_url', existingBinding.deploySheetUrl); } catch (e) {}
-      }
-      setPartnerBindingInfo(existingBinding);
-      const displayWelcomeName = boundNickname || user.name;
-      showToast(`💖 歡迎回來，${displayWelcomeName}！已載入伴侶帳本 (${existingBinding.adminName || '管理員'})`, 'success');
-      try {
-        localStorage.setItem('banban_auth_user', JSON.stringify({ ...user, nickname: boundNickname || user.nickname, userRole: 'partner' }));
-        localStorage.setItem('banban_is_sandbox_mode', 'false');
-      } catch (e) {}
-      return;
-    }
+    } catch (e) {}
 
     // 3. 檢查先前是否曾建立過 API 資料庫 (本地或 Firestore 雲端)
     let activeGas = initialCloudGasUrl || gasWebUrl || localStorage.getItem('muji_gas_web_url') || '';
@@ -747,7 +804,7 @@ export default function App() {
     }
 
     try {
-      localStorage.setItem('banban_auth_user', JSON.stringify(user));
+      localStorage.setItem('banban_auth_user', JSON.stringify({ ...cleanUser, userRole: 'admin', role: 'admin' }));
       localStorage.setItem('banban_is_sandbox_mode', 'false');
     } catch (e) {}
   };
@@ -756,9 +813,29 @@ export default function App() {
    * 處理透過引導彈窗輸入伴侶邀請碼
    */
   const handleBindPartnerInvite = async (inviteInput: string): Promise<{ success: boolean; message?: string }> => {
-    const resolved = resolveInviteCodeOrToken(inviteInput);
+    let resolved = resolveInviteCodeOrToken(inviteInput);
+    if (!resolved || !resolved.gasWebUrl) {
+      try {
+        const cloudResolved = await fetchInviteCodeOnline(inviteInput);
+        if (cloudResolved) {
+          resolved = cloudResolved;
+        }
+      } catch (e) {}
+    }
+
     if (!resolved) {
       return { success: false, message: '找不到符合的邀請碼，請確認 6 碼代碼或完整連結是否正確' };
+    }
+
+    const currentEmail = (currentUser?.email || '').trim().toLowerCase();
+    const adminEmail = (resolved.adminEmail || '').trim().toLowerCase();
+
+    // 🛡️ 防自我配對保護
+    if (currentEmail && adminEmail && currentEmail === adminEmail) {
+      return { 
+        success: false, 
+        message: '此邀請碼為您自身發出的管理員邀請碼，您已具有主管理員身份，無需進行自我配對。' 
+      };
     }
 
     const activeGas = resolved.gasWebUrl || '';
@@ -784,13 +861,14 @@ export default function App() {
       boundAt: new Date().toISOString()
     };
 
-    savePartnerBindingInfo(bindingData);
+    await savePartnerBindingInfo(bindingData);
     setPartnerBindingInfo(bindingData);
 
     if (currentUser) {
       const updatedUser: AuthUser = {
         ...currentUser,
         userRole: 'partner',
+        role: currentUser.role === '廖' ? '廖' : '周',
         adminEmail: resolved.adminEmail,
         adminName: resolved.adminName,
         inviteCode: resolved.inviteCode
