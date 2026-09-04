@@ -1012,7 +1012,7 @@ export default function App() {
     setCurrentUser(null);
     setPartnerBindingInfo(null);
     setIsSandboxMode(false);
-    setIsGuestMode(true);
+    setIsGuestMode(false);
     setIsUnifiedSettingsModalOpen(false);
     setGasWebUrl('');
     setDeploySheetUrl('');
@@ -1035,12 +1035,12 @@ export default function App() {
       localStorage.removeItem('muji_deploy_sheet_url');
       localStorage.removeItem('muji_ledger_data');
       localStorage.setItem('banban_is_sandbox_mode', 'false');
-      localStorage.setItem('banban_is_guest_mode', 'true');
+      localStorage.setItem('banban_is_guest_mode', 'false');
       window.dispatchEvent(new CustomEvent('travel-data-updated', {
         detail: { trips: [], expenses: [], wishlist: [] }
       }));
     } catch (e) {}
-    showToast('已登出 Google 帳號，進入訪客模式', 'info');
+    showToast('已安全登出 Google 帳號，返回登入主畫面', 'info');
   };
 
   const handleSwitchAccount = () => {
