@@ -87,6 +87,7 @@ import { CurrencyCalculatorModal } from './components/modals/CurrencyCalculatorM
 import { AppNotificationModal } from './components/modals/AppNotificationModal';
 import { UnifiedDatabaseModal } from './components/modals/UnifiedDatabaseModal';
 import { InitialEmptyEntryFrame } from './components/common/InitialEmptyEntryFrame';
+import { FullScreenSyncOverlay } from './components/common/FullScreenSyncOverlay';
 import { DataBackupModal } from './components/modals/DataBackupModal';
 import { PwaInstallModal } from './components/modals/PwaInstallModal';
 import { UnifiedSettingsModal } from './components/modals/UnifiedSettingsModal';
@@ -567,6 +568,14 @@ export default function App() {
   const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
   const [isUnifiedSettingsModalOpen, setIsUnifiedSettingsModalOpen] = useState(false);
 
+  // 🚀 全屏同步中動畫狀態 (登入與雲端資料庫同步專用，取代右下角 Toast)
+  const [isInitialSyncing, setIsInitialSyncing] = useState<boolean>(false);
+  const [syncStatusText, setSyncStatusText] = useState<string>('正在同步雲端帳本資料...');
+  const [syncProgressStep, setSyncProgressStep] = useState<number>(1);
+  const [syncingUserEmail, setSyncingUserEmail] = useState<string>('');
+  const [syncingUserName, setSyncingUserName] = useState<string>('');
+  const [syncingUserAvatar, setSyncingUserAvatar] = useState<string>('');
+
   // 💌 伴侶邀請代碼與情侶雙向綁定狀態
   const [currentInviteCode, setCurrentInviteCode] = useState<string>(() => {
     return getActiveInviteCode()?.inviteCode || generateRandomInviteCode();
@@ -723,61 +732,130 @@ export default function App() {
     initialCloudGasUrl?: string,
     initialCloudSheetUrl?: string
   ) => {
-    const cleanEmail = (user.email || '').trim().toLowerCase();
-    const previousEmail = (currentUser?.email || '').trim().toLowerCase();
+    // 🚀 啟動全屏同步中動畫，設定即時帳戶資訊
+    setIsInitialSyncing(true);
+    setSyncProgressStep(1);
+    setSyncStatusText('正在驗證 Google 帳號身分與雲端配對...');
+    setSyncingUserEmail(user.email || '');
+    setSyncingUserName(user.name || '');
+    setSyncingUserAvatar(user.avatar || user.picture || '');
 
-    // 🛡️ 登入前保護：先擷取此裝置目前現存的所有可能資料庫設定備援，避免被清除抹除
-    const cachedDeviceGas = (localStorage.getItem('muji_gas_web_url') || '').trim();
-    const cachedDeviceSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
-    const cachedPerUserGas = cleanEmail ? (localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) || '').trim() : '';
-    const cachedPerUserSheet = cleanEmail ? (localStorage.getItem(`muji_sheet_url_${cleanEmail}`) || '').trim() : '';
-
-    // 🛡️ 徹底隔離：每次 Google 帳號登入或切換時，先清空所有記憶體中的記帳與資料庫狀態，避免舊帳號數據滲漏
-    setRecords([]);
-    setSplitItems([]);
-    setShoppingItems([]);
-    setGasWebUrl('');
-    setDeploySheetUrl('');
-    setPartnerBindingInfo(null);
-
-    // 清除舊有的未依帳號隔離之業務資料暫存，避免跨帳號交叉感染
     try {
-      localStorage.removeItem('muji_ledger_data');
-      localStorage.removeItem('banban_split_records');
-      localStorage.removeItem('banban_shopping_items');
-      localStorage.removeItem('banban_partner_binding');
-      window.dispatchEvent(new CustomEvent('travel-data-updated', {
-        detail: { trips: [], expenses: [], wishlist: [] }
-      }));
-    } catch (e) {}
+      const cleanEmail = (user.email || '').trim().toLowerCase();
+      const previousEmail = (currentUser?.email || '').trim().toLowerCase();
 
-    let boundNickname = user.nickname || '';
-    if (!boundNickname && cleanEmail) {
+      // 🛡️ 登入前保護：先擷取此裝置目前現存的所有可能資料庫設定備援，避免被清除抹除
+      const cachedDeviceGas = (localStorage.getItem('muji_gas_web_url') || '').trim();
+      const cachedDeviceSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
+      const cachedPerUserGas = cleanEmail ? (localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) || '').trim() : '';
+      const cachedPerUserSheet = cleanEmail ? (localStorage.getItem(`muji_sheet_url_${cleanEmail}`) || '').trim() : '';
+
+      // 🛡️ 徹底隔離：每次 Google 帳號登入或切換時，先清空所有記憶體中的記帳與資料庫狀態，避免舊帳號數據滲漏
+      setRecords([]);
+      setSplitItems([]);
+      setShoppingItems([]);
+      setGasWebUrl('');
+      setDeploySheetUrl('');
+      setPartnerBindingInfo(null);
+
+      // 清除舊有的未依帳號隔離之業務資料暫存，避免跨帳號交叉感染
       try {
-        boundNickname = localStorage.getItem(`banban_user_nickname_${cleanEmail}`) || '';
+        localStorage.removeItem('muji_ledger_data');
+        localStorage.removeItem('banban_split_records');
+        localStorage.removeItem('banban_shopping_items');
+        localStorage.removeItem('banban_partner_binding');
+        window.dispatchEvent(new CustomEvent('travel-data-updated', {
+          detail: { trips: [], expenses: [], wishlist: [] }
+        }));
       } catch (e) {}
-    }
 
-    const cleanUser: AuthUser = {
-      ...user,
-      id: cleanEmail || user.email || user.id,
-      nickname: boundNickname || user.nickname
-    };
-    setCurrentUser(cleanUser);
-    setIsSandboxMode(false);
-    setIsGuestMode(false);
-    try {
-      localStorage.setItem('banban_is_guest_mode', 'false');
-      localStorage.setItem('banban_is_sandbox_mode', 'false');
-      localStorage.setItem('banban_active_system_env', 'prod');
-    } catch (e) {}
+      let boundNickname = user.nickname || '';
+      if (!boundNickname && cleanEmail) {
+        try {
+          boundNickname = localStorage.getItem(`banban_user_nickname_${cleanEmail}`) || '';
+        } catch (e) {}
+      }
 
-    // 1. 若登入時自帶伴侶邀請碼或已傳入邀請資訊 (例如點擊分享連結直接帶入)
-    if (partnerInvite && partnerInvite.inviteCode) {
-      const inviteAdminEmail = (partnerInvite.adminEmail || '').trim().toLowerCase();
-      
-      // 🛡️ 防自我配對保護：若登入者自身即為該邀請碼的發起管理者
-      if (cleanEmail && inviteAdminEmail && cleanEmail === inviteAdminEmail) {
+      const cleanUser: AuthUser = {
+        ...user,
+        id: cleanEmail || user.email || user.id,
+        nickname: boundNickname || user.nickname
+      };
+      setCurrentUser(cleanUser);
+      setIsSandboxMode(false);
+      setIsGuestMode(false);
+      try {
+        localStorage.setItem('banban_is_guest_mode', 'false');
+        localStorage.setItem('banban_is_sandbox_mode', 'false');
+        localStorage.setItem('banban_active_system_env', 'prod');
+      } catch (e) {}
+
+      setSyncProgressStep(2);
+      setSyncStatusText('正在連線 Google 試算表與雲端資料庫...');
+
+      // 1. 若登入時自帶伴侶邀請碼或已傳入邀請資訊 (例如點擊分享連結直接帶入)
+      if (partnerInvite && partnerInvite.inviteCode) {
+        const inviteAdminEmail = (partnerInvite.adminEmail || '').trim().toLowerCase();
+        
+        // 🛡️ 防自我配對保護：若登入者自身即為該邀請碼的發起管理者
+        if (cleanEmail && inviteAdminEmail && cleanEmail === inviteAdminEmail) {
+          const activeGas = partnerInvite.gasWebUrl || '';
+          const activeSheet = partnerInvite.deploySheetUrl || '';
+          
+          if (activeGas) {
+            setGasWebUrl(activeGas);
+            try { 
+              localStorage.setItem('muji_gas_web_url', activeGas);
+              localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+            } catch (e) {}
+          }
+          if (activeSheet) {
+            setDeploySheetUrl(activeSheet);
+            try { 
+              localStorage.setItem('muji_sheet_url', activeSheet);
+              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+            } catch (e) {}
+          }
+
+          const adminUser: AuthUser = {
+            ...cleanUser,
+            userRole: 'admin',
+            role: 'admin'
+          };
+          setCurrentUser(adminUser);
+          saveUserCloudConfig(user.email, {
+            email: user.email,
+            name: user.name,
+            nickname: boundNickname || user.nickname,
+            gasWebUrl: activeGas,
+            deploySheetUrl: activeSheet,
+            inviteCode: partnerInvite.inviteCode
+          });
+
+          const displayWelcomeName = boundNickname || user.name;
+          try {
+            localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
+            localStorage.setItem('banban_is_sandbox_mode', 'false');
+          } catch (e) {}
+          if (activeGas) {
+            setSyncProgressStep(3);
+            setSyncStatusText(`正在同步管理員帳本資料庫 (${displayWelcomeName})...`);
+            await Promise.allSettled([
+              fetchDashboardData(false, false),
+              fetchShoppingData(false),
+              fetchSplitData(true),
+              fetchTravelData(true)
+            ]);
+          }
+          setSyncProgressStep(4);
+          setSyncStatusText(`✨ 歡迎回來，${displayWelcomeName}！已載入主管理員帳本`);
+          await new Promise(res => setTimeout(res, 600));
+          setIsInitialSyncing(false);
+          setIsCheckingCloudConfig(false);
+          return;
+        }
+
+        // 💖 真正伴侶登入配對流程
         const activeGas = partnerInvite.gasWebUrl || '';
         const activeSheet = partnerInvite.deploySheetUrl || '';
         
@@ -796,13 +874,32 @@ export default function App() {
           } catch (e) {}
         }
 
-        const adminUser: AuthUser = {
-          ...cleanUser,
-          userRole: 'admin',
-          role: 'admin'
+        const bindingData: CoupleBindingInfo = {
+          adminEmail: partnerInvite.adminEmail || '',
+          adminName: partnerInvite.adminName || '主管理員',
+          partnerEmail: user.email,
+          partnerName: user.name,
+          inviteCode: partnerInvite.inviteCode,
+          gasWebUrl: activeGas,
+          deploySheetUrl: activeSheet,
+          boundAt: new Date().toISOString()
         };
-        setCurrentUser(adminUser);
-        saveUserCloudConfig(user.email, {
+        await savePartnerBindingInfo(bindingData);
+        setPartnerBindingInfo(bindingData);
+
+        const enhancedPartner: AuthUser = {
+          ...cleanUser,
+          id: cleanEmail || cleanUser.id,
+          nickname: boundNickname || user.nickname,
+          userRole: 'partner',
+          role: user.role || (user.name ? user.name.charAt(0) : '伴'),
+          adminEmail: partnerInvite.adminEmail,
+          adminName: partnerInvite.adminName,
+          inviteCode: partnerInvite.inviteCode
+        };
+        setCurrentUser(enhancedPartner);
+
+        await saveUserCloudConfig(user.email, {
           email: user.email,
           name: user.name,
           nickname: boundNickname || user.nickname,
@@ -812,304 +909,266 @@ export default function App() {
         });
 
         const displayWelcomeName = boundNickname || user.name;
-        showToast(`👑 歡迎回來，${displayWelcomeName}！已載入您的主管理員帳本與 API 資料庫`, 'success');
-        try {
-          localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
-          localStorage.setItem('banban_is_sandbox_mode', 'false');
-        } catch (e) {}
-        if (activeGas) {
-          fetchDashboardData(false, false);
-          fetchShoppingData(false);
-          fetchSplitData(true);
-          fetchTravelData(true);
-        }
-        return;
-      }
-
-      // 💖 真正伴侶登入配對流程
-      const activeGas = partnerInvite.gasWebUrl || '';
-      const activeSheet = partnerInvite.deploySheetUrl || '';
-      
-      if (activeGas) {
-        setGasWebUrl(activeGas);
-        try { 
-          localStorage.setItem('muji_gas_web_url', activeGas);
-          localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
-        } catch (e) {}
-      }
-      if (activeSheet) {
-        setDeploySheetUrl(activeSheet);
-        try { 
-          localStorage.setItem('muji_sheet_url', activeSheet);
-          localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
-        } catch (e) {}
-      }
-
-      const bindingData: CoupleBindingInfo = {
-        adminEmail: partnerInvite.adminEmail || '',
-        adminName: partnerInvite.adminName || '主管理員',
-        partnerEmail: user.email,
-        partnerName: user.name,
-        inviteCode: partnerInvite.inviteCode,
-        gasWebUrl: activeGas,
-        deploySheetUrl: activeSheet,
-        boundAt: new Date().toISOString()
-      };
-      await savePartnerBindingInfo(bindingData);
-      setPartnerBindingInfo(bindingData);
-
-      const enhancedPartner: AuthUser = {
-        ...cleanUser,
-        id: cleanEmail || cleanUser.id,
-        nickname: boundNickname || user.nickname,
-        userRole: 'partner',
-        role: user.role || (user.name ? user.name.charAt(0) : '伴'),
-        adminEmail: partnerInvite.adminEmail,
-        adminName: partnerInvite.adminName,
-        inviteCode: partnerInvite.inviteCode
-      };
-      setCurrentUser(enhancedPartner);
-
-      await saveUserCloudConfig(user.email, {
-        email: user.email,
-        name: user.name,
-        nickname: boundNickname || user.nickname,
-        gasWebUrl: activeGas,
-        deploySheetUrl: activeSheet,
-        inviteCode: partnerInvite.inviteCode
-      });
-
-      const displayWelcomeName = boundNickname || user.name;
-      showToast(`💖 歡迎 ${displayWelcomeName}！已成功配對並同步伴侶帳本 (${partnerInvite.adminName || '管理員'})`, 'success');
-      try {
-        localStorage.setItem('banban_auth_user', JSON.stringify(enhancedPartner));
-        localStorage.setItem('banban_is_sandbox_mode', 'false');
-      } catch (e) {}
-      if (activeGas) {
-        fetchDashboardData(false, false);
-        fetchShoppingData(false);
-        fetchSplitData(true);
-        fetchTravelData(true);
-      }
-      return;
-    }
-
-    // 2. 檢查雲端是否已有伴侶配對紀錄 (另一半發起邀請並已綁定此 Google 帳號)
-    try {
-      const existingBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
-      if (existingBinding && existingBinding.partnerEmail && existingBinding.partnerEmail.toLowerCase() === cleanEmail) {
-        if (existingBinding.gasWebUrl) {
-          setGasWebUrl(existingBinding.gasWebUrl);
-          try { 
-            localStorage.setItem('muji_gas_web_url', existingBinding.gasWebUrl);
-            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, existingBinding.gasWebUrl);
-          } catch (e) {}
-        }
-        if (existingBinding.deploySheetUrl) {
-          setDeploySheetUrl(existingBinding.deploySheetUrl);
-          try { 
-            localStorage.setItem('muji_sheet_url', existingBinding.deploySheetUrl);
-            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, existingBinding.deploySheetUrl);
-          } catch (e) {}
-        }
-        setPartnerBindingInfo(existingBinding);
-
-        const enhancedPartner: AuthUser = {
-          ...cleanUser,
-          userRole: 'partner',
-          role: cleanUser.role || (cleanUser.name ? cleanUser.name.charAt(0) : '伴'),
-          adminEmail: existingBinding.adminEmail,
-          adminName: existingBinding.adminName,
-          inviteCode: existingBinding.inviteCode
-        };
-        setCurrentUser(enhancedPartner);
-
-        const displayWelcomeName = boundNickname || user.name;
-        showToast(`💖 歡迎回來，${displayWelcomeName}！已載入伴侶帳本 (${existingBinding.adminName || '管理員'})`, 'success');
         try {
           localStorage.setItem('banban_auth_user', JSON.stringify(enhancedPartner));
           localStorage.setItem('banban_is_sandbox_mode', 'false');
         } catch (e) {}
-        if (existingBinding.gasWebUrl) {
-          fetchDashboardData(false, false);
-          fetchShoppingData(false);
-          fetchSplitData(true);
-          fetchTravelData(true);
+        if (activeGas) {
+          setSyncProgressStep(3);
+          setSyncStatusText(`正在同步伴侶帳本與分帳明細 (${partnerInvite.adminName || '管理員'})...`);
+          await Promise.allSettled([
+            fetchDashboardData(false, false),
+            fetchShoppingData(false),
+            fetchSplitData(true),
+            fetchTravelData(true)
+          ]);
         }
+        setSyncProgressStep(4);
+        setSyncStatusText(`✨ 歡迎 ${displayWelcomeName}！已成功配對並同步伴侶帳本`);
+        await new Promise(res => setTimeout(res, 600));
+        setIsInitialSyncing(false);
+        setIsCheckingCloudConfig(false);
         return;
       }
-    } catch (e) {}
 
-    // 3. 檢查此帳號先前是否曾建立過 API 資料庫 (主管理員) 或同裝置曾綁定資料庫
-    let activeGas = initialCloudGasUrl || cachedPerUserGas || '';
-    let activeSheet = initialCloudSheetUrl || cachedPerUserSheet || '';
-
-    // 若本地專屬尚未取得，嘗試載入本機既有裝置設定（避免同電腦切換或登出後重登變新帳戶）
-    if (!activeGas && cachedDeviceGas && cachedDeviceGas.startsWith('http')) {
-      activeGas = cachedDeviceGas;
-      activeSheet = cachedDeviceSheet || '';
-    }
-
-    try {
-      const cloudConfig = await getUserCloudConfig(user.email);
-      if (cloudConfig) {
-        if (cloudConfig.nickname && !boundNickname) {
-          boundNickname = cloudConfig.nickname;
-          cleanUser.nickname = boundNickname;
-          setCurrentUser({ ...cleanUser, nickname: boundNickname });
-          if (cleanEmail) {
-            try { localStorage.setItem(`banban_user_nickname_${cleanEmail}`, boundNickname); } catch (e) {}
-          }
-        }
-
-        // 🛡️ 雲端 gasWebUrl 載入校驗：確保使用者換機登入時直接載入自己綁定的資料庫
-        if (cloudConfig.gasWebUrl && cloudConfig.gasWebUrl.startsWith('http')) {
-          activeGas = cloudConfig.gasWebUrl;
-          activeSheet = cloudConfig.deploySheetUrl || activeSheet || '';
-        }
-        if (cloudConfig.inviteCode) {
-          setCurrentInviteCode(cloudConfig.inviteCode);
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to retrieve user cloud config on login:', err);
-    }
-
-    // 🛡️ 雙重保險備援 1：向 Firestore 情侶綁定紀錄反查此 Email 是否已配對或本身已綁定資料庫
-    if (!activeGas && cleanEmail) {
+      // 2. 檢查雲端是否已有伴侶配對紀錄 (另一半發起邀請並已綁定此 Google 帳號)
       try {
-        const partnerBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
-        if (partnerBinding && partnerBinding.gasWebUrl && partnerBinding.gasWebUrl.startsWith('http')) {
-          activeGas = partnerBinding.gasWebUrl;
-          activeSheet = partnerBinding.deploySheetUrl || activeSheet || '';
-          setPartnerBindingInfo(partnerBinding);
+        const existingBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
+        if (existingBinding && existingBinding.partnerEmail && existingBinding.partnerEmail.toLowerCase() === cleanEmail) {
+          if (existingBinding.gasWebUrl) {
+            setGasWebUrl(existingBinding.gasWebUrl);
+            try { 
+              localStorage.setItem('muji_gas_web_url', existingBinding.gasWebUrl);
+              localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, existingBinding.gasWebUrl);
+            } catch (e) {}
+          }
+          if (existingBinding.deploySheetUrl) {
+            setDeploySheetUrl(existingBinding.deploySheetUrl);
+            try { 
+              localStorage.setItem('muji_sheet_url', existingBinding.deploySheetUrl);
+              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, existingBinding.deploySheetUrl);
+            } catch (e) {}
+          }
+          setPartnerBindingInfo(existingBinding);
+
+          const enhancedPartner: AuthUser = {
+            ...cleanUser,
+            userRole: 'partner',
+            role: cleanUser.role || (cleanUser.name ? cleanUser.name.charAt(0) : '伴'),
+            adminEmail: existingBinding.adminEmail,
+            adminName: existingBinding.adminName,
+            inviteCode: existingBinding.inviteCode
+          };
+          setCurrentUser(enhancedPartner);
+
+          const displayWelcomeName = boundNickname || user.name;
+          try {
+            localStorage.setItem('banban_auth_user', JSON.stringify(enhancedPartner));
+            localStorage.setItem('banban_is_sandbox_mode', 'false');
+          } catch (e) {}
+          if (existingBinding.gasWebUrl) {
+            setSyncProgressStep(3);
+            setSyncStatusText(`正在載入伴侶帳本資料 (${existingBinding.adminName || '管理員'})...`);
+            await Promise.allSettled([
+              fetchDashboardData(false, false),
+              fetchShoppingData(false),
+              fetchSplitData(true),
+              fetchTravelData(true)
+            ]);
+          }
+          setSyncProgressStep(4);
+          setSyncStatusText(`✨ 歡迎回來，${displayWelcomeName}！已載入伴侶帳本`);
+          await new Promise(res => setTimeout(res, 600));
+          setIsInitialSyncing(false);
+          setIsCheckingCloudConfig(false);
+          return;
         }
       } catch (e) {}
-    }
 
-    // 🛡️ 雙重保險備援 2：向邀請碼註冊表與雲端反查此 Email 是否曾建立過專屬邀請與資料庫
-    if (!activeGas && cleanEmail) {
+      // 3. 檢查此帳號先前是否曾建立過 API 資料庫 (主管理員) 或同裝置曾綁定資料庫
+      let activeGas = initialCloudGasUrl || cachedPerUserGas || '';
+      let activeSheet = initialCloudSheetUrl || cachedPerUserSheet || '';
+
+      // 若本地專屬尚未取得，嘗試載入本機既有裝置設定（避免同電腦切換或登出後重登變新帳戶）
+      if (!activeGas && cachedDeviceGas && cachedDeviceGas.startsWith('http')) {
+        activeGas = cachedDeviceGas;
+        activeSheet = cachedDeviceSheet || '';
+      }
+
       try {
-        const activeInvite = getActiveInviteCode();
-        if (activeInvite && activeInvite.adminEmail?.toLowerCase() === cleanEmail && activeInvite.gasWebUrl && activeInvite.gasWebUrl.startsWith('http')) {
-          activeGas = activeInvite.gasWebUrl;
-          activeSheet = activeInvite.deploySheetUrl || activeSheet || '';
-          if (activeInvite.inviteCode) {
-            setCurrentInviteCode(activeInvite.inviteCode);
-          }
-        } else {
-          const onlineInvite = await fetchInviteCodeOnline(cleanEmail);
-          if (onlineInvite && onlineInvite.gasWebUrl && onlineInvite.gasWebUrl.startsWith('http')) {
-            activeGas = onlineInvite.gasWebUrl;
-            activeSheet = onlineInvite.deploySheetUrl || activeSheet || '';
-            if (onlineInvite.inviteCode) {
-              setCurrentInviteCode(onlineInvite.inviteCode);
+        const cloudConfig = await getUserCloudConfig(user.email);
+        if (cloudConfig) {
+          if (cloudConfig.nickname && !boundNickname) {
+            boundNickname = cloudConfig.nickname;
+            cleanUser.nickname = boundNickname;
+            setCurrentUser({ ...cleanUser, nickname: boundNickname });
+            if (cleanEmail) {
+              try { localStorage.setItem(`banban_user_nickname_${cleanEmail}`, boundNickname); } catch (e) {}
             }
           }
-        }
-      } catch (e) {}
-    }
 
-    // 🛡️ 雙重保險備援 3：直接向伺服器全系統資料庫端點提取（僅在伺服器環境下調用）
-    if (!activeGas && hasBackendServer()) {
-      try {
-        const sysRes = await fetch('/api/system-database');
-        if (sysRes.ok) {
-          const sysData = await sysRes.json();
-          if (sysData?.success && sysData?.database?.gasWebUrl) {
-            activeGas = sysData.database.gasWebUrl;
-            activeSheet = sysData.database.deploySheetUrl || activeSheet || '';
+          // 🛡️ 雲端 gasWebUrl 載入校驗：確保使用者換機登入時直接載入自己綁定的資料庫
+          if (cloudConfig.gasWebUrl && cloudConfig.gasWebUrl.startsWith('http')) {
+            activeGas = cloudConfig.gasWebUrl;
+            activeSheet = cloudConfig.deploySheetUrl || activeSheet || '';
+          }
+          if (cloudConfig.inviteCode) {
+            setCurrentInviteCode(cloudConfig.inviteCode);
           }
         }
-      } catch (e) {}
-    }
-
-    // 若此帳號確實已建立過專屬 API 資料庫 (或從全系統資料庫拉取成功)
-    if (activeGas && activeGas.startsWith('http') && !partnerInvite) {
-      const displayWelcomeName = boundNickname || user.name;
-      setGasWebUrl(activeGas);
-      setDeploySheetUrl(activeSheet);
-
-      // 同步鞏固寫入本地所有隔離與全域快取
-      try {
-        localStorage.setItem('muji_gas_web_url', activeGas);
-        localStorage.setItem('muji_sheet_url', activeSheet);
-        if (cleanEmail) {
-          localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
-          localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
-        }
-      } catch (e) {}
-
-      // 自動同步確保雲端個人資料庫設定永久完備
-      saveUserCloudConfig(user.email, {
-        gasWebUrl: activeGas,
-        deploySheetUrl: activeSheet
-      });
-
-      const adminUser: AuthUser = {
-        ...cleanUser,
-        userRole: 'admin',
-        role: 'admin'
-      };
-      setCurrentUser(adminUser);
-
-      try {
-        localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
-        localStorage.setItem('banban_is_sandbox_mode', 'false');
-      } catch (e) {}
-
-      showToast(`👑 歡迎回來，${displayWelcomeName}！已載入 Google 帳號設定與專屬資料庫`, 'success');
-
-      fetchDashboardData(true, false);
-      fetchShoppingData(false);
-      fetchSplitData(true);
-      fetchTravelData(true);
-
-      setIsCheckingCloudConfig(false);
-      return;
-    } else {
-      // 4. 初次或全新獨立帳號：若完全無任何資料庫紀錄，才初始化
-      const newInviteCode = generateRandomInviteCode();
-      setCurrentInviteCode(newInviteCode);
-      setRecords([]);
-      setSplitItems([]);
-      setShoppingItems([]);
-      setPartnerBindingInfo(null);
-
-      const freshUser: AuthUser = {
-        ...cleanUser,
-        userRole: 'admin',
-        role: 'admin'
-      };
-      setCurrentUser(freshUser);
-
-      // 自動預先註冊此邀請碼至雲端與本機，確保伴侶輸入時代碼即時可查
-      if (freshUser.email) {
-        saveActiveInviteCode({
-          inviteCode: newInviteCode,
-          adminEmail: freshUser.email,
-          adminName: freshUser.name || '主管理員',
-          createdAt: new Date().toISOString()
-        });
-        saveUserCloudConfig(freshUser.email, {
-          inviteCode: newInviteCode,
-          email: freshUser.email,
-          name: freshUser.name
-        });
+      } catch (err) {
+        console.warn('Failed to retrieve user cloud config on login:', err);
       }
 
-      try {
-        localStorage.setItem('banban_auth_user', JSON.stringify(freshUser));
-        localStorage.setItem('banban_is_sandbox_mode', 'false');
-      } catch (e) {}
+      // 🛡️ 雙重保險備援 1：向 Firestore 情侶綁定紀錄反查此 Email 是否已配對或本身已綁定資料庫
+      if (!activeGas && cleanEmail) {
+        try {
+          const partnerBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
+          if (partnerBinding && partnerBinding.gasWebUrl && partnerBinding.gasWebUrl.startsWith('http')) {
+            activeGas = partnerBinding.gasWebUrl;
+            activeSheet = partnerBinding.deploySheetUrl || activeSheet || '';
+            setPartnerBindingInfo(partnerBinding);
+          }
+        } catch (e) {}
+      }
 
-      const displayWelcomeName = boundNickname || user.name;
-      showToast(`✨ 歡迎 ${displayWelcomeName}！已為您初始化全新系統資料，請在引導中確認身分與設定`, 'info');
-      // 立即開啟引導小精靈，讓使用者選擇「主管理者（部署帳本）」或「伴侶模式（輸入邀請碼）」
-      openUnifiedDatabaseModal('wizard');
+      // 🛡️ 雙重保險備援 2：向邀請碼註冊表與雲端反查此 Email 是否曾建立過專屬邀請與資料庫
+      if (!activeGas && cleanEmail) {
+        try {
+          const activeInvite = getActiveInviteCode();
+          if (activeInvite && activeInvite.adminEmail?.toLowerCase() === cleanEmail && activeInvite.gasWebUrl && activeInvite.gasWebUrl.startsWith('http')) {
+            activeGas = activeInvite.gasWebUrl;
+            activeSheet = activeInvite.deploySheetUrl || activeSheet || '';
+            if (activeInvite.inviteCode) {
+              setCurrentInviteCode(activeInvite.inviteCode);
+            }
+          } else {
+            const onlineInvite = await fetchInviteCodeOnline(cleanEmail);
+            if (onlineInvite && onlineInvite.gasWebUrl && onlineInvite.gasWebUrl.startsWith('http')) {
+              activeGas = onlineInvite.gasWebUrl;
+              activeSheet = onlineInvite.deploySheetUrl || activeSheet || '';
+              if (onlineInvite.inviteCode) {
+                setCurrentInviteCode(onlineInvite.inviteCode);
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      // 🛡️ 雙重保險備援 3：直接向伺服器全系統資料庫端點提取（僅在伺服器環境下調用）
+      if (!activeGas && hasBackendServer()) {
+        try {
+          const sysRes = await fetch('/api/system-database');
+          if (sysRes.ok) {
+            const sysData = await sysRes.json();
+            if (sysData?.success && sysData?.database?.gasWebUrl) {
+              activeGas = sysData.database.gasWebUrl;
+              activeSheet = sysData.database.deploySheetUrl || activeSheet || '';
+            }
+          }
+        } catch (e) {}
+      }
+
+      // 若此帳號確實已建立過專屬 API 資料庫 (或從全系統資料庫拉取成功)
+      if (activeGas && activeGas.startsWith('http') && !partnerInvite) {
+        const displayWelcomeName = boundNickname || user.name;
+        setGasWebUrl(activeGas);
+        setDeploySheetUrl(activeSheet);
+
+        // 同步鞏固寫入本地所有隔離與全域快取
+        try {
+          localStorage.setItem('muji_gas_web_url', activeGas);
+          localStorage.setItem('muji_sheet_url', activeSheet);
+          if (cleanEmail) {
+            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+          }
+        } catch (e) {}
+
+        // 自動同步確保雲端個人資料庫設定永久完備
+        saveUserCloudConfig(user.email, {
+          gasWebUrl: activeGas,
+          deploySheetUrl: activeSheet
+        });
+
+        const adminUser: AuthUser = {
+          ...cleanUser,
+          userRole: 'admin',
+          role: 'admin'
+        };
+        setCurrentUser(adminUser);
+
+        try {
+          localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
+          localStorage.setItem('banban_is_sandbox_mode', 'false');
+        } catch (e) {}
+
+        setSyncProgressStep(3);
+        setSyncStatusText(`正在與 Google 試算表同步資料庫...`);
+        await Promise.allSettled([
+          fetchDashboardData(true, false),
+          fetchShoppingData(false),
+          fetchSplitData(true),
+          fetchTravelData(true)
+        ]);
+
+        setSyncProgressStep(4);
+        setSyncStatusText(`✨ 歡迎回來，${displayWelcomeName}！帳本資料已全數同步`);
+        await new Promise(res => setTimeout(res, 600));
+        setIsInitialSyncing(false);
+        setIsCheckingCloudConfig(false);
+        return;
+      } else {
+        // 4. 初次或全新獨立帳號：若完全無任何資料庫紀錄，才初始化
+        const newInviteCode = generateRandomInviteCode();
+        setCurrentInviteCode(newInviteCode);
+        setRecords([]);
+        setSplitItems([]);
+        setShoppingItems([]);
+        setPartnerBindingInfo(null);
+
+        const freshUser: AuthUser = {
+          ...cleanUser,
+          userRole: 'admin',
+          role: 'admin'
+        };
+        setCurrentUser(freshUser);
+
+        // 自動預先註冊此邀請碼至雲端與本機，確保伴侶輸入時代碼即時可查
+        if (freshUser.email) {
+          saveActiveInviteCode({
+            inviteCode: newInviteCode,
+            adminEmail: freshUser.email,
+            adminName: freshUser.name || '主管理員',
+            createdAt: new Date().toISOString()
+          });
+          saveUserCloudConfig(freshUser.email, {
+            inviteCode: newInviteCode,
+            email: freshUser.email,
+            name: freshUser.name
+          });
+        }
+
+        try {
+          localStorage.setItem('banban_auth_user', JSON.stringify(freshUser));
+          localStorage.setItem('banban_is_sandbox_mode', 'false');
+        } catch (e) {}
+
+        const displayWelcomeName = boundNickname || user.name;
+        setSyncProgressStep(3);
+        setSyncStatusText(`✨ 歡迎 ${displayWelcomeName}！正在初始化帳本引導...`);
+        await new Promise(res => setTimeout(res, 500));
+        setIsInitialSyncing(false);
+        setIsCheckingCloudConfig(false);
+        // 立即開啟引導小精靈，讓使用者選擇「主管理者（部署帳本）」或「伴侶模式（輸入邀請碼）」
+        openUnifiedDatabaseModal('wizard');
+      }
+    } catch (loginErr) {
+      console.error('Login sync error:', loginErr);
+    } finally {
+      setIsInitialSyncing(false);
+      setIsCheckingCloudConfig(false);
     }
-
-    setIsCheckingCloudConfig(false);
   };
 
   /**
@@ -3973,8 +4032,9 @@ export default function App() {
     }
   };
 
-  // 觸發 Toast 通知
+  // 觸發 Toast 通知 (當全屏同步動畫進行中時主動靜默，不干擾右下角畫面)
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    if (isInitialSyncing) return;
     setToast({ message, type });
     setTimeout(() => {
       setToast(null);
@@ -4360,11 +4420,22 @@ export default function App() {
   // 若未登入 Google 帳號且非沙盒測試模式，且非本機訪客模式，顯示 Google 帳號登入入口
   if (!currentUser && !isSandboxMode && !isGuestMode) {
     return (
-      <GoogleAuthPortal
-        onLogin={handleGoogleLogin}
-        onEnterDevSandbox={handleEnterDevSandbox}
-        onEnterGuestMode={handleEnterGuestMode}
-      />
+      <>
+        <FullScreenSyncOverlay
+          isVisible={isInitialSyncing}
+          step={syncProgressStep}
+          statusText={syncStatusText}
+          userEmail={syncingUserEmail}
+          userName={syncingUserName}
+          userAvatar={syncingUserAvatar}
+          onSkip={() => setIsInitialSyncing(false)}
+        />
+        <GoogleAuthPortal
+          onLogin={handleGoogleLogin}
+          onEnterDevSandbox={handleEnterDevSandbox}
+          onEnterGuestMode={handleEnterGuestMode}
+        />
+      </>
     );
   }
 
@@ -4374,6 +4445,15 @@ export default function App() {
   if (currentUser && !isDbConnected && !isGuestMode && !isSandboxMode && !isCheckingCloudConfig) {
     return (
       <div className="min-h-screen bg-[#F8F7F3] flex flex-col justify-center items-center p-4">
+        <FullScreenSyncOverlay
+          isVisible={isInitialSyncing}
+          step={syncProgressStep}
+          statusText={syncStatusText}
+          userEmail={syncingUserEmail}
+          userName={syncingUserName}
+          userAvatar={syncingUserAvatar}
+          onSkip={() => setIsInitialSyncing(false)}
+        />
         {/* 背景光暈 */}
         <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-[#F2EFE7] to-transparent opacity-40 pointer-events-none -z-10" />
 
@@ -4415,6 +4495,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-[#3E3A36] font-sans flex flex-col bg-[#F8F7F3] relative overflow-x-hidden antialiased selection:bg-[#E4DFD3] selection:text-[#3E3A36]">
+      {/* 🚀 全屏同步中動畫 (登入與雲端資料庫同步時顯示，取代右下角 Toast) */}
+      <FullScreenSyncOverlay
+        isVisible={isInitialSyncing}
+        step={syncProgressStep}
+        statusText={syncStatusText}
+        userEmail={syncingUserEmail}
+        userName={syncingUserName}
+        userAvatar={syncingUserAvatar}
+        onSkip={() => setIsInitialSyncing(false)}
+      />
+
       {/* 淡淡的無印木質感、日系暖色調背景光波 */}
       <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-[#F2EFE7] to-transparent opacity-40 pointer-events-none -z-10" />
 
