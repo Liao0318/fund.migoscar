@@ -2334,7 +2334,7 @@ export default function App() {
           }
         } catch (e) {}
 
-        // 鞏固儲存至多重持久鍵
+        // 鞏固儲存至多重持久鍵並同步至伺服器與 Firestore 雲端
         if (activeGas && activeGas.startsWith('http')) {
           try {
             localStorage.setItem('muji_gas_web_url', activeGas);
@@ -2350,6 +2350,15 @@ export default function App() {
               localStorage.setItem(`banban_permanent_sheet_url_${cleanEmail}`, activeSheet);
             }
           } catch (e) {}
+
+          // 🚀 關鍵：主動推送至伺服器與 Firestore 雲端，確保換手機時能即刻自動獲取！
+          saveUserCloudConfig(cleanEmail, {
+            email: cleanEmail,
+            name: currentUser?.name || '',
+            gasWebUrl: activeGas,
+            deploySheetUrl: activeSheet || '',
+            inviteCode: currentInviteCode || ''
+          });
         }
 
         if (updated && activeGas) {

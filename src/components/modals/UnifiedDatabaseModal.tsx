@@ -31,10 +31,10 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData, CoupleBindingInfo } from '../../types';
-import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode } from '../../utils/partnerInvite';
+import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline } from '../../utils/partnerInvite';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
-import { scanAndRecoverGasUrl } from '../../utils/userConfigService';
+import { scanAndRecoverGasUrl, getUserCloudConfig } from '../../utils/userConfigService';
 
 interface UnifiedDatabaseModalProps {
   isOpen: boolean;
@@ -437,6 +437,71 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     onClose();
   };
 
+  // ☁️ 跨裝置雲端同步狀態與操作處理
+  const [isCloudSearching, setIsCloudSearching] = useState(false);
+  const [cloudSearchStatus, setCloudSearchStatus] = useState<string | null>(null);
+
+  const handleSyncFromCloud = async (silent = false) => {
+    if (!currentUser?.email) return;
+    setIsCloudSearching(true);
+    if (!silent) setCloudSearchStatus('正在為您的 Google 帳號查詢雲端資料庫...');
+    try {
+      const cleanEmail = currentUser.email.trim().toLowerCase();
+      // 1. 優先查詢使用者個人雲端設定 (後端 API / Firestore)
+      const cloudConfig = await getUserCloudConfig(cleanEmail);
+      if (cloudConfig?.gasWebUrl && cloudConfig.gasWebUrl.startsWith('http')) {
+        setDetectedGasUrl(cloudConfig.gasWebUrl);
+        if (cloudConfig.deploySheetUrl) setDetectedSheetUrl(cloudConfig.deploySheetUrl);
+        setInputGasUrl(cloudConfig.gasWebUrl);
+        if (cloudConfig.deploySheetUrl) setInputSheetUrl(cloudConfig.deploySheetUrl);
+        setGasWebUrl(cloudConfig.gasWebUrl);
+        if (cloudConfig.deploySheetUrl) setDeploySheetUrl(cloudConfig.deploySheetUrl);
+        saveDeployConfig(cloudConfig.gasWebUrl, cloudConfig.deploySheetUrl);
+        setCloudSearchStatus('🎉 已成功從雲端同步電腦設定的資料庫！即將進入帳本...');
+        setTimeout(() => {
+          if (onCompleteOnboarding) onCompleteOnboarding();
+          onClose();
+        }, 500);
+        return;
+      }
+
+      // 2. 查詢情侶綁定紀錄
+      const binding = await fetchPartnerBindingInfoOnline(cleanEmail);
+      if (binding?.gasWebUrl && binding.gasWebUrl.startsWith('http')) {
+        setDetectedGasUrl(binding.gasWebUrl);
+        if (binding.deploySheetUrl) setDetectedSheetUrl(binding.deploySheetUrl);
+        setInputGasUrl(binding.gasWebUrl);
+        if (binding.deploySheetUrl) setInputSheetUrl(binding.deploySheetUrl);
+        setGasWebUrl(binding.gasWebUrl);
+        if (binding.deploySheetUrl) setDeploySheetUrl(binding.deploySheetUrl);
+        saveDeployConfig(binding.gasWebUrl, binding.deploySheetUrl);
+        setCloudSearchStatus('🎉 已成功從雲端同步伴侶綁定的資料庫！即將進入帳本...');
+        setTimeout(() => {
+          if (onCompleteOnboarding) onCompleteOnboarding();
+          onClose();
+        }, 500);
+        return;
+      }
+
+      if (!silent) {
+        setCloudSearchStatus('尚未在雲端找到此 Google 帳號先前儲存的資料庫。若您剛剛在電腦設定，請確認電腦有登入此 Google 帳號並重新整理一次網頁；或您可直接在下方「資料庫與 API 設定」貼上 Web App 網址。');
+      } else {
+        setCloudSearchStatus(null);
+      }
+    } catch (e) {
+      if (!silent) setCloudSearchStatus('雲端查詢失敗，請檢查網路連線後再試。');
+    } finally {
+      setIsCloudSearching(false);
+    }
+  };
+
+  // 開啟視窗時若本機無 API，自動對雲端發起一次靜默查詢
+  useEffect(() => {
+    if (isOpen && currentUser?.email && (!gasWebUrl || !gasWebUrl.startsWith('http'))) {
+      handleSyncFromCloud(true);
+    }
+  }, [isOpen, currentUser?.email, gasWebUrl]);
+
   const isConnected = Boolean(gasWebUrl && gasWebUrl.startsWith('http'));
 
   return (
@@ -621,10 +686,39 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                         </h4>
                         <p className="text-xs text-[#7A7366] max-w-md mx-auto leading-relaxed">
                           {hasLoggedInBefore || detectedGasUrl || currentUser?.userRole === 'admin'
-                            ? '系統已準備好您的帳本連線環境。若上方已偵測到資料庫，可直接一鍵恢復；或切換至上方「資料庫與 API 設定」手動確認。'
-                            : '系統偵測到您尚未建立專屬帳本或綁定伴侶。情侶共同記帳只需其中一人建立 Google 試算表，另一半輸入 6 碼邀請碼即可加入！'}
+                            ? '系統已準備好您的帳本連線環境。若上方已偵測到資料庫，可直接一鍵恢復；或點擊下方「同步電腦資料庫」一鍵獲取！'
+                            : '若您先前已在電腦設定過 Google 試算表，點擊下方「同步電腦資料庫」即可立即拉取；新用戶請依角色開始使用。'}
                         </p>
                       </div>
+
+                      {/* ☁️ 手機 / 電腦跨裝置雲端一鍵同步卡片 */}
+                      {currentUser?.email && (
+                        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                              <RefreshCw className={`w-3.5 h-3.5 text-amber-700 ${isCloudSearching ? 'animate-spin' : ''}`} />
+                              <span>📱 手機與電腦跨裝置資料庫同步</span>
+                            </div>
+                            <p className="text-[11px] text-[#7A7366] leading-relaxed">
+                              已登入帳號：<span className="font-semibold text-[#3E3A36]">{currentUser.email}</span>。若您曾在電腦端配置過 API，點擊右側按鈕即可一秒自動拉取同步！
+                            </p>
+                            {cloudSearchStatus && (
+                              <p className="text-[11px] font-bold text-amber-800 animate-pulse pt-0.5">
+                                {cloudSearchStatus}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleSyncFromCloud(false)}
+                            disabled={isCloudSearching}
+                            className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white text-xs font-bold shrink-0 flex items-center justify-center gap-2 shadow-xs cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isCloudSearching ? 'animate-spin' : ''}`} />
+                            <span>{isCloudSearching ? '雲端拉取中...' : '同步電腦資料庫 🔄'}</span>
+                          </button>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
                         {/* 選擇 1: 我是主管理者 */}
