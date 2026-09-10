@@ -2,6 +2,7 @@ import { db, isFirestoreAvailable, getGoogleAccessToken } from './googleOAuthSer
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { AppNotifySettings } from '../types';
 import { saveConfigToGoogleDrive, loadConfigFromGoogleDrive } from './googleDriveSyncService';
+import { hasBackendServer } from './environment';
 
 export interface UserCloudConfig {
   email: string;
@@ -260,27 +261,29 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
     }
   } catch (e) {}
 
-  // 2. 跨裝置 API 持久化儲存（更換手機或另一台電腦時，直接向後端 API 提取）
-  try {
-    fetch('/api/user-config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).catch(() => {});
-
-    // 同步固化至全系統資料庫
-    if (safeGas) {
-      fetch('/api/system-database', {
+  // 2. 跨裝置 API 持久化儲存（僅在具備 Node.js 後端伺服器環境下調用，靜態主機如 GitHub Pages 避開 404）
+  if (hasBackendServer()) {
+    try {
+      fetch('/api/user-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gasWebUrl: safeGas,
-          deploySheetUrl: safeSheet,
-          email: cleanEmail
-        })
+        body: JSON.stringify(payload)
       }).catch(() => {});
-    }
-  } catch (e) {}
+
+      // 同步固化至全系統資料庫
+      if (safeGas) {
+        fetch('/api/system-database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gasWebUrl: safeGas,
+            deploySheetUrl: safeSheet,
+            email: cleanEmail
+          })
+        }).catch(() => {});
+      }
+    } catch (e) {}
+  }
 
   // 2.5 真正跟隨 Google 帳號跨裝置同步：儲存至使用者的 Google Drive 專屬檔案
   const googleToken = getGoogleAccessToken();
@@ -309,61 +312,63 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
   if (!email) return null;
   const cleanEmail = email.trim().toLowerCase();
 
-  // 1. 優先從伺服器持久化 API 讀取（跨裝置、換電腦登入零遺失）
-  try {
-    const res = await fetch(`/api/user-config?email=${encodeURIComponent(cleanEmail)}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.success && data.config) {
-        const serverConfig = data.config as UserCloudConfig;
-        if (serverConfig.gasWebUrl && serverConfig.gasWebUrl.startsWith('http')) {
-          // 同步快取至本地以加速後續載入
-          try {
-            localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(serverConfig));
-            localStorage.setItem('muji_gas_web_url', serverConfig.gasWebUrl);
-            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, serverConfig.gasWebUrl);
-            localStorage.setItem('banban_permanent_gas_url', serverConfig.gasWebUrl);
-            localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, serverConfig.gasWebUrl);
-            if (serverConfig.deploySheetUrl) {
-              localStorage.setItem('muji_sheet_url', serverConfig.deploySheetUrl);
-              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, serverConfig.deploySheetUrl);
-            }
-          } catch (e) {}
-          return serverConfig;
+  // 1. 優先從伺服器持久化 API 讀取（僅在有伺服器環境下調用，GitHub Pages 跳過此步驟以避免 404）
+  if (hasBackendServer()) {
+    try {
+      const res = await fetch(`/api/user-config?email=${encodeURIComponent(cleanEmail)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.config) {
+          const serverConfig = data.config as UserCloudConfig;
+          if (serverConfig.gasWebUrl && serverConfig.gasWebUrl.startsWith('http')) {
+            // 同步快取至本地以加速後續載入
+            try {
+              localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(serverConfig));
+              localStorage.setItem('muji_gas_web_url', serverConfig.gasWebUrl);
+              localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, serverConfig.gasWebUrl);
+              localStorage.setItem('banban_permanent_gas_url', serverConfig.gasWebUrl);
+              localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, serverConfig.gasWebUrl);
+              if (serverConfig.deploySheetUrl) {
+                localStorage.setItem('muji_sheet_url', serverConfig.deploySheetUrl);
+                localStorage.setItem(`muji_sheet_url_${cleanEmail}`, serverConfig.deploySheetUrl);
+              }
+            } catch (e) {}
+            return serverConfig;
+          }
         }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
 
-  // 1.5 檢查全系統預設資料庫 (system-database)
-  try {
-    const sysRes = await fetch('/api/system-database');
-    if (sysRes.ok) {
-      const sysData = await sysRes.json();
-      if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
-        const sysDb = sysData.database;
-        const fallbackConfig: UserCloudConfig = {
-          email: cleanEmail,
-          name: '',
-          gasWebUrl: sysDb.gasWebUrl,
-          deploySheetUrl: sysDb.deploySheetUrl || '',
-          updatedAt: sysDb.updatedAt || new Date().toISOString()
-        };
-        try {
-          localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(fallbackConfig));
-          localStorage.setItem('muji_gas_web_url', sysDb.gasWebUrl);
-          localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, sysDb.gasWebUrl);
-          localStorage.setItem('banban_permanent_gas_url', sysDb.gasWebUrl);
-          localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, sysDb.gasWebUrl);
-          if (sysDb.deploySheetUrl) {
-            localStorage.setItem('muji_sheet_url', sysDb.deploySheetUrl);
-            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, sysDb.deploySheetUrl);
-          }
-        } catch (e) {}
-        return fallbackConfig;
+    // 1.5 檢查全系統預設資料庫 (system-database)
+    try {
+      const sysRes = await fetch('/api/system-database');
+      if (sysRes.ok) {
+        const sysData = await sysRes.json();
+        if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
+          const sysDb = sysData.database;
+          const fallbackConfig: UserCloudConfig = {
+            email: cleanEmail,
+            name: '',
+            gasWebUrl: sysDb.gasWebUrl,
+            deploySheetUrl: sysDb.deploySheetUrl || '',
+            updatedAt: sysDb.updatedAt || new Date().toISOString()
+          };
+          try {
+            localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(fallbackConfig));
+            localStorage.setItem('muji_gas_web_url', sysDb.gasWebUrl);
+            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, sysDb.gasWebUrl);
+            localStorage.setItem('banban_permanent_gas_url', sysDb.gasWebUrl);
+            localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, sysDb.gasWebUrl);
+            if (sysDb.deploySheetUrl) {
+              localStorage.setItem('muji_sheet_url', sysDb.deploySheetUrl);
+              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, sysDb.deploySheetUrl);
+            }
+          } catch (e) {}
+          return fallbackConfig;
+        }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   // 1.8 真正跟隨 Google 帳號無縫同步：從使用者個人的 Google Drive 讀取設定檔
   const driveToken = getGoogleAccessToken();
@@ -438,12 +443,14 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
     try {
       localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(recoveredConfig));
     } catch (e) {}
-    // 異步同步至伺服器 API
-    fetch('/api/user-config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(recoveredConfig)
-    }).catch(() => {});
+    // 異步同步至伺服器 API（僅在有後端伺服器環境下調用）
+    if (hasBackendServer()) {
+      fetch('/api/user-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(recoveredConfig)
+      }).catch(() => {});
+    }
     return recoveredConfig;
   }
 

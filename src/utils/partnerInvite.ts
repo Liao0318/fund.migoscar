@@ -1,6 +1,7 @@
 import { PartnerInviteData, CoupleBindingInfo } from '../types';
 import { db, isFirestoreAvailable } from './googleOAuthService';
 import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { hasBackendServer } from './environment';
 
 const REGISTRY_STORAGE_KEY = 'banban_invite_registry';
 const ACTIVE_INVITE_STORAGE_KEY = 'banban_active_invite';
@@ -82,14 +83,16 @@ export async function saveActiveInviteCode(invite: PartnerInviteData): Promise<v
     console.error('Error saving active invite code locally', e);
   }
 
-  // 伺服器持久 API 同步（跨裝置無縫查詢）
-  try {
-    fetch('/api/partner-invite', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(invite)
-    }).catch(() => {});
-  } catch (e) {}
+  // 伺服器持久 API 同步（僅在有後端伺服器環境下調用，避免靜態環境 404）
+  if (hasBackendServer()) {
+    try {
+      fetch('/api/partner-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(invite)
+      }).catch(() => {});
+    } catch (e) {}
+  }
 
   // 雲端 Firestore 同步
   if (isFirestoreAvailable() && db && invite.inviteCode) {
@@ -145,14 +148,16 @@ export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<v
     console.error('Error saving partner binding info locally', e);
   }
 
-  // 伺服器 API 同步（跨裝置）
-  try {
-    fetch('/api/couple-binding', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(info)
-    }).catch(() => {});
-  } catch (e) {}
+  // 伺服器 API 同步（僅在有後端伺服器環境下調用）
+  if (hasBackendServer()) {
+    try {
+      fetch('/api/couple-binding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(info)
+      }).catch(() => {});
+    } catch (e) {}
+  }
 
   if (isFirestoreAvailable() && db) {
     try {
@@ -193,18 +198,20 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
   
   const cleanEmail = email.trim().toLowerCase();
 
-  // 1. 優先從伺服器持久 API 抓取
-  try {
-    const res = await fetch(`/api/couple-binding?email=${encodeURIComponent(cleanEmail)}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.success && data.binding) {
-        const bindData = data.binding as CoupleBindingInfo;
-        savePartnerBindingInfo(bindData);
-        return bindData;
+  // 1. 優先從伺服器持久 API 抓取（僅在有後端伺服器環境下調用）
+  if (hasBackendServer()) {
+    try {
+      const res = await fetch(`/api/couple-binding?email=${encodeURIComponent(cleanEmail)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.binding) {
+          const bindData = data.binding as CoupleBindingInfo;
+          savePartnerBindingInfo(bindData);
+          return bindData;
+        }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   // 2. 嘗試從 Firestore 讀取
   if (isFirestoreAvailable() && db) {
@@ -368,23 +375,25 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
   const extractedCode = extractInviteCode(cleanInput);
   const codeToQuery = (extractedCode || cleanInput).toUpperCase();
 
-  // 2.5 優先向伺服器持久化 API 查詢（跨裝置零時差）
-  try {
-    const queryUrl = cleanInput.includes('@') 
-      ? `/api/partner-invite?email=${encodeURIComponent(cleanInput.trim().toLowerCase())}`
-      : `/api/partner-invite?code=${encodeURIComponent(codeToQuery)}`;
-    const res = await fetch(queryUrl);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.success && data.invite) {
-        const inv = data.invite as PartnerInviteData;
-        if (inv && inv.adminEmail && inv.gasWebUrl) {
-          saveActiveInviteCode(inv);
-          return inv;
+  // 2.5 優先向伺服器持久化 API 查詢（僅在有後端伺服器環境下調用）
+  if (hasBackendServer()) {
+    try {
+      const queryUrl = cleanInput.includes('@') 
+        ? `/api/partner-invite?email=${encodeURIComponent(cleanInput.trim().toLowerCase())}`
+        : `/api/partner-invite?code=${encodeURIComponent(codeToQuery)}`;
+      const res = await fetch(queryUrl);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.invite) {
+          const inv = data.invite as PartnerInviteData;
+          if (inv && inv.adminEmail && inv.gasWebUrl) {
+            saveActiveInviteCode(inv);
+            return inv;
+          }
         }
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   // 3. 向 Firestore 查詢真實存在的邀請紀錄
   if (isFirestoreAvailable() && db && codeToQuery) {

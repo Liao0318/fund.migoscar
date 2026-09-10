@@ -27,6 +27,7 @@ import {
 } from '../../utils/googleOAuthService';
 import { fetchPartnerBindingInfoOnline, getActiveInviteCode } from '../../utils/partnerInvite';
 import { getUserCloudConfig, scanAndRecoverGasUrl } from '../../utils/userConfigService';
+import { hasBackendServer } from '../../utils/environment';
 
 interface GoogleAuthPortalProps {
   onLogin: (user: AuthUser, partnerInvite?: PartnerInviteData | null, initialCloudGasUrl?: string, initialCloudSheetUrl?: string) => void;
@@ -146,8 +147,8 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
         }
       }
 
-      // 若尚未取得，直接查詢全系統伺服器資料庫 (跨裝置統一配置)
-      if (!cloudGas) {
+      // 若尚未取得，且在伺服器環境下，直接查詢全系統伺服器資料庫 (跨裝置統一配置)
+      if (!cloudGas && hasBackendServer()) {
         try {
           const sysRes = await fetch('/api/system-database');
           if (sysRes.ok) {

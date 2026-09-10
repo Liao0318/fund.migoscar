@@ -133,6 +133,7 @@ import {
 } from './utils/userConfigService';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { syncGoogleUserProfile, signOutGoogle, db } from './utils/googleOAuthService';
+import { hasBackendServer } from './utils/environment';
 
 
 // 定義購物記事資料型態
@@ -1009,8 +1010,8 @@ export default function App() {
       } catch (e) {}
     }
 
-    // 🛡️ 雙重保險備援 3：直接向伺服器全系統資料庫端點提取 (跨裝置換機即刻自動同步)
-    if (!activeGas) {
+    // 🛡️ 雙重保險備援 3：直接向伺服器全系統資料庫端點提取（僅在伺服器環境下調用）
+    if (!activeGas && hasBackendServer()) {
       try {
         const sysRes = await fetch('/api/system-database');
         if (sysRes.ok) {
@@ -2307,31 +2308,33 @@ export default function App() {
       if (localGas && localGas.trim().startsWith('http')) {
         const safeGas = localGas.trim();
         const safeSheet = (localSheet || '').trim();
-        try {
-          fetch('/api/system-database', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              gasWebUrl: safeGas,
-              deploySheetUrl: safeSheet,
-              email: cleanEmail
-            })
-          }).catch(() => {});
-
-          if (cleanEmail) {
-            fetch('/api/user-config', {
+        if (hasBackendServer()) {
+          try {
+            fetch('/api/system-database', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                email: cleanEmail,
-                name: currentUser?.name || '',
                 gasWebUrl: safeGas,
                 deploySheetUrl: safeSheet,
-                inviteCode: currentInviteCode
+                email: cleanEmail
               })
             }).catch(() => {});
-          }
-        } catch (e) {}
+
+            if (cleanEmail) {
+              fetch('/api/user-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  email: cleanEmail,
+                  name: currentUser?.name || '',
+                  gasWebUrl: safeGas,
+                  deploySheetUrl: safeSheet,
+                  inviteCode: currentInviteCode
+                })
+              }).catch(() => {});
+            }
+          } catch (e) {}
+        }
       } else {
         // 2. 若此裝置本地無網址，主動向伺服器拉取系統既有資料庫或使用者個人雲端
         if (cleanEmail) {
@@ -2345,27 +2348,29 @@ export default function App() {
           } catch (e) {}
         }
 
-        try {
-          const res = await fetch('/api/system-database');
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.success && data.database && data.database.gasWebUrl) {
-              const sysGas = data.database.gasWebUrl;
-              const sysSheet = data.database.deploySheetUrl || '';
-              setGasWebUrl(sysGas);
-              if (sysSheet) setDeploySheetUrl(sysSheet);
-              try {
-                localStorage.setItem('muji_gas_web_url', sysGas);
-                localStorage.setItem('banban_permanent_gas_url', sysGas);
-                localStorage.setItem('banban_device_master_gas', sysGas);
-                if (sysSheet) {
-                  localStorage.setItem('muji_sheet_url', sysSheet);
-                  localStorage.setItem('banban_permanent_sheet_url', sysSheet);
-                }
-              } catch (e) {}
+        if (hasBackendServer()) {
+          try {
+            const res = await fetch('/api/system-database');
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.success && data.database && data.database.gasWebUrl) {
+                const sysGas = data.database.gasWebUrl;
+                const sysSheet = data.database.deploySheetUrl || '';
+                setGasWebUrl(sysGas);
+                if (sysSheet) setDeploySheetUrl(sysSheet);
+                try {
+                  localStorage.setItem('muji_gas_web_url', sysGas);
+                  localStorage.setItem('banban_permanent_gas_url', sysGas);
+                  localStorage.setItem('banban_device_master_gas', sysGas);
+                  if (sysSheet) {
+                    localStorage.setItem('muji_sheet_url', sysSheet);
+                    localStorage.setItem('banban_permanent_sheet_url', sysSheet);
+                  }
+                } catch (e) {}
+              }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
+        }
       }
     };
     syncSystemDatabase();
@@ -2467,8 +2472,8 @@ export default function App() {
           }
         } catch (e) {}
 
-        // 2.5 向伺服器全域系統資料庫查詢備援 (換手機時自動繼承電腦已設定之資料庫)
-        if (!activeGas || !activeGas.startsWith('http')) {
+        // 2.5 向伺服器全域系統資料庫查詢備援 (換手機時自動繼承電腦已設定之資料庫，僅在伺服器環境下調用)
+        if ((!activeGas || !activeGas.startsWith('http')) && hasBackendServer()) {
           try {
             const sysRes = await fetch('/api/system-database');
             if (sysRes.ok) {
@@ -2646,22 +2651,24 @@ export default function App() {
       if (showToastNotice) showToast(`⚡ 已即時更新${sourceLabel}各國最新匯率！`, 'success');
     };
 
-    // 1. 優先嘗試同源代理 API (避開瀏覽器跨網域限制與 CORS)
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch('/api/exchange-rates', { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.rates) {
-          applyRatesFromData(data.rates, '基準市場');
-          if (!isBackground) setIsRateLoading(false);
-          return;
+    // 1. 優先嘗試同源代理 API (僅在有伺服器環境下調用，靜態主機如 GitHub Pages 直接進入步驟 2 避開 404)
+    if (hasBackendServer()) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch('/api/exchange-rates', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.rates) {
+            applyRatesFromData(data.rates, '基準市場');
+            if (!isBackground) setIsRateLoading(false);
+            return;
+          }
         }
+      } catch (e) {
+        // 靜默嘗試下一管道
       }
-    } catch (e) {
-      // 靜默嘗試下一管道
     }
 
     // 2. 嘗試主要公開匯率 API
