@@ -145,6 +145,22 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
           cloudSheet = activeInvite.deploySheetUrl || '';
         }
       }
+
+      // 若尚未取得，直接查詢全系統伺服器資料庫 (跨裝置統一配置)
+      if (!cloudGas) {
+        try {
+          const sysRes = await fetch('/api/system-database');
+          if (sysRes.ok) {
+            const sysData = await sysRes.json();
+            if (sysData?.success && sysData?.database?.gasWebUrl) {
+              cloudGas = sysData.database.gasWebUrl.trim();
+              if (sysData.database.deploySheetUrl && !cloudSheet) {
+                cloudSheet = sysData.database.deploySheetUrl.trim();
+              }
+            }
+          }
+        } catch (e) {}
+      }
     } catch (e) {
       console.warn('Failed to load user cloud config:', e);
     }

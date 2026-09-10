@@ -266,6 +266,19 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     }).catch(() => {});
+
+    // 同步固化至全系統資料庫
+    if (safeGas) {
+      fetch('/api/system-database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gasWebUrl: safeGas,
+          deploySheetUrl: safeSheet,
+          email: cleanEmail
+        })
+      }).catch(() => {});
+    }
   } catch (e) {}
 
   // 3. 雲端 Firestore 同步儲存（若專案已啟用 Firestore）
@@ -278,7 +291,7 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
 }
 
 /**
- * 取得使用者的專屬個人化設定（優先從後端 API / Firestore 雲端讀取，降級讀取本地與深度掃描）
+ * 取得使用者的專屬個人化設定（優先從後端 API / 全系統資料庫 / Firestore 雲端讀取，降級讀取本地與深度掃描）
  */
 export async function getUserCloudConfig(email: string): Promise<UserCloudConfig | null> {
   if (!email) return null;
@@ -306,6 +319,36 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
           } catch (e) {}
           return serverConfig;
         }
+      }
+    }
+  } catch (e) {}
+
+  // 1.5 檢查全系統預設資料庫 (system-database)
+  try {
+    const sysRes = await fetch('/api/system-database');
+    if (sysRes.ok) {
+      const sysData = await sysRes.json();
+      if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
+        const sysDb = sysData.database;
+        const fallbackConfig: UserCloudConfig = {
+          email: cleanEmail,
+          name: '',
+          gasWebUrl: sysDb.gasWebUrl,
+          deploySheetUrl: sysDb.deploySheetUrl || '',
+          updatedAt: sysDb.updatedAt || new Date().toISOString()
+        };
+        try {
+          localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(fallbackConfig));
+          localStorage.setItem('muji_gas_web_url', sysDb.gasWebUrl);
+          localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, sysDb.gasWebUrl);
+          localStorage.setItem('banban_permanent_gas_url', sysDb.gasWebUrl);
+          localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, sysDb.gasWebUrl);
+          if (sysDb.deploySheetUrl) {
+            localStorage.setItem('muji_sheet_url', sysDb.deploySheetUrl);
+            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, sysDb.deploySheetUrl);
+          }
+        } catch (e) {}
+        return fallbackConfig;
       }
     }
   } catch (e) {}

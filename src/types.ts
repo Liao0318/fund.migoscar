@@ -217,7 +217,7 @@ export interface PartnerInviteData {
   adminNickname?: string;
   adminAvatar?: string;
   adminRole?: '廖' | '周' | 'admin' | string;
-  gasWebUrl: string;
+  gasWebUrl?: string;
   deploySheetUrl?: string;
   createdAt: string;
 }

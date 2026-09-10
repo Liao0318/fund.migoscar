@@ -13,6 +13,7 @@ if (!fs.existsSync(DATA_DIR)) {
 const USER_CONFIGS_FILE = path.join(DATA_DIR, 'user_configs.json');
 const PARTNER_INVITES_FILE = path.join(DATA_DIR, 'partner_invites.json');
 const COUPLE_BINDINGS_FILE = path.join(DATA_DIR, 'couple_bindings.json');
+const SYSTEM_DATABASE_FILE = path.join(DATA_DIR, 'system_database.json');
 
 function readJsonFile<T>(filePath: string, defaultValue: T): T {
   try {
@@ -48,7 +49,22 @@ async function startServer() {
         return res.status(400).json({ success: false, message: 'Email required' });
       }
       const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
-      const config = configs[email] || null;
+      let config = configs[email] || null;
+
+      // 若此帳號尚無獨立資料庫設定，自動回退使用全系統現有已配置之資料庫（情侶共同帳本預設）
+      if (!config || !config.gasWebUrl) {
+        const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
+        if (sysDb && sysDb.gasWebUrl) {
+          config = {
+            ...(config || {}),
+            email,
+            gasWebUrl: sysDb.gasWebUrl,
+            deploySheetUrl: sysDb.deploySheetUrl || '',
+            updatedAt: sysDb.updatedAt,
+          };
+        }
+      }
+
       return res.json({ success: true, config });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
@@ -63,14 +79,101 @@ async function startServer() {
         return res.status(400).json({ success: false, message: 'Email required' });
       }
       const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const existing = configs[email] || {};
+
+      // 🛡️ 嚴格防止現有有效網址被空字串意外覆蓋清空
+      const safeGas = (payload.gasWebUrl && typeof payload.gasWebUrl === 'string' && payload.gasWebUrl.trim().startsWith('http'))
+        ? payload.gasWebUrl.trim()
+        : (payload.forceClear ? '' : (existing.gasWebUrl || ''));
+
+      const safeSheet = (payload.deploySheetUrl && typeof payload.deploySheetUrl === 'string' && payload.deploySheetUrl.trim().startsWith('http'))
+        ? payload.deploySheetUrl.trim()
+        : (payload.forceClear ? '' : (existing.deploySheetUrl || ''));
+
       configs[email] = {
-        ...(configs[email] || {}),
+        ...existing,
         ...payload,
         email,
+        gasWebUrl: safeGas,
+        deploySheetUrl: safeSheet,
         updatedAt: new Date().toISOString(),
       };
       writeJsonFile(USER_CONFIGS_FILE, configs);
+
+      // 當有有效 GAS 網址時，同步至全系統資料庫 fallback 檔案
+      if (safeGas) {
+        const sysDb = {
+          gasWebUrl: safeGas,
+          deploySheetUrl: safeSheet,
+          configuredBy: email,
+          updatedAt: new Date().toISOString(),
+        };
+        writeJsonFile(SYSTEM_DATABASE_FILE, sysDb);
+      }
+
       return res.json({ success: true, config: configs[email] });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 1.5 System Database API (單一全域資料庫端點，只要任何一台電腦或手機設定過一次，全體共享即刻同步)
+  app.get('/api/system-database', (_req, res) => {
+    try {
+      const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
+      if (sysDb && sysDb.gasWebUrl) {
+        return res.json({ success: true, database: sysDb });
+      }
+      // 搜尋是否有任一使用者已儲存有效網址
+      const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const anyWithGas = Object.values(configs).find((c: any) => c && c.gasWebUrl && typeof c.gasWebUrl === 'string' && c.gasWebUrl.startsWith('http'));
+      if (anyWithGas) {
+        const derived = {
+          gasWebUrl: anyWithGas.gasWebUrl,
+          deploySheetUrl: anyWithGas.deploySheetUrl || '',
+          configuredBy: anyWithGas.email || '',
+          updatedAt: anyWithGas.updatedAt || new Date().toISOString(),
+        };
+        writeJsonFile(SYSTEM_DATABASE_FILE, derived);
+        return res.json({ success: true, database: derived });
+      }
+      return res.json({ success: false, database: null });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/system-database', (req, res) => {
+    try {
+      const { gasWebUrl, deploySheetUrl, email } = req.body || {};
+      if (gasWebUrl && typeof gasWebUrl === 'string' && gasWebUrl.trim().startsWith('http')) {
+        const cleanGas = gasWebUrl.trim();
+        const cleanSheet = typeof deploySheetUrl === 'string' ? deploySheetUrl.trim() : '';
+        const sysDb = {
+          gasWebUrl: cleanGas,
+          deploySheetUrl: cleanSheet,
+          configuredBy: email || '',
+          updatedAt: new Date().toISOString(),
+        };
+        writeJsonFile(SYSTEM_DATABASE_FILE, sysDb);
+
+        // 同步寫入此使用者的個人設定中
+        if (email && typeof email === 'string') {
+          const cleanEmail = email.trim().toLowerCase();
+          const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+          configs[cleanEmail] = {
+            ...(configs[cleanEmail] || {}),
+            email: cleanEmail,
+            gasWebUrl: cleanGas,
+            deploySheetUrl: cleanSheet,
+            updatedAt: new Date().toISOString(),
+          };
+          writeJsonFile(USER_CONFIGS_FILE, configs);
+        }
+
+        return res.json({ success: true, database: sysDb });
+      }
+      return res.status(400).json({ success: false, message: 'Invalid gasWebUrl' });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }

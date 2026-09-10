@@ -1009,7 +1009,21 @@ export default function App() {
       } catch (e) {}
     }
 
-    // 若此帳號確實已建立過專屬 API 資料庫
+    // 🛡️ 雙重保險備援 3：直接向伺服器全系統資料庫端點提取 (跨裝置換機即刻自動同步)
+    if (!activeGas) {
+      try {
+        const sysRes = await fetch('/api/system-database');
+        if (sysRes.ok) {
+          const sysData = await sysRes.json();
+          if (sysData?.success && sysData?.database?.gasWebUrl) {
+            activeGas = sysData.database.gasWebUrl;
+            activeSheet = sysData.database.deploySheetUrl || activeSheet || '';
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 若此帳號確實已建立過專屬 API 資料庫 (或從全系統資料庫拉取成功)
     if (activeGas && activeGas.startsWith('http') && !partnerInvite) {
       const displayWelcomeName = boundNickname || user.name;
       setGasWebUrl(activeGas);
@@ -1053,11 +1067,9 @@ export default function App() {
       setIsCheckingCloudConfig(false);
       return;
     } else {
-      // 4. 初次或全新獨立帳號：徹底初始化全新系統資料，數值全部為空，並彈出引導小精靈！
+      // 4. 初次或全新獨立帳號：若完全無任何資料庫紀錄，才初始化
       const newInviteCode = generateRandomInviteCode();
       setCurrentInviteCode(newInviteCode);
-      setGasWebUrl('');
-      setDeploySheetUrl('');
       setRecords([]);
       setSplitItems([]);
       setShoppingItems([]);
@@ -1076,8 +1088,6 @@ export default function App() {
           inviteCode: newInviteCode,
           adminEmail: freshUser.email,
           adminName: freshUser.name || '主管理員',
-          gasWebUrl: '',
-          deploySheetUrl: '',
           createdAt: new Date().toISOString()
         });
         saveUserCloudConfig(freshUser.email, {
@@ -2238,6 +2248,53 @@ export default function App() {
     fetchTravelData(true);
   };
 
+  // ☁️ 全域跨裝置就緒：開機時無論登入與否，主動雙向同步本機與伺服器系統資料庫
+  useEffect(() => {
+    const syncSystemDatabase = async () => {
+      // 1. 若此裝置本地存有有效網址，立刻上傳同步至伺服器，使手機或另一台裝置即刻可用
+      const localGas = localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || localStorage.getItem('banban_device_master_gas');
+      const localSheet = localStorage.getItem('muji_sheet_url') || localStorage.getItem('banban_permanent_sheet_url') || localStorage.getItem('banban_device_master_sheet');
+      
+      if (localGas && localGas.trim().startsWith('http')) {
+        try {
+          fetch('/api/system-database', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              gasWebUrl: localGas.trim(),
+              deploySheetUrl: (localSheet || '').trim(),
+              email: currentUser?.email || ''
+            })
+          }).catch(() => {});
+        } catch (e) {}
+      } else {
+        // 2. 若此裝置本地無網址，主動向伺服器拉取系統既有資料庫
+        try {
+          const res = await fetch('/api/system-database');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.success && data.database && data.database.gasWebUrl) {
+              const sysGas = data.database.gasWebUrl;
+              const sysSheet = data.database.deploySheetUrl || '';
+              setGasWebUrl(sysGas);
+              if (sysSheet) setDeploySheetUrl(sysSheet);
+              try {
+                localStorage.setItem('muji_gas_web_url', sysGas);
+                localStorage.setItem('banban_permanent_gas_url', sysGas);
+                localStorage.setItem('banban_device_master_gas', sysGas);
+                if (sysSheet) {
+                  localStorage.setItem('muji_sheet_url', sysSheet);
+                  localStorage.setItem('banban_permanent_sheet_url', sysSheet);
+                }
+              } catch (e) {}
+            }
+          }
+        } catch (e) {}
+      }
+    };
+    syncSystemDatabase();
+  }, [currentUser?.email]);
+
   // ☁️ 確保管理者的有效邀請碼在 Firestore 雲端隨時就緒
   useEffect(() => {
     if (currentUser?.email && !isSandboxMode && currentUser.userRole === 'admin') {
@@ -2333,6 +2390,27 @@ export default function App() {
             }
           }
         } catch (e) {}
+
+        // 2.5 向伺服器全域系統資料庫查詢備援 (換手機時自動繼承電腦已設定之資料庫)
+        if (!activeGas || !activeGas.startsWith('http')) {
+          try {
+            const sysRes = await fetch('/api/system-database');
+            if (sysRes.ok) {
+              const sysData = await sysRes.json();
+              if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
+                const sysGas = sysData.database.gasWebUrl;
+                const sysSheet = sysData.database.deploySheetUrl || '';
+                activeGas = sysGas;
+                setGasWebUrl(sysGas);
+                if (sysSheet && !activeSheet) {
+                  activeSheet = sysSheet;
+                  setDeploySheetUrl(sysSheet);
+                }
+                updated = true;
+              }
+            }
+          } catch (e) {}
+        }
 
         // 鞏固儲存至多重持久鍵並同步至伺服器與 Firestore 雲端
         if (activeGas && activeGas.startsWith('http')) {

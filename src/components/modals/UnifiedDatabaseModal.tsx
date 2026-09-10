@@ -374,6 +374,19 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     // 立即傳入乾淨的 API 網址與試算表網址，確保雲端邀請碼即刻綁定
     saveDeployConfig(cleanGas, cleanSheet);
 
+    // 立即主動推送至伺服器全域持久端點，讓手機與其他電腦立即能夠讀取
+    try {
+      fetch('/api/system-database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gasWebUrl: cleanGas,
+          deploySheetUrl: cleanSheet,
+          email: currentUser?.email || ''
+        })
+      }).catch(() => {});
+    } catch (e) {}
+
     setTimeout(() => {
       setIsAdminBindingLoading(false);
       setAdminWizardStep(3); // 進入綁定成功與邀請伴侶步驟
@@ -404,6 +417,20 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     } catch (e) {}
 
     saveDeployConfig(cleanGas, cleanSheet);
+
+    // 立即主動推送至伺服器全域持久端點，讓手機與其他電腦立即能夠讀取
+    try {
+      fetch('/api/system-database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gasWebUrl: cleanGas,
+          deploySheetUrl: cleanSheet,
+          email: currentUser?.email || ''
+        })
+      }).catch(() => {});
+    } catch (e) {}
+
     setSaveSuccessMsg(true);
     setTimeout(() => setSaveSuccessMsg(false), 3000);
 
@@ -482,6 +509,31 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
         }, 500);
         return;
       }
+
+      // 3. 查詢全系統伺服器資料庫 (system-database)
+      try {
+        const sysRes = await fetch('/api/system-database');
+        if (sysRes.ok) {
+          const sysData = await sysRes.json();
+          if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
+            const sysGas = sysData.database.gasWebUrl;
+            const sysSheet = sysData.database.deploySheetUrl || '';
+            setDetectedGasUrl(sysGas);
+            if (sysSheet) setDetectedSheetUrl(sysSheet);
+            setInputGasUrl(sysGas);
+            if (sysSheet) setInputSheetUrl(sysSheet);
+            setGasWebUrl(sysGas);
+            if (sysSheet) setDeploySheetUrl(sysSheet);
+            saveDeployConfig(sysGas, sysSheet);
+            setCloudSearchStatus('🎉 已成功從系統伺服器同步電腦設定的資料庫！即將進入帳本...');
+            setTimeout(() => {
+              if (onCompleteOnboarding) onCompleteOnboarding();
+              onClose();
+            }, 500);
+            return;
+          }
+        }
+      } catch (e) {}
 
       if (!silent) {
         setCloudSearchStatus('尚未在雲端找到此 Google 帳號先前儲存的資料庫。若您剛剛在電腦設定，請確認電腦有登入此 Google 帳號並重新整理一次網頁；或您可直接在下方「資料庫與 API 設定」貼上 Web App 網址。');
