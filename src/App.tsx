@@ -1038,6 +1038,23 @@ export default function App() {
       };
       setCurrentUser(freshUser);
 
+      // 自動預先註冊此邀請碼至雲端與本機，確保伴侶輸入時代碼即時可查
+      if (freshUser.email) {
+        saveActiveInviteCode({
+          inviteCode: newInviteCode,
+          adminEmail: freshUser.email,
+          adminName: freshUser.name || '主管理員',
+          gasWebUrl: '',
+          deploySheetUrl: '',
+          createdAt: new Date().toISOString()
+        });
+        saveUserCloudConfig(freshUser.email, {
+          inviteCode: newInviteCode,
+          email: freshUser.email,
+          name: freshUser.name
+        });
+      }
+
       try {
         localStorage.setItem('banban_auth_user', JSON.stringify(freshUser));
         localStorage.setItem('banban_is_sandbox_mode', 'false');

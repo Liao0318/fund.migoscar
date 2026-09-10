@@ -220,13 +220,7 @@ export function extractInviteCode(input: string): string | null {
   if (!input) return null;
   const str = input.trim();
 
-  // 1. 若含有 BB- 開頭的 4~8 碼正規格式（例如 BB-XXXX、BB - 1234、包含中括號 【BB-XXXX】等）
-  const matchBB = str.match(/BB\s*-\s*([A-Za-z0-9]{4,8})/i);
-  if (matchBB && matchBB[1]) {
-    return `BB-${matchBB[1].toUpperCase()}`;
-  }
-
-  // 2. 若為 URL 且含有 invite= (Base64 Token)
+  // 1. 若為 URL 且含有 invite= (Base64 Token)
   if (str.includes('invite=')) {
     try {
       const url = new URL(str.startsWith('http') ? str : `https://dummy.local/${str}`);
@@ -235,16 +229,27 @@ export function extractInviteCode(input: string): string | null {
     } catch (e) {}
   }
 
+  // 2. 若含有 BB- 開頭的 4~8 碼正規格式（例如 BB-XXXX、BB - 1234、包含中括號 【BB-XXXX】等）
+  const matchBB = str.match(/BB\s*[-_]?\s*([A-Za-z0-9]{4,8})/i);
+  if (matchBB && matchBB[1]) {
+    return `BB-${matchBB[1].toUpperCase()}`;
+  }
+
   // 3. 若含有 #join= 或 #code= 或 join= 或 code=
   const matchParam = str.match(/(?:#|\?|&)(?:join|code)=([A-Za-z0-9_-]+)/i);
   if (matchParam && matchParam[1]) {
     const raw = matchParam[1].toUpperCase();
-    return raw.startsWith('BB-') ? raw : `BB-${raw}`;
+    return raw.startsWith('BB-') ? raw : (raw.startsWith('BB') ? `BB-${raw.slice(2)}` : `BB-${raw}`);
   }
 
-  // 4. 若去除空格與符號後為 4~8 碼英數字
+  // 4. 若輸入內容為純 email
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)) {
+    return str.toLowerCase();
+  }
+
+  // 5. 若去除空格與符號後為 4~8 碼英數字
   const cleanChars = str.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  if (cleanChars.length >= 4 && cleanChars.length <= 8) {
+  if (cleanChars.length >= 4 && cleanChars.length <= 10) {
     return cleanChars.startsWith('BB') && cleanChars.length > 4 
       ? `BB-${cleanChars.slice(2)}` 
       : `BB-${cleanChars}`;
@@ -369,7 +374,30 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
     }
   }
 
-  // 4. 若 Token 解碼出有效資料，亦予認可
+  // 4. 若輸入的是伴侶或管理員的 Email，直接從該管理員的 user_configs 中查詢最新邀請資訊
+  if (isFirestoreAvailable() && db && cleanInput.includes('@')) {
+    try {
+      const emailClean = cleanInput.trim().toLowerCase();
+      const userDoc = await getDoc(doc(db, 'user_configs', emailClean));
+      if (userDoc.exists()) {
+        const udata = userDoc.data() as any;
+        if (udata && udata.inviteCode) {
+          const inviteData: PartnerInviteData = {
+            inviteCode: udata.inviteCode,
+            adminEmail: emailClean,
+            adminName: udata.name || '主管理員',
+            gasWebUrl: udata.gasWebUrl || '',
+            deploySheetUrl: udata.deploySheetUrl || '',
+            createdAt: new Date().toISOString()
+          };
+          saveActiveInviteCode(inviteData);
+          return inviteData;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 5. 若 Token 解碼出有效資料，亦予認可
   if (localResolved && localResolved.adminEmail) {
     return localResolved;
   }
