@@ -952,43 +952,20 @@ export default function App() {
           }
         }
 
-        // 🛡️ 防跨帳號污染校驗：檢查雲端 gasWebUrl 是否確實為本帳號合法配置
+        // 🛡️ 雲端 gasWebUrl 載入校驗：確保使用者換機登入時直接載入自己綁定的資料庫
         if (cloudConfig.gasWebUrl && cloudConfig.gasWebUrl.startsWith('http')) {
-          let isContaminated = false;
-          // 若有附帶邀請碼，確認該邀請碼的發起人是否為自己
+          activeGas = cloudConfig.gasWebUrl;
+          activeSheet = cloudConfig.deploySheetUrl || '';
+          setGasWebUrl(activeGas);
+          setDeploySheetUrl(activeSheet);
+          try {
+            localStorage.setItem('muji_gas_web_url', activeGas);
+            localStorage.setItem('muji_sheet_url', activeSheet);
+            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+          } catch (e) {}
           if (cloudConfig.inviteCode) {
-            try {
-              const inviteInfo = await fetchInviteCodeOnline(cloudConfig.inviteCode);
-              if (inviteInfo && inviteInfo.adminEmail && inviteInfo.adminEmail.toLowerCase() !== cleanEmail) {
-                // 該邀請碼管理者是別人，表示為先前跨帳號快取造成的歷史污染，予以修復清空
-                isContaminated = true;
-              }
-            } catch (e) {}
-          }
-
-          if (isContaminated) {
-            console.warn('檢測到帳號存在舊版跨帳號殘留設定，已自動重設並初始化為全新狀態:', cleanEmail);
-            await saveUserCloudConfig(user.email, {
-              gasWebUrl: '',
-              deploySheetUrl: '',
-              inviteCode: generateRandomInviteCode()
-            });
-            activeGas = '';
-            activeSheet = '';
-          } else {
-            activeGas = cloudConfig.gasWebUrl;
-            activeSheet = cloudConfig.deploySheetUrl || '';
-            setGasWebUrl(activeGas);
-            setDeploySheetUrl(activeSheet);
-            try {
-              localStorage.setItem('muji_gas_web_url', activeGas);
-              localStorage.setItem('muji_sheet_url', activeSheet);
-              localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
-              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
-            } catch (e) {}
-            if (cloudConfig.inviteCode) {
-              setCurrentInviteCode(cloudConfig.inviteCode);
-            }
+            setCurrentInviteCode(cloudConfig.inviteCode);
           }
         }
       }
@@ -2234,39 +2211,27 @@ export default function App() {
           }
         } catch (e) {}
 
-        // 2. 從個人 UserCloudConfig 同步 (帶有防污染驗證)
+        // 2. 從個人 UserCloudConfig 雲端設定同步（換機或無快取時自動載入）
         try {
           const cloudConfig = await getUserCloudConfig(cleanEmail);
           if (cloudConfig) {
-            let isContaminated = false;
-            if (cloudConfig.inviteCode) {
-              try {
-                const inviteInfo = await fetchInviteCodeOnline(cloudConfig.inviteCode);
-                if (inviteInfo && inviteInfo.adminEmail && inviteInfo.adminEmail.toLowerCase() !== cleanEmail && !isPartnerRole) {
-                  isContaminated = true;
-                }
+            if (cloudConfig.gasWebUrl && (!activeGas || activeGas !== cloudConfig.gasWebUrl)) {
+              setGasWebUrl(cloudConfig.gasWebUrl);
+              try { 
+                localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl);
+                localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cloudConfig.gasWebUrl);
               } catch (e) {}
+              activeGas = cloudConfig.gasWebUrl;
+              updated = true;
             }
-
-            if (!isContaminated) {
-              if (cloudConfig.gasWebUrl && !activeGas) {
-                setGasWebUrl(cloudConfig.gasWebUrl);
-                try { 
-                  localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl);
-                  localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cloudConfig.gasWebUrl);
-                } catch (e) {}
-                activeGas = cloudConfig.gasWebUrl;
-                updated = true;
-              }
-              if (cloudConfig.deploySheetUrl && !activeSheet) {
-                setDeploySheetUrl(cloudConfig.deploySheetUrl);
-                try { 
-                  localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl);
-                  localStorage.setItem(`muji_sheet_url_${cleanEmail}`, cloudConfig.deploySheetUrl);
-                } catch (e) {}
-                activeSheet = cloudConfig.deploySheetUrl;
-                updated = true;
-              }
+            if (cloudConfig.deploySheetUrl && (!activeSheet || activeSheet !== cloudConfig.deploySheetUrl)) {
+              setDeploySheetUrl(cloudConfig.deploySheetUrl);
+              try { 
+                localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl);
+                localStorage.setItem(`muji_sheet_url_${cleanEmail}`, cloudConfig.deploySheetUrl);
+              } catch (e) {}
+              activeSheet = cloudConfig.deploySheetUrl;
+              updated = true;
             }
           }
         } catch (e) {}

@@ -18,16 +18,6 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   }
 }
 
-// 徹底重置本機所有測試快取與登入狀態，確保每次進入都是乾淨的新用戶狀態
-if (typeof window !== 'undefined') {
-  const RESET_VERSION = 'v2026_09_fresh_start_1';
-  if (localStorage.getItem('banban_reset_version') !== RESET_VERSION) {
-    localStorage.clear();
-    sessionStorage.clear();
-    localStorage.setItem('banban_reset_version', RESET_VERSION);
-  }
-}
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
