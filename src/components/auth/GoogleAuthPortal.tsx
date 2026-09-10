@@ -262,10 +262,10 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
             transition={{ duration: 0.4 }}
             className="flex flex-col items-center"
           >
-            {/* 伴伴記官方專屬 Logo */}
+            {/* 伴伴記官方專屬 Logo (填滿圓角邊緣，立體鮮明) */}
             <div className="mb-4 relative">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white shadow-[0_8px_24px_rgba(82,68,54,0.08)] border border-[#EDE5DA] flex items-center justify-center p-3 transition-transform hover:scale-105">
-                <BrandLogo size={68} transparent={false} />
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-[28px] sm:rounded-[32px] bg-white shadow-[0_12px_28px_rgba(82,68,54,0.12)] border border-[#EDE5DA] flex items-center justify-center p-0 overflow-hidden transition-transform hover:scale-105">
+                <BrandLogo className="w-full h-full" transparent={false} />
               </div>
               <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] shadow-sm font-bold border-2 border-white">
                 ♥

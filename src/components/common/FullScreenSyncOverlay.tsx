@@ -65,27 +65,27 @@ export const FullScreenSyncOverlay: React.FC<FullScreenSyncOverlayProps> = ({
               <motion.div
                 animate={{ scale: [1, 1.15, 1], opacity: [0.35, 0.7, 0.35] }}
                 transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-                className="absolute w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-gradient-to-tr from-amber-400/20 via-emerald-400/20 to-amber-500/20 blur-md pointer-events-none"
+                className="absolute w-36 h-36 sm:w-40 sm:h-40 rounded-full bg-gradient-to-tr from-amber-400/25 via-rose-300/20 to-amber-500/25 blur-lg pointer-events-none"
               />
 
               {/* 旋轉微粒軌道環 */}
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
-                className="absolute w-24 h-24 sm:w-28 sm:h-28 rounded-full border border-dashed border-amber-600/30"
+                className="absolute w-32 h-32 sm:w-36 sm:h-36 rounded-full border border-dashed border-amber-600/35"
               />
 
               {/* 旋轉發光指示點 */}
               <motion.div
                 animate={{ rotate: 360 }}
                 transition={{ duration: 2.2, repeat: Infinity, ease: 'linear' }}
-                className="absolute w-24 h-24 sm:w-28 sm:h-28"
+                className="absolute w-32 h-32 sm:w-36 sm:h-36"
               >
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-600 shadow-sm shadow-amber-500 -top-1 left-1/2 -translate-x-1/2 absolute" />
+                <div className="w-3 h-3 rounded-full bg-amber-600 shadow-sm shadow-amber-500 -top-1.5 left-1/2 -translate-x-1/2 absolute" />
               </motion.div>
 
-              {/* 核心 Logo 卡片 */}
-              <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-2xl bg-white shadow-xl shadow-amber-900/5 border border-[#EDE8DE] flex items-center justify-center p-3.5 z-10">
+              {/* 核心 Logo 卡片 (填滿圓角邊緣) */}
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-[28px] sm:rounded-[32px] bg-white shadow-2xl shadow-amber-900/15 border border-[#E8DFD1] flex items-center justify-center p-0 overflow-hidden z-10">
                 <BrandLogo className="w-full h-full" />
               </div>
             </div>
