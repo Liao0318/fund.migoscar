@@ -92,6 +92,7 @@ import { DataBackupModal } from './components/modals/DataBackupModal';
 import { PwaInstallModal } from './components/modals/PwaInstallModal';
 import { UnifiedSettingsModal } from './components/modals/UnifiedSettingsModal';
 import { DeveloperSettingsModal } from './components/modals/DeveloperSettingsModal';
+import { VersionInfoModal } from './components/modals/VersionInfoModal';
 import { FloatingChatButton } from './components/chat/FloatingChatButton';
 import { ChatAssistantDrawer } from './components/chat/ChatAssistantDrawer';
 import { 
@@ -567,6 +568,7 @@ export default function App() {
   const isUserProfileModalOpen_deprecated = false;
   const [isUserProfileModalOpen, setIsUserProfileModalOpen] = useState(false);
   const [isUnifiedSettingsModalOpen, setIsUnifiedSettingsModalOpen] = useState(false);
+  const [isVersionInfoModalOpen, setIsVersionInfoModalOpen] = useState(false);
 
   // 🚀 全屏同步中動畫狀態 (登入與雲端資料庫同步專用，取代右下角 Toast)
   const [isInitialSyncing, setIsInitialSyncing] = useState<boolean>(false);
@@ -4537,6 +4539,7 @@ export default function App() {
         isSandboxMode={isSandboxMode}
         gasWebUrl={gasWebUrl}
         onOpenDevSettings={() => setIsDevSettingsModalOpen(true)}
+        onOpenVersionInfo={() => setIsVersionInfoModalOpen(true)}
       />
 
 
@@ -6373,6 +6376,19 @@ export default function App() {
         setAllNotifySettings={setAllAppNotifySettings}
         toggleNotifySetting={toggleAppNotifySetting}
         onTestNotification={handleTestInAppNotify}
+        onOpenVersionInfo={() => setIsVersionInfoModalOpen(true)}
+      />
+
+      {/* 🏷️ 系統版本與運行環境資訊 Modal */}
+      <VersionInfoModal
+        isOpen={isVersionInfoModalOpen}
+        onClose={() => setIsVersionInfoModalOpen(false)}
+        isSandboxMode={isSandboxMode}
+        isGuestMode={isGuestMode}
+        isDevUser={currentUser?.isDevSandbox}
+        gasWebUrl={gasWebUrl}
+        onOpenDatabaseSettings={handleOpenGasDeploy}
+        onToggleDevSandbox={() => handleToggleSandboxMode(!isSandboxMode)}
       />
 
       {/* 進入網頁時的超支/省錢警告通知彈窗 */}

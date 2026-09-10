@@ -36,6 +36,7 @@ import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTe
 import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
 import { scanAndRecoverGasUrl, getUserCloudConfig } from '../../utils/userConfigService';
 import { hasBackendServer } from '../../utils/environment';
+import { APP_VERSION } from '../../version';
 
 interface UnifiedDatabaseModalProps {
   isOpen: boolean;
@@ -596,6 +597,9 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                     <h3 className="font-extrabold text-[#3E3A36] text-sm sm:text-base">
                       {isForcedOnboarding ? '✨ 帳本啟用引導小精靈' : '資料庫設定與引導小精靈'}
                     </h3>
+                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-[#EDE8DC] text-[#635B4E] border border-[#DDD6C8]">
+                      {APP_VERSION}
+                    </span>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
                       isConnected 
                         ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 

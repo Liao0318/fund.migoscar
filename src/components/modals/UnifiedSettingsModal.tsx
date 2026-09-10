@@ -34,6 +34,7 @@ import {
   Sliders
 } from 'lucide-react';
 import { AuthUser, CoupleBindingInfo, NicknameLengthPreference, AppNotifySettings } from '../../types';
+import { APP_VERSION, APP_BUILD_DATE, APP_NAME } from '../../version';
 
 interface UnifiedSettingsModalProps {
   isOpen: boolean;
@@ -70,6 +71,7 @@ interface UnifiedSettingsModalProps {
   setAllNotifySettings?: (val: boolean) => void;
   toggleNotifySetting?: (key: keyof AppNotifySettings) => void;
   onTestNotification?: () => void;
+  onOpenVersionInfo?: () => void;
 }
 
 type SettingsSubView = null | 'nickname' | 'partner' | 'gas' | 'backup' | 'pwa' | 'advanced' | 'notify';
@@ -103,7 +105,8 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   notifySettings,
   setAllNotifySettings,
   toggleNotifySetting,
-  onTestNotification
+  onTestNotification,
+  onOpenVersionInfo
 }) => {
   const [subView, setSubView] = useState<SettingsSubView>(null);
   const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
@@ -1207,8 +1210,23 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
             </div>
 
             {/* 3. Footer 底部版本資訊 */}
-            <div className="px-4 py-2.5 border-t border-[#E8E4D9] bg-white text-center text-[10px] text-[#A39E92] font-mono shrink-0">
-              伴伴記帳 • BanBan Accounting v2.5
+            <div className="px-4 py-2.5 border-t border-[#E8E4D9] bg-white flex items-center justify-between text-[11px] text-[#8C8475] font-mono shrink-0 select-none">
+              <div className="flex items-center gap-1.5">
+                <span>{APP_NAME}</span>
+                <span className="font-bold text-[#3E3A36]">{APP_VERSION}</span>
+                <span className="text-[#DDD6C8]">|</span>
+                <span className="text-[10px] text-[#A8A194]">{APP_BUILD_DATE}</span>
+              </div>
+              {onOpenVersionInfo && (
+                <button
+                  type="button"
+                  onClick={onOpenVersionInfo}
+                  className="text-[10px] px-2 py-0.5 rounded-md bg-[#FAF8F5] hover:bg-[#EAE5D9] text-[#5C5549] border border-[#DDD6C8] transition-all cursor-pointer font-sans font-bold active:scale-95"
+                  title="點擊查看版本與更新紀錄"
+                >
+                  版本詳情
+                </button>
+              )}
             </div>
           </motion.aside>
         </div>

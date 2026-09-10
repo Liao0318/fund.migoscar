@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { RefreshCw, CheckCircle2, Database, ShieldCheck, ArrowRight } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
+import { APP_VERSION } from '../../version';
 
 export interface FullScreenSyncOverlayProps {
   isVisible: boolean;
@@ -191,6 +192,11 @@ export const FullScreenSyncOverlay: React.FC<FullScreenSyncOverlayProps> = ({
             <div className="flex items-center gap-1.5 text-[11px] text-[#8C8474]">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span>直連您的 Google 雲端試算表與個人空間，數據絕不外流</span>
+            </div>
+
+            {/* 系統版本號註記 */}
+            <div className="mt-2.5 text-[10px] font-mono text-[#A8A194] select-none">
+              伴伴記 {APP_VERSION} • 雲端同步核心
             </div>
 
             {/* 連線若久未回應時出現的「直接進入」按鈕 */}

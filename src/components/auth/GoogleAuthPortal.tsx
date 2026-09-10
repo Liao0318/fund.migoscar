@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { BrandLogo } from '../common/BrandLogo';
 import { AuthUser, PartnerInviteData } from '../../types';
+import { APP_VERSION, APP_BUILD_DATE, APP_NAME } from '../../version';
 import { 
   signInWithGooglePopup, 
   requestGoogleOAuthToken
@@ -634,6 +635,16 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
                     <span>系統整體設定通道 (Dev)</span>
                   </button>
                 </div>
+
+                {/* 🏷️ 系統版本號與環境標記 */}
+                <div className="pt-2 text-center">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#EAE5D9]/80 border border-[#DDD6C8] text-[10px] font-mono text-[#787164]">
+                    <span>{APP_NAME}</span>
+                    <span className="font-bold text-[#3E3A36]">{APP_VERSION}</span>
+                    <span className="text-[#B3ABA0]">|</span>
+                    <span>正式雲端版</span>
+                  </span>
+                </div>
               </div>
             </>
           ) : (
@@ -649,10 +660,18 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
                 <Rocket className="w-4 h-4 text-emerald-700" />
                 <span>返回上路正式系統登入</span>
               </button>
-              <div className="text-center pt-1">
+              <div className="text-center pt-1 space-y-1">
                 <p className="text-[11px] text-[#9C9486] font-medium">
                   DEV 模式專供介面設計與全功能調校・帳號登入完全獨立隔離
                 </p>
+                {/* 🏷️ DEV 版本號標記 */}
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-100 border border-purple-200 text-[10px] font-mono text-purple-900">
+                    <span>{APP_NAME}</span>
+                    <span className="font-bold">{APP_VERSION}</span>
+                    <span>(DEV 測試沙盒)</span>
+                  </span>
+                </div>
               </div>
             </>
           )}

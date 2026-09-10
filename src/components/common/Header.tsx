@@ -2,6 +2,7 @@ import React from 'react';
 import { Bell, LogIn, Menu } from 'lucide-react';
 import { BrandLogo } from './BrandLogo.tsx';
 import { AuthUser } from '../../types';
+import { APP_VERSION } from '../../version';
 
 interface HeaderProps {
   isOnline: boolean;
@@ -24,6 +25,7 @@ interface HeaderProps {
   onOpenGasDeploy?: () => void;
   unreadNotificationCount?: number;
   onOpenDevSettings?: () => void;
+  onOpenVersionInfo?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,7 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   isSandboxMode = false,
   gasWebUrl = '',
-  onOpenDevSettings
+  onOpenDevSettings,
+  onOpenVersionInfo
 }) => {
   return (
     <header className="fixed top-0 left-0 right-0 z-40 w-full font-sans bg-[#FAF9F5]/95 backdrop-blur-xl border-b border-[#EAE6DC] shadow-[0_2px_12px_rgba(62,58,54,0.04)]">
@@ -67,6 +70,17 @@ export const Header: React.FC<HeaderProps> = ({
               <h1 className="text-sm sm:text-base font-black text-[#3E3A36] leading-tight flex items-center gap-1">
                 伴伴記<span className="text-rose-500 text-xs sm:text-sm animate-pulse">❤️</span>
               </h1>
+              
+              {/* 🏷️ 系統版本號標籤 (點擊可查看版本與環境詳情) */}
+              <button
+                type="button"
+                onClick={onOpenVersionInfo || onOpenSettings}
+                className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-[#EDE8DC] hover:bg-[#E0DBD0] text-[#635B4E] hover:text-[#2C2824] border border-[#DDD6C8] transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0 select-none"
+                title="點擊查看版本與運行環境"
+              >
+                {APP_VERSION}
+              </button>
+
               {currentUser?.isDevSandbox && (
                 <button
                   type="button"
