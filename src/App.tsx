@@ -1132,11 +1132,53 @@ export default function App() {
     const currentEmail = (currentUser?.email || '').trim().toLowerCase();
     const adminEmail = (resolved.adminEmail || '').trim().toLowerCase();
 
-    // 🛡️ 防自我配對保護
+    // 🛡️ 同一帳號跨裝置同步：若登入者自身即為該邀請碼的發起管理者，自動在手機同步資料庫與管理員權限！
     if (currentEmail && adminEmail && currentEmail === adminEmail) {
+      let activeGas = resolved.gasWebUrl || '';
+      let activeSheet = resolved.deploySheetUrl || '';
+
+      if (!activeGas && resolved.adminEmail) {
+        try {
+          const adminConfig = await getUserCloudConfig(resolved.adminEmail);
+          if (adminConfig && adminConfig.gasWebUrl) {
+            activeGas = adminConfig.gasWebUrl;
+            activeSheet = adminConfig.deploySheetUrl || activeSheet;
+          }
+        } catch (e) {}
+      }
+
+      if (activeGas) {
+        setGasWebUrl(activeGas);
+        try { 
+          localStorage.setItem('muji_gas_web_url', activeGas);
+          localStorage.setItem(`muji_gas_web_url_${currentEmail}`, activeGas);
+          localStorage.setItem('banban_permanent_gas_url', activeGas);
+          localStorage.setItem(`banban_permanent_gas_url_${currentEmail}`, activeGas);
+        } catch (e) {}
+      }
+      if (activeSheet) {
+        setDeploySheetUrl(activeSheet);
+        try { 
+          localStorage.setItem('muji_sheet_url', activeSheet);
+          localStorage.setItem(`muji_sheet_url_${currentEmail}`, activeSheet);
+        } catch (e) {}
+      }
+
+      const adminUser: AuthUser = {
+        ...currentUser,
+        userRole: 'admin',
+        role: 'admin'
+      };
+      setCurrentUser(adminUser);
+      try {
+        localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
+      } catch (e) {}
+
+      saveDeployConfig(activeGas, activeSheet);
+
       return { 
-        success: false, 
-        message: '此邀請碼為您自身發出的管理員邀請碼，您已具有主管理員身份，無需進行自我配對。' 
+        success: true, 
+        message: '🎉 跨裝置同步成功！已成功在手機同步您的管理員資料庫！' 
       };
     }
 
@@ -2251,24 +2293,58 @@ export default function App() {
   // ☁️ 全域跨裝置就緒：開機時無論登入與否，主動雙向同步本機與伺服器系統資料庫
   useEffect(() => {
     const syncSystemDatabase = async () => {
+      const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
       // 1. 若此裝置本地存有有效網址，立刻上傳同步至伺服器，使手機或另一台裝置即刻可用
-      const localGas = localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || localStorage.getItem('banban_device_master_gas');
-      const localSheet = localStorage.getItem('muji_sheet_url') || localStorage.getItem('banban_permanent_sheet_url') || localStorage.getItem('banban_device_master_sheet');
+      const localGas = (cleanEmail ? localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) : null) ||
+        localStorage.getItem('muji_gas_web_url') || 
+        localStorage.getItem('banban_permanent_gas_url') || 
+        localStorage.getItem('banban_device_master_gas');
+      const localSheet = (cleanEmail ? localStorage.getItem(`muji_sheet_url_${cleanEmail}`) : null) ||
+        localStorage.getItem('muji_sheet_url') || 
+        localStorage.getItem('banban_permanent_sheet_url') || 
+        localStorage.getItem('banban_device_master_sheet');
       
       if (localGas && localGas.trim().startsWith('http')) {
+        const safeGas = localGas.trim();
+        const safeSheet = (localSheet || '').trim();
         try {
           fetch('/api/system-database', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              gasWebUrl: localGas.trim(),
-              deploySheetUrl: (localSheet || '').trim(),
-              email: currentUser?.email || ''
+              gasWebUrl: safeGas,
+              deploySheetUrl: safeSheet,
+              email: cleanEmail
             })
           }).catch(() => {});
+
+          if (cleanEmail) {
+            fetch('/api/user-config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email: cleanEmail,
+                name: currentUser?.name || '',
+                gasWebUrl: safeGas,
+                deploySheetUrl: safeSheet,
+                inviteCode: currentInviteCode
+              })
+            }).catch(() => {});
+          }
         } catch (e) {}
       } else {
-        // 2. 若此裝置本地無網址，主動向伺服器拉取系統既有資料庫
+        // 2. 若此裝置本地無網址，主動向伺服器拉取系統既有資料庫或使用者個人雲端
+        if (cleanEmail) {
+          try {
+            const userConfig = await getUserCloudConfig(cleanEmail);
+            if (userConfig && userConfig.gasWebUrl && userConfig.gasWebUrl.startsWith('http')) {
+              setGasWebUrl(userConfig.gasWebUrl);
+              if (userConfig.deploySheetUrl) setDeploySheetUrl(userConfig.deploySheetUrl);
+              return;
+            }
+          } catch (e) {}
+        }
+
         try {
           const res = await fetch('/api/system-database');
           if (res.ok) {

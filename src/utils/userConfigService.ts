@@ -1,6 +1,7 @@
-import { db, isFirestoreAvailable } from './googleOAuthService';
+import { db, isFirestoreAvailable, getGoogleAccessToken } from './googleOAuthService';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { AppNotifySettings } from '../types';
+import { saveConfigToGoogleDrive, loadConfigFromGoogleDrive } from './googleDriveSyncService';
 
 export interface UserCloudConfig {
   email: string;
@@ -281,6 +282,17 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
     }
   } catch (e) {}
 
+  // 2.5 真正跟隨 Google 帳號跨裝置同步：儲存至使用者的 Google Drive 專屬檔案
+  const googleToken = getGoogleAccessToken();
+  if (googleToken && safeGas) {
+    saveConfigToGoogleDrive(googleToken, {
+      gasWebUrl: safeGas,
+      deploySheetUrl: safeSheet,
+      inviteCode: payload.inviteCode,
+      userEmail: cleanEmail
+    }).catch((err) => console.warn('Google Drive config save error:', err));
+  }
+
   // 3. 雲端 Firestore 同步儲存（若專案已啟用 Firestore）
   if (isFirestoreAvailable() && db) {
     try {
@@ -352,6 +364,38 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
       }
     }
   } catch (e) {}
+
+  // 1.8 真正跟隨 Google 帳號無縫同步：從使用者個人的 Google Drive 讀取設定檔
+  const driveToken = getGoogleAccessToken();
+  if (driveToken) {
+    try {
+      const driveConfig = await loadConfigFromGoogleDrive(driveToken);
+      if (driveConfig && driveConfig.gasWebUrl && driveConfig.gasWebUrl.startsWith('http')) {
+        const mergedDriveConfig: UserCloudConfig = {
+          email: cleanEmail,
+          name: '',
+          gasWebUrl: driveConfig.gasWebUrl,
+          deploySheetUrl: driveConfig.deploySheetUrl || '',
+          inviteCode: driveConfig.inviteCode || '',
+          updatedAt: driveConfig.updatedAt || new Date().toISOString()
+        };
+        try {
+          localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(mergedDriveConfig));
+          localStorage.setItem('muji_gas_web_url', driveConfig.gasWebUrl);
+          localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, driveConfig.gasWebUrl);
+          localStorage.setItem('banban_permanent_gas_url', driveConfig.gasWebUrl);
+          localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, driveConfig.gasWebUrl);
+          if (driveConfig.deploySheetUrl) {
+            localStorage.setItem('muji_sheet_url', driveConfig.deploySheetUrl);
+            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, driveConfig.deploySheetUrl);
+          }
+        } catch (e) {}
+        return mergedDriveConfig;
+      }
+    } catch (e) {
+      console.warn('Load from Google Drive failed:', e);
+    }
+  }
 
   // 2. 嘗試從 Firestore 雲端抓取最新資料
   if (isFirestoreAvailable() && db) {

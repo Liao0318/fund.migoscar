@@ -31,7 +31,7 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData, CoupleBindingInfo } from '../../types';
-import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline } from '../../utils/partnerInvite';
+import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline, encodeInvitePayload } from '../../utils/partnerInvite';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
 import { scanAndRecoverGasUrl, getUserCloudConfig } from '../../utils/userConfigService';
@@ -267,7 +267,19 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     }
     const origin = window.location.origin;
     const pathname = window.location.pathname;
-    const fullJoinUrl = `${origin}${pathname}#join=${currentInviteCode}`;
+    const currentGas = gasWebUrl || inputGasUrl || '';
+    const currentSheet = deploySheetUrl || inputSheetUrl || '';
+    const token = encodeInvitePayload({
+      inviteCode: currentInviteCode,
+      adminEmail: currentUser?.email || '',
+      adminName: currentUser?.name || '',
+      gasWebUrl: currentGas,
+      deploySheetUrl: currentSheet,
+      createdAt: new Date().toISOString()
+    });
+    const fullJoinUrl = token 
+      ? `${origin}${pathname}#join=${currentInviteCode}&token=${token}`
+      : `${origin}${pathname}#join=${currentInviteCode}`;
     const cardText = `【伴伴記 ❤️ 情侶共同記帳邀請】\n\n嗨！${currentUser?.name || '我'} 邀請你一起使用「伴伴記」共同記帳與管理支出！\n\n🔑 專屬伴侶邀請代碼：${currentInviteCode}\n📲 點擊專屬連結立即加入綁定：\n${fullJoinUrl}\n\n一起甜蜜記帳吧！💑✨`;
     navigator.clipboard.writeText(cardText);
     setCopiedShare(true);

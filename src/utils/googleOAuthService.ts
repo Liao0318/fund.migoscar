@@ -52,6 +52,21 @@ provider.setCustomParameters({
 
 let cachedAccessToken: string | null = null;
 
+export function getGoogleAccessToken(): string | null {
+  return cachedAccessToken || (typeof window !== 'undefined' ? localStorage.getItem('banban_google_access_token') : null);
+}
+
+export function setGoogleAccessToken(token: string | null) {
+  cachedAccessToken = token;
+  if (typeof window !== 'undefined') {
+    if (token) {
+      localStorage.setItem('banban_google_access_token', token);
+    } else {
+      localStorage.removeItem('banban_google_access_token');
+    }
+  }
+}
+
 // 根據使用者 Email 或姓名判斷伴伴角色
 export function determineUserRole(name: string, email: string): '廖' | '周' | 'admin' {
   const cleanName = (name || '').trim();
@@ -76,7 +91,7 @@ export async function signInWithGooglePopup(): Promise<{ user: AuthUser; accessT
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const accessToken = credential?.accessToken;
     if (accessToken) {
-      cachedAccessToken = accessToken;
+      setGoogleAccessToken(accessToken);
     }
 
     const fbUser = result.user;
@@ -167,7 +182,7 @@ export async function requestGoogleOAuthToken(): Promise<{ user: AuthUser; acces
             return;
           }
 
-          cachedAccessToken = response.access_token;
+          setGoogleAccessToken(response.access_token);
           const userInfo = await fetchGoogleUserInfo(response.access_token);
           if (!userInfo || !userInfo.email) {
             reject(new Error('無法自 Google API 取得個人資料'));
@@ -255,5 +270,5 @@ export async function signOutGoogle() {
   } catch (e) {
     console.warn('Sign out error:', e);
   }
-  cachedAccessToken = null;
+  setGoogleAccessToken(null);
 }

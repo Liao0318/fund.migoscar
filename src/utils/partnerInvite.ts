@@ -253,11 +253,16 @@ export function extractInviteCode(input: string): string | null {
   if (!input) return null;
   const str = input.trim();
 
-  // 1. 若為 URL 且含有 invite= (Base64 Token)
-  if (str.includes('invite=')) {
+  // 1. 若含有 token= 或 invite= (Base64 Token)
+  const matchToken = str.match(/(?:#|\?|&)(?:token|invite)=([A-Za-z0-9_-]+)/i);
+  if (matchToken && matchToken[1]) {
+    return matchToken[1];
+  }
+
+  if (str.includes('invite=') || str.includes('token=')) {
     try {
       const url = new URL(str.startsWith('http') ? str : `https://dummy.local/${str}`);
-      const token = url.searchParams.get('invite');
+      const token = url.searchParams.get('token') || url.searchParams.get('invite');
       if (token) return token;
     } catch (e) {}
   }
