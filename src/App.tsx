@@ -6218,14 +6218,14 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 💬 LINE 風格智慧對話記帳懸浮圓形按鈕 */}
+      {/* 💬 智慧對話記帳懸浮圓形按鈕 */}
       <FloatingChatButton
         isOpen={isChatAssistantOpen}
         onClick={() => setIsChatAssistantOpen(true)}
         unreadCount={incomingUnreadCount}
       />
 
-      {/* 💬 LINE 風格智慧對話記帳小秘書 Drawer / Modal (LINE 機器人通知整合、語音輸入與即時記帳) */}
+      {/* 💬 智慧對話記帳小秘書 Drawer / Modal (語音輸入與即時記帳) */}
       <ChatAssistantDrawer
         isOpen={isChatAssistantOpen}
         onClose={() => setIsChatAssistantOpen(false)}

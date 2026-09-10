@@ -1498,7 +1498,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     setIsAddExpenseOpen(true);
   };
 
-  // 一鍵複製完整旅行對帳單 (Line / 通訊群組友善排版)
+  // 一鍵複製完整旅行對帳單 (通訊群組友善排版)
   const handleCopyBillSummary = () => {
     if (!activeTrip) return;
     const lines = [
@@ -1528,7 +1528,7 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
     ];
 
     navigator.clipboard.writeText(lines.join('\n'));
-    showToast('📋 已複製完整旅行對帳單！可直接貼至 LINE / 通訊群組', 'success');
+    showToast('📋 已複製完整旅行對帳單！可直接貼至通訊群組', 'success');
   };
 
   // 一鍵下載所有旅費支出為標準 Excel 試算表 (.xlsx 活頁簿，不亂碼、排版精確)

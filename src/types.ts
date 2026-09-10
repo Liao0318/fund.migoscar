@@ -179,9 +179,6 @@ export interface AppNotifySettings {
   notifyOnShoppingDelete: boolean;
 }
 
-export type TelegramNotifySettings = AppNotifySettings;
-export type LineNotifySettings = AppNotifySettings;
-
 export interface SmartCommandCardData {
   categoryBadge?: string;
   tagPill?: string;

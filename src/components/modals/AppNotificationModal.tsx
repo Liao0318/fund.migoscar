@@ -425,7 +425,7 @@ export const AppNotificationModal: React.FC<AppNotificationModalProps> = ({
                         <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 text-[11px] text-amber-900 space-y-1.5">
                           <p className="font-bold flex items-center gap-1">
                             <Smartphone className="w-3.5 h-3.5 text-amber-700" />
-                            <span>直接接收手機系統通知（免綁 LINE）</span>
+                            <span>直接接收手機系統推播通知</span>
                           </p>
                           <p className="text-[10px] text-amber-800">
                             只要雙方手機安裝了伴伴記（加到主畫面），點擊下方按鈕允許通知，對方記帳時您的手機就會跳出提醒！

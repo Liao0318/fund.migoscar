@@ -41,7 +41,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Do not intercept non-GET requests or Google Apps Script API calls
-  if (request.method !== 'GET' || url.hostname.includes('script.google.com') || url.hostname.includes('api.line.me')) {
+  if (request.method !== 'GET' || url.hostname.includes('script.google.com')) {
     return;
   }
 
