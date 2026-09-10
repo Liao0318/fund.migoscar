@@ -128,7 +128,8 @@ import {
   getUserCloudConfig,
   saveUserNotifySettings,
   getUserNotifySettings,
-  clearAllSessionLedgerCache
+  clearAllSessionLedgerCache,
+  scanAndRecoverGasUrl
 } from './utils/userConfigService';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { syncGoogleUserProfile, signOutGoogle, db } from './utils/googleOAuthService';
@@ -1629,7 +1630,14 @@ export default function App() {
   // ------------------- 隱密部署與連線設定 Modal 狀態 -------------------
   
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
-  const [gasWebUrl, setGasWebUrl] = useState(() => localStorage.getItem('muji_gas_web_url') || '');
+  const [gasWebUrl, setGasWebUrl] = useState(() => {
+    try {
+      const rec = scanAndRecoverGasUrl();
+      return rec.gasWebUrl || localStorage.getItem('muji_gas_web_url') || '';
+    } catch (e) {
+      return localStorage.getItem('muji_gas_web_url') || '';
+    }
+  });
   const [isSyncingGas, setIsSyncingGas] = useState(false);
 
   // 整合式資料庫設定與精靈 Modal 狀態
@@ -2123,7 +2131,14 @@ export default function App() {
 
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
   const [isDatabaseOnboardingOpen, setIsDatabaseOnboardingOpen] = useState(false);
-  const [deploySheetUrl, setDeploySheetUrl] = useState(() => localStorage.getItem('muji_sheet_url') || '');
+  const [deploySheetUrl, setDeploySheetUrl] = useState(() => {
+    try {
+      const rec = scanAndRecoverGasUrl();
+      return rec.deploySheetUrl || localStorage.getItem('muji_sheet_url') || '';
+    } catch (e) {
+      return localStorage.getItem('muji_sheet_url') || '';
+    }
+  });
   const [activeDeployCodeTab, setActiveDeployCodeTab] = useState<'codeGs' | 'indexHtml' | 'splitHtml'>('codeGs');
   const [copiedCodeType, setCopiedCodeType] = useState<'codeGs' | 'indexHtml' | 'splitHtml' | null>(null);
 
@@ -2146,10 +2161,25 @@ export default function App() {
     localStorage.setItem('muji_sheet_url', cleanSheet);
     localStorage.setItem('muji_gas_web_url', cleanGas);
     const cleanUserEmail = (currentUser?.email || '').trim().toLowerCase();
-    if (cleanUserEmail) {
+    if (cleanGas) {
       try {
-        localStorage.setItem(`muji_sheet_url_${cleanUserEmail}`, cleanSheet);
-        localStorage.setItem(`muji_gas_web_url_${cleanUserEmail}`, cleanGas);
+        localStorage.setItem('banban_permanent_gas_url', cleanGas);
+        localStorage.setItem('banban_device_master_gas', cleanGas);
+        if (cleanUserEmail) {
+          localStorage.setItem(`muji_gas_web_url_${cleanUserEmail}`, cleanGas);
+          localStorage.setItem(`banban_permanent_gas_url_${cleanUserEmail}`, cleanGas);
+          localStorage.setItem(`banban_user_has_logged_in_${cleanUserEmail}`, 'true');
+        }
+      } catch (e) {}
+    }
+    if (cleanSheet) {
+      try {
+        localStorage.setItem('banban_permanent_sheet_url', cleanSheet);
+        localStorage.setItem('banban_device_master_sheet', cleanSheet);
+        if (cleanUserEmail) {
+          localStorage.setItem(`muji_sheet_url_${cleanUserEmail}`, cleanSheet);
+          localStorage.setItem(`banban_permanent_sheet_url_${cleanUserEmail}`, cleanSheet);
+        }
       } catch (e) {}
     }
 
@@ -2237,6 +2267,20 @@ export default function App() {
         let activeSheet = deploySheetUrl || (cleanEmail ? localStorage.getItem(`muji_sheet_url_${cleanEmail}`) : '') || '';
         let updated = false;
 
+        // 0. 本機多重持久掃描（快速秒復原）
+        if (!activeGas || !activeGas.startsWith('http')) {
+          const recovered = scanAndRecoverGasUrl(cleanEmail);
+          if (recovered.gasWebUrl) {
+            activeGas = recovered.gasWebUrl;
+            setGasWebUrl(activeGas);
+            if (recovered.deploySheetUrl && !activeSheet) {
+              activeSheet = recovered.deploySheetUrl;
+              setDeploySheetUrl(activeSheet);
+            }
+            updated = true;
+          }
+        }
+
         // 1. 無論是主管理員或伴侶，都嘗試同步伴侶綁定紀錄
         try {
           const binding = await fetchPartnerBindingInfoOnline(cleanEmail);
@@ -2289,6 +2333,24 @@ export default function App() {
             }
           }
         } catch (e) {}
+
+        // 鞏固儲存至多重持久鍵
+        if (activeGas && activeGas.startsWith('http')) {
+          try {
+            localStorage.setItem('muji_gas_web_url', activeGas);
+            localStorage.setItem('banban_permanent_gas_url', activeGas);
+            localStorage.setItem('banban_device_master_gas', activeGas);
+            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+            localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, activeGas);
+            localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
+            if (activeSheet) {
+              localStorage.setItem('muji_sheet_url', activeSheet);
+              localStorage.setItem('banban_permanent_sheet_url', activeSheet);
+              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+              localStorage.setItem(`banban_permanent_sheet_url_${cleanEmail}`, activeSheet);
+            }
+          } catch (e) {}
+        }
 
         if (updated && activeGas) {
           showToast('☁️ 已從雲端帳號自動同步專屬 API 設定', 'info');

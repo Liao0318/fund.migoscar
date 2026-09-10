@@ -26,7 +26,7 @@ import {
   requestGoogleOAuthToken
 } from '../../utils/googleOAuthService';
 import { fetchPartnerBindingInfoOnline, getActiveInviteCode } from '../../utils/partnerInvite';
-import { getUserCloudConfig } from '../../utils/userConfigService';
+import { getUserCloudConfig, scanAndRecoverGasUrl } from '../../utils/userConfigService';
 
 interface GoogleAuthPortalProps {
   onLogin: (user: AuthUser, partnerInvite?: PartnerInviteData | null, initialCloudGasUrl?: string, initialCloudSheetUrl?: string) => void;
@@ -96,15 +96,14 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
           cloudSheet = userSheet.trim();
         }
       }
-      // 若無用戶專屬金鑰，讀取本機現存之全域金鑰備援（同裝置已綁定之資料庫）
+      // 深度全域與本機多層級掃描復原
       if (!cloudGas) {
-        const fallbackGas = localStorage.getItem('muji_gas_web_url');
-        const fallbackSheet = localStorage.getItem('muji_sheet_url');
-        if (fallbackGas && fallbackGas.trim().startsWith('http')) {
-          cloudGas = fallbackGas.trim();
-        }
-        if (fallbackSheet) {
-          cloudSheet = fallbackSheet.trim();
+        const recovered = scanAndRecoverGasUrl(cleanEmail);
+        if (recovered.gasWebUrl) {
+          cloudGas = recovered.gasWebUrl;
+          if (recovered.deploySheetUrl && !cloudSheet) {
+            cloudSheet = recovered.deploySheetUrl;
+          }
         }
       }
     } catch (e) {}

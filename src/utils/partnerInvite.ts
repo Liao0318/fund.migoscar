@@ -82,6 +82,15 @@ export async function saveActiveInviteCode(invite: PartnerInviteData): Promise<v
     console.error('Error saving active invite code locally', e);
   }
 
+  // 伺服器持久 API 同步（跨裝置無縫查詢）
+  try {
+    fetch('/api/partner-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(invite)
+    }).catch(() => {});
+  } catch (e) {}
+
   // 雲端 Firestore 同步
   if (isFirestoreAvailable() && db && invite.inviteCode) {
     try {
@@ -127,7 +136,7 @@ export function getInviteRegistry(): Record<string, PartnerInviteData> {
 }
 
 /**
- * 儲存伴侶綁定資訊 (雙軌：本地 + Firestore)
+ * 儲存伴侶綁定資訊 (三軌：本地 + 伺服器 API + Firestore)
  */
 export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<void> {
   try {
@@ -135,6 +144,15 @@ export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<v
   } catch (e) {
     console.error('Error saving partner binding info locally', e);
   }
+
+  // 伺服器 API 同步（跨裝置）
+  try {
+    fetch('/api/couple-binding', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(info)
+    }).catch(() => {});
+  } catch (e) {}
 
   if (isFirestoreAvailable() && db) {
     try {
@@ -167,13 +185,28 @@ export function getPartnerBindingInfo(): CoupleBindingInfo | null {
 }
 
 /**
- * 從 Firestore 或本地讀取最新伴侶綁定資訊
+ * 從伺服器 API、Firestore 或本地讀取最新伴侶綁定資訊（具備跨裝置同步）
  */
 export async function fetchPartnerBindingInfoOnline(email?: string): Promise<CoupleBindingInfo | null> {
   const local = getPartnerBindingInfo();
   if (!email) return local;
   
   const cleanEmail = email.trim().toLowerCase();
+
+  // 1. 優先從伺服器持久 API 抓取
+  try {
+    const res = await fetch(`/api/couple-binding?email=${encodeURIComponent(cleanEmail)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && data.binding) {
+        const bindData = data.binding as CoupleBindingInfo;
+        savePartnerBindingInfo(bindData);
+        return bindData;
+      }
+    }
+  } catch (e) {}
+
+  // 2. 嘗試從 Firestore 讀取
   if (isFirestoreAvailable() && db) {
     try {
       const bindRef = doc(db, 'couple_bindings', cleanEmail);
@@ -329,6 +362,24 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
   // 2. 智慧萃取出乾淨的代碼 (例如 BB-XXXX)
   const extractedCode = extractInviteCode(cleanInput);
   const codeToQuery = (extractedCode || cleanInput).toUpperCase();
+
+  // 2.5 優先向伺服器持久化 API 查詢（跨裝置零時差）
+  try {
+    const queryUrl = cleanInput.includes('@') 
+      ? `/api/partner-invite?email=${encodeURIComponent(cleanInput.trim().toLowerCase())}`
+      : `/api/partner-invite?code=${encodeURIComponent(codeToQuery)}`;
+    const res = await fetch(queryUrl);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && data.invite) {
+        const inv = data.invite as PartnerInviteData;
+        if (inv && inv.adminEmail && inv.gasWebUrl) {
+          saveActiveInviteCode(inv);
+          return inv;
+        }
+      }
+    }
+  } catch (e) {}
 
   // 3. 向 Firestore 查詢真實存在的邀請紀錄
   if (isFirestoreAvailable() && db && codeToQuery) {

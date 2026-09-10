@@ -34,6 +34,7 @@ import { AuthUser, PartnerInviteData, CoupleBindingInfo } from '../../types';
 import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode } from '../../utils/partnerInvite';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
+import { scanAndRecoverGasUrl } from '../../utils/userConfigService';
 
 interface UnifiedDatabaseModalProps {
   isOpen: boolean;
@@ -99,9 +100,14 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
   // 管理員小精靈步驟：1 (試算表與代碼) | 2 (驗證與綁定 API) | 3 (派發邀請碼)
   const [adminWizardStep, setAdminWizardStep] = useState<1 | 2 | 3>(1);
 
+  // 智慧偵測本機或多重鍵已儲存之 API 網址
+  const detectedInitial = scanAndRecoverGasUrl(currentUser?.email);
+  const [detectedGasUrl, setDetectedGasUrl] = useState<string>(detectedInitial.gasWebUrl || '');
+  const [detectedSheetUrl, setDetectedSheetUrl] = useState<string>(detectedInitial.deploySheetUrl || '');
+
   // 本地輸入狀態
-  const [inputSheetUrl, setInputSheetUrl] = useState(deploySheetUrl || '');
-  const [inputGasUrl, setInputGasUrl] = useState(gasWebUrl || '');
+  const [inputSheetUrl, setInputSheetUrl] = useState(deploySheetUrl || detectedInitial.deploySheetUrl || '');
+  const [inputGasUrl, setInputGasUrl] = useState(gasWebUrl || detectedInitial.gasWebUrl || '');
 
   // 伴侶邀請碼輸入與驗證狀態
   const [inviteInput, setInviteInput] = useState('');
@@ -122,12 +128,28 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
 
   const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
   const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
+  const cleanUserEmail = (currentUser?.email || '').trim().toLowerCase();
+  const hasLoggedInBefore = cleanUserEmail ? (
+    localStorage.getItem(`banban_user_has_logged_in_${cleanUserEmail}`) === 'true' ||
+    Boolean(localStorage.getItem(`banban_permanent_gas_url_${cleanUserEmail}`)) ||
+    Boolean(localStorage.getItem(`muji_gas_web_url_${cleanUserEmail}`)) ||
+    Boolean(detectedGasUrl)
+  ) : Boolean(detectedGasUrl);
 
   // 同步外部傳入的初始設定
   useEffect(() => {
     if (isOpen) {
-      if (deploySheetUrl) setInputSheetUrl(deploySheetUrl);
-      if (gasWebUrl) setInputGasUrl(gasWebUrl);
+      const rec = scanAndRecoverGasUrl(currentUser?.email);
+      if (rec.gasWebUrl) {
+        setDetectedGasUrl(rec.gasWebUrl);
+        if (rec.deploySheetUrl) setDetectedSheetUrl(rec.deploySheetUrl);
+      }
+
+      const activeGas = gasWebUrl || rec.gasWebUrl || '';
+      const activeSheet = deploySheetUrl || rec.deploySheetUrl || '';
+
+      if (activeSheet) setInputSheetUrl(activeSheet);
+      if (activeGas) setInputGasUrl(activeGas);
 
       // 🛡️ 權限防護：伴侶不可進入 settings 或 code 分頁
       if (isPartner) {
@@ -142,8 +164,8 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
 
       if (initialWizardRole === 'admin') setWizardRole('admin_flow');
       else if (initialWizardRole === 'partner') setWizardRole('partner_flow');
-      else if (gasWebUrl && gasWebUrl.startsWith('http')) {
-        // 若已連線，預設開啟設定分頁或引導管理者
+      else if (activeGas && activeGas.startsWith('http')) {
+        // 若已連線，預設開啟完成步驟或設定
         setWizardRole(isPartner ? 'partner_flow' : 'admin_flow');
         setAdminWizardStep(3);
       } else {
@@ -168,7 +190,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
         }
       } catch (e) {}
     }
-  }, [isOpen, deploySheetUrl, gasWebUrl, initialTab, initialWizardRole]);
+  }, [isOpen, deploySheetUrl, gasWebUrl, initialTab, initialWizardRole, currentUser?.email]);
 
   // 即時聯網解析伴侶邀請碼（支援整段文案、網址或純代碼）
   useEffect(() => {
@@ -337,6 +359,16 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     try {
       localStorage.setItem('muji_gas_web_url', cleanGas);
       localStorage.setItem('muji_sheet_url', cleanSheet);
+      localStorage.setItem('banban_permanent_gas_url', cleanGas);
+      localStorage.setItem('banban_device_master_gas', cleanGas);
+      const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+      if (cleanEmail) {
+        localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cleanGas);
+        localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, cleanGas);
+        localStorage.setItem(`muji_sheet_url_${cleanEmail}`, cleanSheet);
+        localStorage.setItem(`banban_permanent_sheet_url_${cleanEmail}`, cleanSheet);
+        localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
+      }
     } catch (e) {}
 
     // 立即傳入乾淨的 API 網址與試算表網址，確保雲端邀請碼即刻綁定
@@ -359,16 +391,50 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     try {
       localStorage.setItem('muji_gas_web_url', cleanGas);
       localStorage.setItem('muji_sheet_url', cleanSheet);
+      localStorage.setItem('banban_permanent_gas_url', cleanGas);
+      localStorage.setItem('banban_device_master_gas', cleanGas);
       const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
       if (cleanEmail) {
         localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cleanGas);
+        localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, cleanGas);
         localStorage.setItem(`muji_sheet_url_${cleanEmail}`, cleanSheet);
+        localStorage.setItem(`banban_permanent_sheet_url_${cleanEmail}`, cleanSheet);
+        localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
       }
     } catch (e) {}
 
     saveDeployConfig(cleanGas, cleanSheet);
     setSaveSuccessMsg(true);
     setTimeout(() => setSaveSuccessMsg(false), 3000);
+
+    if (cleanGas.startsWith('http')) {
+      if (onCompleteOnboarding) onCompleteOnboarding();
+      onClose();
+    }
+  };
+
+  const handleQuickRestoreDetected = () => {
+    if (!detectedGasUrl) return;
+    setGasWebUrl(detectedGasUrl);
+    if (detectedSheetUrl) setDeploySheetUrl(detectedSheetUrl);
+    saveDeployConfig(detectedGasUrl, detectedSheetUrl);
+    try {
+      localStorage.setItem('muji_gas_web_url', detectedGasUrl);
+      localStorage.setItem('banban_permanent_gas_url', detectedGasUrl);
+      localStorage.setItem('banban_device_master_gas', detectedGasUrl);
+      const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+      if (cleanEmail) {
+        localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, detectedGasUrl);
+        localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, detectedGasUrl);
+        localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
+        if (detectedSheetUrl) {
+          localStorage.setItem(`muji_sheet_url_${cleanEmail}`, detectedSheetUrl);
+          localStorage.setItem(`banban_permanent_sheet_url_${cleanEmail}`, detectedSheetUrl);
+        }
+      }
+    } catch (e) {}
+    if (onCompleteOnboarding) onCompleteOnboarding();
+    onClose();
   };
 
   const isConnected = Boolean(gasWebUrl && gasWebUrl.startsWith('http'));
@@ -400,7 +466,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                         : 'bg-amber-100 text-amber-800 border border-amber-300'
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-600' : 'bg-amber-600 animate-ping'}`} />
-                      <span>{isConnected ? (isPartner ? '伴侶連線中' : '資料庫已連通') : (isForcedOnboarding ? '新帳號初次設定' : '初始待連線')}</span>
+                      <span>{isConnected ? (isPartner ? '伴侶連線中' : '資料庫已連通') : (hasLoggedInBefore || detectedGasUrl ? '既有用戶待連線' : '新帳號初次設定')}</span>
                     </span>
                   </div>
                   <p className="text-[11px] text-[#8C8475] font-medium mt-0.5">
@@ -423,7 +489,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
               )}
             </div>
 
-            {/* 4 大功能分頁切換列 (強制引導時僅開放引導小精靈，或允許進階設定) */}
+            {/* 4 大功能分頁切換列 (隨時開放切換設定或代碼，避免困於引導流程) */}
             <div className="bg-[#F5F2EA] px-4 py-2 border-b border-[#E8E4D9] flex items-center justify-between gap-1 overflow-x-auto shrink-0">
               <div className="flex items-center gap-1">
                 <button
@@ -439,66 +505,62 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                   <span>引導小精靈</span>
                 </button>
 
-                {!isForcedOnboarding && (
+                {!isPartner ? (
+                  /* 👑 主管理員專屬分頁 */
                   <>
-                    {!isPartner ? (
-                      /* 👑 主管理員專屬分頁 */
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('settings')}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                            activeTab === 'settings'
-                              ? 'bg-white text-amber-900 shadow-2xs'
-                              : 'text-[#7A7366] hover:text-[#3E3A36]'
-                          }`}
-                        >
-                          <Sliders className="w-3.5 h-3.5 text-amber-700" />
-                          <span>資料庫與 API 設定</span>
-                        </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('settings')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        activeTab === 'settings'
+                          ? 'bg-white text-amber-900 shadow-2xs'
+                          : 'text-[#7A7366] hover:text-[#3E3A36]'
+                      }`}
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-amber-700" />
+                      <span>資料庫與 API 設定</span>
+                    </button>
 
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('code')}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                            activeTab === 'code'
-                              ? 'bg-white text-amber-900 shadow-2xs'
-                              : 'text-[#7A7366] hover:text-[#3E3A36]'
-                          }`}
-                        >
-                          <FileCode className="w-3.5 h-3.5 text-amber-700" />
-                          <span>後端代碼庫</span>
-                        </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('code')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        activeTab === 'code'
+                          ? 'bg-white text-amber-900 shadow-2xs'
+                          : 'text-[#7A7366] hover:text-[#3E3A36]'
+                      }`}
+                    >
+                      <FileCode className="w-3.5 h-3.5 text-amber-700" />
+                      <span>後端代碼庫</span>
+                    </button>
 
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('partner')}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                            activeTab === 'partner'
-                              ? 'bg-white text-rose-900 shadow-2xs'
-                              : 'text-[#7A7366] hover:text-[#3E3A36]'
-                          }`}
-                        >
-                          <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
-                          <span>伴侶邀請管理</span>
-                        </button>
-                      </>
-                    ) : (
-                      /* 💖 伴侶專屬分頁 */
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('partner')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                          activeTab === 'partner'
-                            ? 'bg-white text-rose-900 shadow-2xs'
-                            : 'text-[#7A7366] hover:text-[#3E3A36]'
-                        }`}
-                      >
-                        <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
-                        <span>💖 伴侶帳本連線狀態</span>
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('partner')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                        activeTab === 'partner'
+                          ? 'bg-white text-rose-900 shadow-2xs'
+                          : 'text-[#7A7366] hover:text-[#3E3A36]'
+                      }`}
+                    >
+                      <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
+                      <span>伴侶邀請管理</span>
+                    </button>
                   </>
+                ) : (
+                  /* 💖 伴侶專屬分頁 */
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('partner')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      activeTab === 'partner'
+                        ? 'bg-white text-rose-900 shadow-2xs'
+                        : 'text-[#7A7366] hover:text-[#3E3A36]'
+                    }`}
+                  >
+                    <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
+                    <span>💖 伴侶帳本連線狀態</span>
+                  </button>
                 )}
               </div>
 
@@ -517,16 +579,50 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                 <div className="space-y-4">
                   {wizardRole === 'select_role' && (
                     <div className="space-y-4">
+                      {/* ⚡ 智慧秒恢復：偵測到此裝置先前設定的資料庫 API */}
+                      {detectedGasUrl && (
+                        <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-amber-50 p-4 sm:p-5 rounded-2xl border-2 border-emerald-400/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in">
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>智慧秒恢復：偵測到您先前在此裝置設定的資料庫 API！</span>
+                            </div>
+                            <p className="text-xs font-mono text-[#5C564E] truncate max-w-md">
+                              {detectedGasUrl}
+                            </p>
+                            <p className="text-[11px] text-[#7A7366]">
+                              您無需重新配置或重複部署代碼，點擊按鈕即可一秒恢復連線並開啟帳本！
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleQuickRestoreDetected}
+                            className="w-full sm:w-auto px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 shadow-md cursor-pointer transition-all"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>一鍵立即連線並進入帳本 🚀</span>
+                          </button>
+                        </div>
+                      )}
+
                       <div className="text-center space-y-1.5 py-2">
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold border border-amber-200">
                           <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-                          <span>系統自動識別：初次登入新用戶設定提示</span>
+                          <span>
+                            {hasLoggedInBefore || detectedGasUrl || currentUser?.userRole === 'admin'
+                              ? '帳本資料庫連線與身分確認'
+                              : '系統自動識別：初次登入新用戶設定提示'}
+                          </span>
                         </div>
                         <h4 className="text-lg font-black text-[#3E3A36]">
-                          歡迎新朋友 {currentUser?.nickname || currentUser?.name || ''}！請依您的角色開始使用
+                          {hasLoggedInBefore || detectedGasUrl || currentUser?.userRole === 'admin'
+                            ? `歡迎回來 ${currentUser?.nickname || currentUser?.name || ''}！請確認您的帳本連線方式`
+                            : `歡迎新朋友 ${currentUser?.nickname || currentUser?.name || ''}！請依您的角色開始使用`}
                         </h4>
                         <p className="text-xs text-[#7A7366] max-w-md mx-auto leading-relaxed">
-                          系統偵測到您尚未建立專屬帳本或綁定伴侶。情侶共同記帳只需其中一人建立 Google 試算表，另一半輸入 6 碼邀請碼即可加入！
+                          {hasLoggedInBefore || detectedGasUrl || currentUser?.userRole === 'admin'
+                            ? '系統已準備好您的帳本連線環境。若上方已偵測到資料庫，可直接一鍵恢復；或切換至上方「資料庫與 API 設定」手動確認。'
+                            : '系統偵測到您尚未建立專屬帳本或綁定伴侶。情侶共同記帳只需其中一人建立 Google 試算表，另一半輸入 6 碼邀請碼即可加入！'}
                         </p>
                       </div>
 
