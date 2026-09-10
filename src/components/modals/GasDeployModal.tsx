@@ -1,8 +1,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Sliders, Heart, Crown, Share2, Cloud, Database, AlertCircle } from 'lucide-react';
+import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Sliders, Heart, Crown, Share2, Cloud, Database, AlertCircle, Download, FileSpreadsheet, ExternalLink } from 'lucide-react';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { AuthUser } from '../../types';
+import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
 
 interface GasDeployModalProps {
   isOpen: boolean;
@@ -259,6 +260,33 @@ export const GasDeployModal: React.FC<GasDeployModalProps> = ({
                           <strong className="text-[#3E3A36] font-bold block">8. 旅遊心願清單</strong>
                           <span className="text-[#8C8475] text-[10px]">出國必吃必玩心願踩點清單與代買事項追蹤</span>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* 快速下載官方空白 Excel 範本捷徑 */}
+                    <div className="pt-2 border-t border-[#EAE4D6] flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-[11px] text-[#7A7366] flex items-center gap-1">
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>初次部署需要標準 Google 試算表範本？</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => downloadDatabaseExcelTemplate()}
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer active:scale-95"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>下載 Excel 範本 (.xlsx)</span>
+                        </button>
+                        <a
+                          href={GOOGLE_SHEETS_NEW_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2.5 py-1 bg-white hover:bg-[#FAF8F3] text-[#3E3A36] border border-[#DDD6C8] rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                        >
+                          <ExternalLink className="w-3 h-3 text-amber-800" />
+                          <span>建立新 Google 試算表</span>
+                        </a>
                       </div>
                     </div>
                   </div>

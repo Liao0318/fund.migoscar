@@ -256,7 +256,7 @@ export interface AuthUser {
   nicknameLengthPreference?: NicknameLengthPreference; // 偏好顯示字數：'1-char' (單字) 或 '2-char' (雙字)
   email: string;
   avatar?: string;
-  role?: '廖' | '周' | 'admin' | 'guest';
+  role?: '廖' | '周' | 'admin' | 'guest' | string;
   userRole?: 'admin' | 'partner'; // 'admin': 主管理者 (控管 API / Code.gs 部署與派發邀請碼), 'partner': 伴侶 (透過邀請碼綁定，純記帳無權改動API)
   adminEmail?: string;
   adminName?: string;

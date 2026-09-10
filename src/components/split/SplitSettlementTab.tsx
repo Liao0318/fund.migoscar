@@ -244,50 +244,50 @@ export const SplitSettlementTab: React.FC<SplitSettlementTabProps> = ({
                 <span>由</span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#E0DCD3] shadow-2xs">
                   <div className="w-5 h-5 rounded-full overflow-hidden border border-[#D0C9BA] shrink-0 bg-[#FAF9F5]">
-                    {((safeSummary.netDebtor === '廖' ? userA.avatar : userB.avatar)) ? (
+                    {((isRecordOfUserA(safeSummary.netDebtor, userA, userB) ? userA.avatar : userB.avatar)) ? (
                       <img
-                        src={(safeSummary.netDebtor === '廖' ? userA.avatar : userB.avatar)!}
+                        src={(isRecordOfUserA(safeSummary.netDebtor, userA, userB) ? userA.avatar : userB.avatar)!}
                         alt="Payer"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                       />
                     ) : (
                       <span className="w-full h-full bg-slate-700 text-white text-[9px] font-bold flex items-center justify-center">
-                        {safeSummary.netDebtor === '廖' ? userA.shortName : (userB.isPendingBinding ? '待' : userB.shortName)}
+                        {isRecordOfUserA(safeSummary.netDebtor, userA, userB) ? userA.shortName : (userB.isPendingBinding ? '待' : userB.shortName)}
                       </span>
                     )}
                   </div>
                   <strong className="text-[#3E3A36] text-xs sm:text-sm">
-                    {safeSummary.netDebtor === '廖'
+                    {isRecordOfUserA(safeSummary.netDebtor, userA, userB)
                       ? userA.displayName
                       : (userB.isPendingBinding ? '待確認伴侶' : userB.displayName)}
                   </strong>
-                  {safeSummary.netDebtor !== '廖' && userB.isPendingBinding && (
+                  {!isRecordOfUserA(safeSummary.netDebtor, userA, userB) && userB.isPendingBinding && (
                     <span className="text-[9px] bg-neutral-800 text-white px-1.5 py-0.2 rounded font-mono">待受邀</span>
                   )}
                 </span>
                 <span>支付給</span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#E0DCD3] shadow-2xs">
                   <div className="w-5 h-5 rounded-full overflow-hidden border border-[#D0C9BA] shrink-0 bg-[#FAF9F5]">
-                    {((safeSummary.netDebtor === '廖' ? userB.avatar : userA.avatar)) ? (
+                    {((isRecordOfUserA(safeSummary.netDebtor, userA, userB) ? userB.avatar : userA.avatar)) ? (
                       <img
-                        src={(safeSummary.netDebtor === '廖' ? userB.avatar : userA.avatar)!}
+                        src={(isRecordOfUserA(safeSummary.netDebtor, userA, userB) ? userB.avatar : userA.avatar)!}
                         alt="Payee"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                       />
                     ) : (
                       <span className="w-full h-full bg-slate-700 text-white text-[9px] font-bold flex items-center justify-center">
-                        {safeSummary.netDebtor === '廖' ? (userB.isPendingBinding ? '待' : userB.shortName) : userA.shortName}
+                        {isRecordOfUserA(safeSummary.netDebtor, userA, userB) ? (userB.isPendingBinding ? '待' : userB.shortName) : userA.shortName}
                       </span>
                     )}
                   </div>
                   <strong className="text-[#3E3A36] text-xs sm:text-sm">
-                    {safeSummary.netDebtor === '廖'
+                    {isRecordOfUserA(safeSummary.netDebtor, userA, userB)
                       ? (userB.isPendingBinding ? '待確認伴侶' : userB.displayName)
                       : userA.displayName}
                   </strong>
-                  {safeSummary.netDebtor === '廖' && userB.isPendingBinding && (
+                  {isRecordOfUserA(safeSummary.netDebtor, userA, userB) && userB.isPendingBinding && (
                     <span className="text-[9px] bg-neutral-800 text-white px-1.5 py-0.2 rounded font-mono">待受邀</span>
                   )}
                 </span>

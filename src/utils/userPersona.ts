@@ -81,6 +81,60 @@ export function resolveUserPersonas(
   currentUser?: AuthUser | null,
   partnerBinding?: CoupleBindingInfo | null
 ): PersonaPair {
+  // 🛠️ 開發者沙盒模式 (DEV Sandbox)：100% 獨立隔離的角色設定，嚴格杜絕與真實 Google 用戶資料混雜
+  if (currentUser?.isDevSandbox) {
+    const devUserA: UserPersona = {
+      id: 'developer.admin@banbanji.internal',
+      name: '系統架構師 (開發模式)',
+      nickname: '架構師',
+      displayName: '架構師',
+      shortName: '架',
+      fullName2Char: '架構',
+      nickname1Char: '架',
+      nickname2Char: '架構',
+      nicknameLengthPreference: '2-char',
+      initial: 'DEV',
+      romanizedName: 'DEV ARCHITECT',
+      email: 'developer.admin@banbanji.internal',
+      avatar: '',
+      isCurrentUser: true,
+      roleKey: 'userA',
+      themeColor: 'sky',
+      iconEmoji: '🛠️',
+      isPendingBinding: false,
+      bindingStatusText: '沙盒開發環境'
+    };
+
+    const devUserB: UserPersona = {
+      id: 'sandbox.partner@banbanji.internal',
+      name: '沙盒測試伴侶',
+      nickname: '測試伴侶',
+      displayName: '測試伴侶',
+      shortName: '伴',
+      fullName2Char: '伴侶',
+      nickname1Char: '伴',
+      nickname2Char: '伴侶',
+      nicknameLengthPreference: '2-char',
+      initial: '伴',
+      romanizedName: 'SANDBOX PARTNER',
+      email: 'sandbox.partner@banbanji.internal',
+      avatar: '',
+      isCurrentUser: false,
+      roleKey: 'userB',
+      themeColor: 'rose',
+      iconEmoji: '👧',
+      isPendingBinding: false,
+      bindingStatusText: '沙盒展示伴侶'
+    };
+
+    return {
+      userA: devUserA,
+      userB: devUserB,
+      currentUserPersona: devUserA,
+      partnerPersona: devUserB
+    };
+  }
+
   // 📱 訪客模式或未登入狀態：嚴格確保不洩漏任何其他使用者的真實姓名與 Gmail
   if (!currentUser) {
     const guestUserA: UserPersona = {
@@ -136,19 +190,19 @@ export function resolveUserPersonas(
   }
 
   const isPartnerLogin = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBinding?.partnerEmail && partnerBinding.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
-  const isOscarEmail = currentUser?.email?.toLowerCase().includes('oscar');
-  const isPeitiEmail = currentUser?.email?.toLowerCase().includes('peiti') || currentUser?.email?.toLowerCase().includes('chou');
+  const isOscarEmail = Boolean(currentUser?.email?.toLowerCase().includes('oscar'));
+  const isPeitiEmail = Boolean(currentUser?.email?.toLowerCase().includes('peiti') || currentUser?.email?.toLowerCase().includes('chou'));
 
   // ---------- 定義 Persona A (預設：管理員/首位使用者) ----------
-  let userAName = '廖尹丞';
-  let userANickname = '廖廖';
+  let userAName = isOscarEmail ? '廖尹丞' : '管理員';
+  let userANickname = isOscarEmail ? '廖廖' : '我';
   let userAEmail = '';
   let userAAvatar = '';
   let isUserACurrent = false;
 
   // ---------- 定義 Persona B (伴侶/第二位使用者) ----------
-  let userBName = '待確認伴侶';
-  let userBNickname = '待確認';
+  let userBName = isPeitiEmail ? '周沛緹' : '待確認伴侶';
+  let userBNickname = isPeitiEmail ? '周周' : '待確認';
   let userBEmail = '';
   let userBAvatar = '';
   let isUserBCurrent = false;
@@ -186,7 +240,7 @@ export function resolveUserPersonas(
       // 目前登入者為管理者 / 主帳號端
       isUserACurrent = true;
       userAName = cleanCurrentName || (isOscarEmail ? '廖尹丞' : '管理員');
-      userANickname = currentUser.nickname?.trim() || cleanCurrentName || (isOscarEmail ? '廖廖' : '管理員');
+      userANickname = currentUser.nickname?.trim() || cleanCurrentName || (isOscarEmail ? '廖廖' : '我');
       userAEmail = currentUser.email || '';
       userAAvatar = currentUser.avatar || '';
 
@@ -263,10 +317,12 @@ export function resolveUserPersonas(
   if (!userA1Char) {
     if (userANickname && userANickname.length === 1) {
       userA1Char = userANickname;
-    } else if (userAName.includes('廖') || userANickname.includes('廖') || isOscarEmail) {
-      userA1Char = '廖';
+    } else if (userAName && userAName !== '管理員' && userAName.length > 0) {
+      userA1Char = userAName.charAt(0);
+    } else if (userANickname && userANickname !== '我' && userANickname.length > 0) {
+      userA1Char = userANickname.charAt(0);
     } else {
-      userA1Char = userANickname?.[0] || userAName?.[0] || '廖';
+      userA1Char = isOscarEmail ? '廖' : '我';
     }
   }
 
@@ -274,12 +330,12 @@ export function resolveUserPersonas(
   if (!userA2Char) {
     if (userANickname && userANickname.length === 2) {
       userA2Char = userANickname;
-    } else if (userAName.includes('廖') || userANickname.includes('廖') || isOscarEmail) {
-      userA2Char = '廖廖';
-    } else if (userAName.length >= 2) {
+    } else if (userAName && userAName !== '管理員' && userAName.length >= 2) {
       userA2Char = userAName.slice(0, 2);
-    } else {
+    } else if (userA1Char && userA1Char !== '我') {
       userA2Char = userA1Char + userA1Char;
+    } else {
+      userA2Char = isOscarEmail ? '廖廖' : (userANickname || userAName || '管理員');
     }
   }
 
@@ -291,7 +347,7 @@ export function resolveUserPersonas(
 
   // 🌟 尊重使用者自訂暱稱：如果有設定暱稱了，就顯示暱稱！
   let userADisplayName = userALengthPref === '1-char' ? userA1Char : userA2Char;
-  if (userANickname && userANickname !== '廖廖' && userANickname !== '管理員') {
+  if (userANickname && userANickname !== '廖廖' && userANickname !== '管理員' && userANickname !== '我') {
     if (userALengthPref === '1-char' && userA1Char) {
       userADisplayName = userA1Char;
     } else if (userALengthPref === '2-char' && userA2Char) {
@@ -346,22 +402,24 @@ export function resolveUserPersonas(
     if (!userB1Char) {
       if (userBNickname && userBNickname.length === 1) {
         userB1Char = userBNickname;
-      } else if (userBName.includes('周') || userBNickname.includes('周') || isPeitiEmail) {
-        userB1Char = '周';
+      } else if (userBName && !userBName.includes('待確認') && userBName !== '伴侶') {
+        userB1Char = userBName.charAt(0);
+      } else if (userBNickname && !userBNickname.includes('待確認') && userBNickname !== '伴侶') {
+        userB1Char = userBNickname.charAt(0);
       } else {
-        userB1Char = userBNickname?.[0] || userBName?.[0] || '伴';
+        userB1Char = isPeitiEmail ? '周' : (isPartnerBound ? '伴' : '待');
       }
     }
 
     if (!userB2Char) {
       if (userBNickname && userBNickname.length === 2) {
         userB2Char = userBNickname;
-      } else if (userBName.includes('周') || userBNickname.includes('周') || isPeitiEmail) {
-        userB2Char = '周周';
-      } else if (userBName.length >= 2) {
+      } else if (userBName && !userBName.includes('待確認') && userBName !== '伴侶' && userBName.length >= 2) {
         userB2Char = userBName.slice(0, 2);
-      } else {
+      } else if (userB1Char && userB1Char !== '待' && userB1Char !== '伴') {
         userB2Char = userB1Char + userB1Char;
+      } else {
+        userB2Char = isPeitiEmail ? '周周' : (isPartnerBound ? '伴侶' : '待確認');
       }
     }
   }
@@ -384,8 +442,11 @@ export function resolveUserPersonas(
     }
   }
 
+  const cleanUserAId = (userAEmail || '').trim().toLowerCase();
+  const cleanUserBId = (userBEmail || '').trim().toLowerCase();
+
   const personaA: UserPersona = {
-    id: userAEmail || 'user-a',
+    id: cleanUserAId || 'user-a',
     name: userAName,
     nickname: userANickname,
     displayName: userADisplayName,
@@ -407,7 +468,7 @@ export function resolveUserPersonas(
   };
 
   const personaB: UserPersona = {
-    id: !isPartnerBound ? 'user-b-pending' : (userBEmail || 'user-b'),
+    id: !isPartnerBound ? 'user-b-pending' : (cleanUserBId || 'user-b'),
     name: !isPartnerBound ? '待確認伴侶' : userBName,
     nickname: !isPartnerBound ? '待確認' : userBNickname,
     displayName: userBDisplayName,
@@ -457,14 +518,21 @@ export function isRecordOfUserA(recordPayer: string, userA: UserPersona, userB: 
     return true;
   }
 
-  // 2. 若為既有廖之別名
+  // 2. 若為 DEV 沙盒環境，相容測試資料常用名（如架構師、廖、DEV）
+  if (userA.id === 'developer.admin@banbanji.internal' || userA.name.includes('架構師')) {
+    if (p.includes('廖') || p.includes('架構') || p === 'DEV' || p === 'Liao' || p === '我' || p === '管理員') {
+      return true;
+    }
+  }
+
+  // 3. 若為既有廖之別名
   if (userA.name.includes('廖') || userA.nickname.includes('廖') || userA.name === '廖尹丞') {
     if (p.includes('廖') || p === 'Liao' || p === 'L') {
       return true;
     }
   }
 
-  // 3. 反向排除：若已符合 User B 則必定不是 User A
+  // 4. 反向排除：若已符合 User B 則必定不是 User A
   if (isRecordOfUserB(p, userA, userB)) {
     return false;
   }
@@ -493,7 +561,14 @@ export function isRecordOfUserB(recordPayer: string, userA: UserPersona, userB: 
     return true;
   }
 
-  // 2. 若伴侶尚在待確認狀態，相容歷史紀錄之標記（如周、周周、伴侶、待確認）
+  // 2. 若為 DEV 沙盒環境，相容測試伴侶常用名（如測試伴侶、周、伴侶）
+  if (userB.id === 'sandbox.partner@banbanji.internal' || userB.name.includes('測試伴侶')) {
+    if (p.includes('周') || p.includes('測試') || p.includes('伴侶') || p === 'Chou' || p === 'P') {
+      return true;
+    }
+  }
+
+  // 3. 若伴侶尚在待確認狀態，相容歷史紀錄之標記（如周、周周、伴侶、待確認）
   if (userB.isPendingBinding) {
     if (
       p === '周' ||

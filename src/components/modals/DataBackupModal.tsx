@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Database, Download, Upload, RefreshCw, CheckCircle, AlertTriangle, Check, X, ShieldAlert, ArrowRight, Layers } from 'lucide-react';
+import { Database, Download, Upload, RefreshCw, CheckCircle, AlertTriangle, Check, X, ShieldAlert, ArrowRight, Layers, FileSpreadsheet, ExternalLink } from 'lucide-react';
 import { RecordItem, ShoppingItem, SplitRecordItem, TravelTrip, TravelExpenseItem, TravelWishItem } from '../../types';
+import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
 
 interface DataBackupModalProps {
   isOpen: boolean;
@@ -15,6 +16,8 @@ interface DataBackupModalProps {
   isSyncing: boolean;
   lastSyncedAt: string;
   isOnline: boolean;
+  isAdmin?: boolean;
+  isPartner?: boolean;
 }
 
 export const DataBackupModal: React.FC<DataBackupModalProps> = ({
@@ -28,7 +31,9 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
   onSyncAll,
   isSyncing,
   lastSyncedAt,
-  isOnline
+  isOnline,
+  isAdmin = true,
+  isPartner = false
 }) => {
   const [activeTab, setActiveTab] = useState<'backup' | 'reconcile'>('backup');
   const [restoreJsonText, setRestoreJsonText] = useState('');
@@ -131,6 +136,10 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
 
   // 執行還原
   const handleConfirmRestore = () => {
+    if (isPartner) {
+      setRestoreError('🔒 伴侶權限限制：為保障共同資料庫安全，全量覆蓋還原操作僅限主管理員帳號執行。');
+      return;
+    }
     if (!restorePreview || !restorePreview.rawData) return;
     try {
       onRestoreData(restorePreview.rawData);
@@ -235,7 +244,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
               <div className="space-y-4">
                 {/* 匯出卡片 */}
                 <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] shadow-2xs space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5">
                         <Download className="w-4 h-4 text-blue-700" />
@@ -248,7 +257,7 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                     <button
                       type="button"
                       onClick={handleExportBackup}
-                      className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
+                      className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
                     >
                       <Download className="w-4 h-4" />
                       <span>立即下載 JSON 備份檔</span>
@@ -256,31 +265,84 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                   </div>
                 </div>
 
+                {/* 官方空白資料庫 Excel 範本下載卡片 */}
+                <div className="bg-[#FAF8F3] rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5">
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                        <span>📊 下載官方空白資料庫範本 (.xlsx)</span>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.2 rounded-full">
+                          8 大工作表
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-[#8C8475] leading-relaxed">
+                        提供乾淨空白且已預設好 8 大工作表欄位（流水帳、代墊、採購、商店、旅遊行程/支出/心願、核銷）的 Excel 範本，可直接上傳 Google 雲端硬碟掛接。
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => downloadDatabaseExcelTemplate()}
+                        className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>下載 Excel 範本</span>
+                      </button>
+                      <a
+                        href={GOOGLE_SHEETS_NEW_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3.5 py-2 bg-white hover:bg-[#F2EDE1] text-[#3E3A36] border border-[#DDD8CC] rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-amber-800" />
+                        <span>建立新試算表</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
                 {/* 還原卡片 */}
                 <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] shadow-2xs space-y-3.5">
                   <div>
-                    <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5">
-                      <Upload className="w-4 h-4 text-amber-700" />
-                      <span>📤 自 JSON 備份檔還原資料</span>
-                    </h4>
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5">
+                        <Upload className="w-4 h-4 text-amber-700" />
+                        <span>📤 自 JSON 備份檔還原資料</span>
+                      </h4>
+                      {isPartner && (
+                        <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                          🔒 僅限主管理員執行還原
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-[#8C8475] mt-0.5">
-                      上傳先前匯出的備份檔案，可一次還原所有紀錄與分類
+                      {isPartner 
+                        ? '為保護雲端共享帳本一致性，全量覆蓋還原功能僅限主管理員執行。伴侶可自由匯出備份以供個人留存。'
+                        : '上傳先前匯出的備份檔案，可一次還原所有紀錄與分類'}
                     </p>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-center gap-3">
-                    <label className="w-full sm:w-auto px-4 py-2.5 bg-[#FAF8F3] hover:bg-[#F2EDE1] text-[#3E3A36] border border-[#DDD8CC] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs">
-                      <Upload className="w-4 h-4 text-[#8C8475]" />
-                      <span>選擇備份檔案 (.json)</span>
-                      <input
-                        type="file"
-                        accept=".json,application/json"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                    </label>
-                    <span className="text-[11px] text-[#A39E93]">或貼上 JSON 內容進行預覽</span>
-                  </div>
+                  {!isPartner ? (
+                    <div className="flex flex-col sm:flex-row items-center gap-3">
+                      <label className="w-full sm:w-auto px-4 py-2.5 bg-[#FAF8F3] hover:bg-[#F2EDE1] text-[#3E3A36] border border-[#DDD8CC] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-2xs">
+                        <Upload className="w-4 h-4 text-[#8C8475]" />
+                        <span>選擇備份檔案 (.json)</span>
+                        <input
+                          type="file"
+                          accept=".json,application/json"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                        />
+                      </label>
+                      <span className="text-[11px] text-[#A39E93]">或貼上 JSON 內容進行預覽</span>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-[#FAF8F3] rounded-xl border border-[#EDE7D8] text-xs text-[#7A7366] flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span>伴侶帳號具備全量資料匯出與檢視權限，若需進行系統級資料覆蓋還原，請聯繫主管理員操作。</span>
+                    </div>
+                  )}
 
                   {restoreError && (
                     <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
@@ -332,14 +394,20 @@ export const DataBackupModal: React.FC<DataBackupModalProps> = ({
                           <ShieldAlert className="w-3.5 h-3.5" />
                           <span>注意：還原將覆蓋現有本地暫存紀錄！</span>
                         </span>
-                        <button
-                          type="button"
-                          onClick={handleConfirmRestore}
-                          className="px-4 py-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer active:scale-95"
-                        >
-                          <span>確認覆蓋並還原</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
+                        {!isPartner ? (
+                          <button
+                            type="button"
+                            onClick={handleConfirmRestore}
+                            className="px-4 py-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer active:scale-95"
+                          >
+                            <span>確認覆蓋並還原</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span className="text-xs font-bold text-gray-500 bg-gray-200 px-3 py-1.5 rounded-xl cursor-not-allowed">
+                            🔒 僅主管理員可還原
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}

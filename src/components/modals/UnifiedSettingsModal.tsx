@@ -10,28 +10,30 @@ import {
   LogOut, 
   Crown, 
   Heart, 
-  Edit3, 
-  Check, 
   RefreshCw, 
-  Terminal, 
   ExternalLink, 
   Share2, 
   Copy, 
   CheckCircle2, 
   AlertCircle,
-  Cloud,
-  Layers,
   ChevronRight,
   ShieldCheck,
-  Camera,
   LogIn,
   Unlink,
   KeyRound,
   ClipboardPaste,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  Check,
+  Sparkles,
+  Layers,
+  ArrowRight,
+  Laptop,
+  Bell,
+  SlidersHorizontal,
+  Sliders
 } from 'lucide-react';
-import { AuthUser, CoupleBindingInfo, NicknameLengthPreference } from '../../types';
-import { NicknameSettingsSection } from '../common/NicknameSettingsSection';
+import { AuthUser, CoupleBindingInfo, NicknameLengthPreference, AppNotifySettings } from '../../types';
 
 interface UnifiedSettingsModalProps {
   isOpen: boolean;
@@ -64,7 +66,13 @@ interface UnifiedSettingsModalProps {
   pendingQueueCount?: number;
   isOnline?: boolean;
   lastSyncedAt?: string;
+  notifySettings?: AppNotifySettings;
+  setAllNotifySettings?: (val: boolean) => void;
+  toggleNotifySetting?: (key: keyof AppNotifySettings) => void;
+  onTestNotification?: () => void;
 }
+
+type SettingsSubView = null | 'nickname' | 'partner' | 'gas' | 'backup' | 'pwa' | 'advanced' | 'notify';
 
 export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   isOpen,
@@ -91,12 +99,13 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   onSyncGoogleAvatar,
   pendingQueueCount = 0,
   isOnline = true,
-  lastSyncedAt = '剛剛'
+  lastSyncedAt = '剛剛',
+  notifySettings,
+  setAllNotifySettings,
+  toggleNotifySetting,
+  onTestNotification
 }) => {
-  const [activeSection, setActiveSection] = useState<'profile' | 'gas' | 'backup' | 'pwa' | 'advanced'>('profile');
-  const [nicknameInput, setNicknameInput] = useState('');
-  const [isEditingNickname, setIsEditingNickname] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [subView, setSubView] = useState<SettingsSubView>(null);
   const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
@@ -105,14 +114,45 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   const [isSubmittingJoin, setIsSubmittingJoin] = useState(false);
   const [joinErrorMessage, setJoinErrorMessage] = useState('');
 
-  useEffect(() => {
-    if (currentUser) {
-      setNicknameInput(currentUser.nickname || currentUser.name?.slice(0, 2) || '');
-    }
-  }, [currentUser, isOpen]);
-
+  // 稱呼偏好表單狀態
   const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
   const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
+  const userFirstChar = currentUser?.name ? currentUser.name.charAt(0) : (isAdmin ? '我' : '伴');
+  const userShort = currentUser?.name && currentUser.name.length >= 2 ? currentUser.name.slice(0, 2) : (isAdmin ? '管理' : '伴侶');
+
+  const [lengthPref, setLengthPref] = useState<NicknameLengthPreference>('2-char');
+  const [n1Input, setN1Input] = useState<string>(userFirstChar);
+  const [n2Input, setN2Input] = useState<string>(userShort);
+  const [nicknameSavedToast, setNicknameSavedToast] = useState(false);
+
+  // 開啟選單時鎖定背景滾動，避免滾輪滾動到底層畫面
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      const originalTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.touchAction = originalTouchAction;
+      };
+    }
+  }, [isOpen]);
+
+  // 當開啟彈窗或 currentUser 變更時重設
+  useEffect(() => {
+    if (isOpen) {
+      setSubView(null);
+      setJoinErrorMessage('');
+    }
+    if (currentUser) {
+      const pref = currentUser.nicknameLengthPreference || (currentUser.nickname && currentUser.nickname.length === 1 ? '1-char' : '2-char');
+      setLengthPref(pref);
+      setN1Input(currentUser.nickname1Char || (currentUser.nickname?.length === 1 ? currentUser.nickname : userFirstChar));
+      setN2Input(currentUser.nickname2Char || (currentUser.nickname?.length === 2 ? currentUser.nickname : userShort));
+    }
+  }, [currentUser, isOpen, userFirstChar, userShort]);
 
   const handleCopyCode = () => {
     if (!currentInviteCode) return;
@@ -139,204 +179,144 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
     }
   };
 
+  const handleSaveNickname = (newPref?: NicknameLengthPreference, newN1?: string, newN2?: string) => {
+    const targetPref = newPref || lengthPref;
+    const targetN1 = (newN1 !== undefined ? newN1 : n1Input).trim() || userFirstChar;
+    const targetN2 = (newN2 !== undefined ? newN2 : n2Input).trim() || userShort;
+    const chosenName = targetPref === '1-char' ? targetN1 : targetN2;
+
+    if (onUpdateNickname) {
+      onUpdateNickname(chosenName, targetPref, targetN1, targetN2);
+      setNicknameSavedToast(true);
+      setTimeout(() => setNicknameSavedToast(false), 2000);
+    }
+  };
+
+  // 當前顯示的稱呼名稱
+  const currentDisplayName = currentUser?.nickname || currentUser?.name || '使用者';
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex pointer-events-none">
-          {/* 霧面暗色背景遮罩，點擊關閉 */}
+        <div 
+          className="fixed inset-0 z-50 overflow-hidden flex justify-start pointer-events-none"
+          onWheel={(e) => {
+            // 防止滾輪穿透到背景
+            if ((e.target as HTMLElement).closest('.modal-scroll-area')) {
+              e.stopPropagation();
+            } else {
+              e.preventDefault();
+            }
+          }}
+        >
+          {/* 背景遮罩 */}
           <motion.div
-            key="sidebar-overlay"
+            key="settings-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/40 backdrop-blur-[2px] pointer-events-auto cursor-pointer"
+            className="fixed inset-0 bg-black/40 backdrop-blur-[2px] pointer-events-auto cursor-pointer touch-none"
           />
 
-          {/* 由螢幕左邊緣向右滑出之側邊選單面板 */}
+          {/* 現代左側抽屜面板 (由左向右滑出，符合使用者習慣) */}
           <motion.aside
-            key="sidebar-panel"
+            key="settings-drawer"
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-            drag="x"
-            dragConstraints={{ left: -440, right: 0 }}
-            dragElastic={0.05}
-            onDragEnd={(e, info) => {
-              if (info.offset.x < -60 || info.velocity.x < -200) {
-                onClose();
-              }
-            }}
-            className="relative w-[90vw] sm:w-[420px] max-w-[440px] bg-[#FAF9F5] shadow-2xl z-50 flex flex-col border-r border-[#E8E4D9] h-full overflow-hidden text-[#3E3A36] pointer-events-auto"
+            transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+            className="relative w-full sm:w-[400px] max-w-[420px] bg-[#F8F7F4] shadow-2xl z-50 flex flex-col h-full overflow-hidden text-[#3E3A36] pointer-events-auto border-r border-[#E8E4D9]"
           >
-          {/* Header 頂部 */}
-          <div className="p-4 border-b border-[#E8E4D9] flex items-center justify-between bg-white shrink-0 shadow-2xs">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#3E3A36] to-[#5C564E] text-white flex items-center justify-center shadow-md shrink-0">
-                <Settings className="w-4.5 h-4.5 text-amber-300" />
+            {/* 1. Header 頂部導覽列 */}
+            <div className="px-4 py-3.5 border-b border-[#E8E4D9] flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-2">
+                {subView ? (
+                  <button
+                    type="button"
+                    onClick={() => setSubView(null)}
+                    className="p-1.5 -ml-1 rounded-full hover:bg-[#F2EFE7] text-[#5C564E] transition-colors flex items-center gap-1 text-xs font-bold cursor-pointer"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                    <span>返回設定</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold">
+                      <Settings className="w-4 h-4 text-amber-700" />
+                    </div>
+                    <h2 className="font-bold text-[#3E3A36] text-base">設定與帳戶中心</h2>
+                  </div>
+                )}
               </div>
-              <div className="min-w-0">
-                <h3 className="font-extrabold text-[#3E3A36] text-base leading-snug flex items-center gap-1.5 truncate">
-                  <span>系統設定與帳戶中心</span>
-                </h3>
-                <p className="text-[10px] text-[#8C8475] font-normal truncate">
-                  側邊選單 • 整合個人帳戶、金鑰、備份與偏好
-                </p>
-              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-[#EFECE3] hover:bg-[#E5E1D5] flex items-center justify-center text-[#8C8475] hover:text-[#3E3A36] transition-colors cursor-pointer"
+                aria-label="關閉"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-[#EFECE3] hover:bg-[#E5E1D5] flex items-center justify-center text-[#8C8475] hover:text-[#3E3A36] transition-all cursor-pointer shrink-0 ml-2"
-              title="關閉側邊選單 (亦可向左滑動關閉)"
-              aria-label="關閉側邊選單"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
 
-          {/* 橫向分頁導覽選單 */}
-          <div className="flex items-center border-b border-[#E8E4D9] bg-[#F4F1EA] px-3 sm:px-5 pt-2 gap-1 sm:gap-2 shrink-0 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-            <button
-              type="button"
-              onClick={() => setActiveSection('profile')}
-              className={`pb-2.5 px-3 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 shrink-0 ${
-                activeSection === 'profile'
-                  ? 'border-rose-600 text-rose-700 bg-white/70 rounded-t-xl'
-                  : 'border-transparent text-[#706B62] hover:text-[#3E3A36]'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              <span>{currentUser && !isGuestMode ? '個人與伴侶' : '個人帳號'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveSection('gas')}
-              className={`pb-2.5 px-3 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 shrink-0 ${
-                activeSection === 'gas'
-                  ? 'border-amber-600 text-amber-800 bg-white/70 rounded-t-xl'
-                  : 'border-transparent text-[#706B62] hover:text-[#3E3A36]'
-              }`}
-            >
-              <Key className="w-4 h-4" />
-              <span>試算表金鑰</span>
-              {gasWebUrl ? (
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              ) : (
-                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveSection('backup')}
-              className={`pb-2.5 px-3 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 shrink-0 ${
-                activeSection === 'backup'
-                  ? 'border-blue-600 text-blue-800 bg-white/70 rounded-t-xl'
-                  : 'border-transparent text-[#706B62] hover:text-[#3E3A36]'
-              }`}
-            >
-              <Database className="w-4 h-4" />
-              <span>資料備份對帳</span>
-              {pendingQueueCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[9px] font-bold">
-                  {pendingQueueCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveSection('pwa')}
-              className={`pb-2.5 px-3 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 shrink-0 ${
-                activeSection === 'pwa'
-                  ? 'border-rose-600 text-rose-700 bg-white/70 rounded-t-xl'
-                  : 'border-transparent text-[#706B62] hover:text-[#3E3A36]'
-              }`}
-            >
-              <Smartphone className="w-4 h-4" />
-              <span>手機桌面 App</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveSection('advanced')}
-              className={`pb-2.5 px-3 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border-b-2 shrink-0 ${
-                activeSection === 'advanced'
-                  ? 'border-[#3E3A36] text-[#3E3A36] bg-white/70 rounded-t-xl'
-                  : 'border-transparent text-[#706B62] hover:text-[#3E3A36]'
-              }`}
-            >
-              <Terminal className="w-4 h-4" />
-              <span>進階與離線模式</span>
-            </button>
-          </div>
-
-          {/* 內容區塊 */}
-          <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1 text-left">
-            {/* 1. 個人與伴侶 */}
-            {activeSection === 'profile' && (
-              <div className="space-y-4">
-                {/* 使用者 Google 資訊卡片 */}
-                <div className="bg-white rounded-2xl p-3.5 sm:p-5 border border-[#E8E4D9] space-y-3 sm:space-y-4 shadow-2xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* 2. 主內容區 (支援一級列表與子頁面切換) */}
+            <div className="modal-scroll-area flex-1 overflow-y-auto px-4 py-4 space-y-4 overscroll-contain">
+              {/* =========================================================================
+                  A. 一級主選單 (iOS Settings 清單風格)
+                  ========================================================================= */}
+              {!subView && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  {/* 使用者個人 Profile 頂部卡片 */}
+                  <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] shadow-xs flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0">
-                        <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden shadow-md flex items-center justify-center font-bold text-base sm:text-lg text-white ${
-                          currentUser ? (currentUser?.userRole === 'partner' || currentUser?.role === '周' ? 'bg-rose-500' : 'bg-amber-600') : 'bg-stone-500'
+                        <div className={`w-12 h-12 rounded-2xl overflow-hidden shadow-xs flex items-center justify-center font-bold text-base text-white ${
+                          currentUser ? (isPartner ? 'bg-rose-500' : 'bg-amber-600') : 'bg-stone-500'
                         }`}>
                           {currentUser?.avatar ? (
                             <img
                               src={currentUser.avatar}
-                              alt={currentUser.nickname || currentUser.name}
+                              alt={currentDisplayName}
                               referrerPolicy="no-referrer"
                               className="w-full h-full object-cover"
                             />
-                          ) : currentUser ? (
-                            <span>{currentUser?.nickname?.[0] || currentUser?.name?.[0] || '我'}</span>
                           ) : (
-                            <span>訪</span>
+                            <span>{currentUser ? currentDisplayName[0] : '訪'}</span>
                           )}
                         </div>
-                        {onSyncGoogleAvatar && currentUser && (
+                        {onSyncGoogleAvatar && currentUser && !currentUser.isDevSandbox && currentUser.authMethod === 'google_oauth' && (
                           <button
                             type="button"
                             onClick={handleSyncAvatar}
                             disabled={isSyncingAvatar}
-                            className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white border border-[#E6E0D2] shadow-xs flex items-center justify-center text-[#5C564E] hover:text-rose-600 transition-all cursor-pointer"
+                            className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white border border-[#E6E0D2] shadow-xs flex items-center justify-center text-[#5C564E] hover:text-amber-600 cursor-pointer"
                             title="重新同步 Google 大頭貼"
                           >
-                            <RefreshCw className={`w-3 h-3 ${isSyncingAvatar ? 'animate-spin text-rose-500' : ''}`} />
+                            <RefreshCw className={`w-2.5 h-2.5 ${isSyncingAvatar ? 'animate-spin text-amber-600' : ''}`} />
                           </button>
                         )}
                       </div>
 
-                      <div className="min-w-0 flex-1">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-extrabold text-[#3E3A36] text-sm sm:text-base truncate max-w-[120px] sm:max-w-none">
-                            {currentUser ? (currentUser.nickname || currentUser.name || '使用者') : '本機訪客 (未登入)'}
+                          <span className="font-bold text-[#3E3A36] text-base truncate">
+                            {currentDisplayName}
                           </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 whitespace-nowrap ${
+                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md ${
                             !currentUser
-                              ? 'bg-stone-100 text-stone-700 border border-stone-300'
+                              ? 'bg-stone-100 text-stone-700'
                               : isAdmin 
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300' 
-                              : 'bg-rose-100 text-rose-800 border border-rose-300'
+                              ? 'bg-amber-100 text-amber-900 border border-amber-200' 
+                              : 'bg-rose-100 text-rose-800 border border-rose-200'
                           }`}>
-                            {!currentUser ? (
-                              <span>📱 訪客模式</span>
-                            ) : isAdmin ? (
-                              <><Crown className="w-2.5 h-2.5 shrink-0" /><span>主要管理者</span></>
-                            ) : (
-                              <><Heart className="w-2.5 h-2.5 shrink-0" /><span>受邀伴侶</span></>
-                            )}
+                            {!currentUser ? '訪客' : isAdmin ? '主要管理者' : '伴侶'}
                           </span>
                         </div>
-                        <p className="text-xs text-[#8C8475] font-mono mt-0.5 truncate max-w-[200px] sm:max-w-none">
-                          {currentUser?.email || '未登入 Google 帳號'}
+                        <p className="text-xs text-[#8C8475] truncate mt-0.5 font-mono flex items-center gap-1">
+                          <span className="text-[10px] bg-[#FAF8F3] border border-[#E8E4D9] text-[#78716C] px-1 py-0.2 rounded font-sans font-bold">ID</span>
+                          <span>{currentUser?.email || currentUser?.id || '本機訪客體驗中'}</span>
                         </p>
                       </div>
                     </div>
@@ -346,120 +326,418 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                         type="button"
                         onClick={() => {
                           onClose();
-                          if (onLoginGoogle) {
-                            onLoginGoogle();
-                          } else {
-                            onSwitchAccount();
-                          }
+                          if (onLoginGoogle) onLoginGoogle();
+                          else onSwitchAccount();
                         }}
-                        className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-700 via-amber-800 to-amber-900 hover:from-amber-800 hover:to-amber-950 text-white text-xs font-black transition-all shadow-sm cursor-pointer flex items-center justify-center gap-1.5 shrink-0 active:scale-95 whitespace-nowrap self-stretch sm:self-center"
+                        className="px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold shrink-0 flex items-center gap-1 cursor-pointer"
                       >
                         <LogIn className="w-3.5 h-3.5 text-amber-300" />
-                        <span>登入 Google 帳號 (返回初始畫面)</span>
+                        <span>登入</span>
                       </button>
                     )}
                   </div>
 
-                  {/* 🏷️ 稱呼顯示設定與字數選擇 (單字 vs 雙字) */}
-                  {currentUser && (
-                    <NicknameSettingsSection
-                      currentUser={currentUser}
-                      onUpdateNickname={onUpdateNickname}
-                      accentColor={isAdmin ? 'amber' : 'rose'}
-                    />
-                  )}
-                </div>
+                  {/* 分組清單 1：帳號與伴侶 */}
+                  <div className="space-y-1.5">
+                    <div className="px-1 text-[11px] font-bold text-[#8C8475] tracking-wider uppercase">
+                      個人與伴侶偏好
+                    </div>
+                    <div className="bg-white rounded-2xl border border-[#E8E4D9] divide-y divide-[#F0EDE6] overflow-hidden shadow-xs">
+                      {/* 1. 稱呼與顯示模式 */}
+                      <button
+                        type="button"
+                        onClick={() => setSubView('nickname')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#FAF8F3] transition-colors text-left cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold text-xs">
+                            🏷️
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-[#3E3A36]">稱呼顯示設定</div>
+                            <div className="text-xs text-[#8C8475]">全站優先顯示之暱稱與單/雙字</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-[#8C8475]">
+                          <span className="font-bold text-[#3E3A36] bg-[#F4F1EA] px-2 py-0.5 rounded-md">
+                            {currentDisplayName} ({lengthPref === '1-char' ? '單字' : '雙字'})
+                          </span>
+                          <ChevronRight className="w-4 h-4 text-[#B5AFA6] group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </button>
 
-                {/* 伴侶連線卡片 - 僅限登入 Google 帳號用戶才可使用，訪客模式隱藏不顯示 */}
-                {currentUser && !isGuestMode && (
-                  isAdmin ? (
-                    /* 管理員專屬：派發伴侶配對邀請卡片 / 輸入伴侶邀請碼加入卡片 */
-                    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-3 shadow-2xs">
+                      {/* 2. 伴侶共同記帳 */}
+                      <button
+                        type="button"
+                        onClick={() => setSubView('partner')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#FAF8F3] transition-colors text-left cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center font-bold text-xs">
+                            💖
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-[#3E3A36]">情侶連線與邀請</div>
+                            <div className="text-xs text-[#8C8475]">
+                              {partnerBindingInfo?.partnerEmail ? `已綁定：${partnerBindingInfo.partnerName || '伴侶'}` : '邀請代碼與雙向連動'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          {partnerBindingInfo?.partnerEmail ? (
+                            <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                              已連線
+                            </span>
+                          ) : (
+                            <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                              未連線
+                            </span>
+                          )}
+                          <ChevronRight className="w-4 h-4 text-[#B5AFA6] group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </button>
+
+                      {/* 3. 個人化推播與提醒設定 */}
+                      <button
+                        type="button"
+                        onClick={() => setSubView('notify')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#FAF8F3] transition-colors text-left cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 flex items-center justify-center font-bold text-xs">
+                            🔔
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-[#3E3A36]">系統提醒與推播偏好</div>
+                            <div className="text-xs text-[#8C8475]">個人獨立開關、記帳與採購推播</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          {notifySettings && (
+                            <span className="bg-amber-100 text-amber-900 font-bold text-[10px] px-2 py-0.5 rounded-md">
+                              {Object.values(notifySettings).filter(Boolean).length}/9 項開啟
+                            </span>
+                          )}
+                          <ChevronRight className="w-4 h-4 text-[#B5AFA6] group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 分組清單 2：雲端與資料 */}
+                  <div className="space-y-1.5">
+                    <div className="px-1 text-[11px] font-bold text-[#8C8475] tracking-wider uppercase">
+                      雲端資料庫與備份
+                    </div>
+                    <div className="bg-white rounded-2xl border border-[#E8E4D9] divide-y divide-[#F0EDE6] overflow-hidden shadow-xs">
+                      {/* 3. Google 試算表連線 */}
+                      <button
+                        type="button"
+                        onClick={() => setSubView('gas')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#FAF8F3] transition-colors text-left cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-bold text-xs">
+                            📊
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-[#3E3A36]">Google 試算表連線</div>
+                            <div className="text-xs text-[#8C8475]">Web App API 金鑰與工作表</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] flex items-center gap-1 ${
+                            gasWebUrl 
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+                              : 'bg-amber-50 text-amber-800 border border-amber-200'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${gasWebUrl ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+                            <span>{gasWebUrl ? '已連線' : '待綁定'}</span>
+                          </span>
+                          <ChevronRight className="w-4 h-4 text-[#B5AFA6] group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </button>
+
+                      {/* 4. 資料備份與還原 */}
+                      <button
+                        type="button"
+                        onClick={() => setSubView('backup')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#FAF8F3] transition-colors text-left cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-800 flex items-center justify-center font-bold text-xs">
+                            💾
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-[#3E3A36]">資料備份與匯出</div>
+                            <div className="text-xs text-[#8C8475]">匯出 CSV、離線暫存佇列</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-[#8C8475]">
+                          {pendingQueueCount > 0 && (
+                            <span className="bg-amber-500 text-white font-bold text-[10px] px-1.5 py-0.2 rounded-full">
+                              {pendingQueueCount} 筆待同步
+                            </span>
+                          )}
+                          <ChevronRight className="w-4 h-4 text-[#B5AFA6] group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 分組清單 3：偏好與進階 */}
+                  <div className="space-y-1.5">
+                    <div className="px-1 text-[11px] font-bold text-[#8C8475] tracking-wider uppercase">
+                      應用程式與裝置
+                    </div>
+                    <div className="bg-white rounded-2xl border border-[#E8E4D9] divide-y divide-[#F0EDE6] overflow-hidden shadow-xs">
+                      {/* 5. 手機桌面 App (PWA) */}
+                      <button
+                        type="button"
+                        onClick={() => setSubView('pwa')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#FAF8F3] transition-colors text-left cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-800 flex items-center justify-center font-bold text-xs">
+                            📱
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-[#3E3A36]">安裝至手機桌面 (PWA)</div>
+                            <div className="text-xs text-[#8C8475]">全螢幕原生體驗與離線支援</div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-[#B5AFA6] group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+
+                      {/* 6. 進階與帳號管理 */}
+                      <button
+                        type="button"
+                        onClick={() => setSubView('advanced')}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#FAF8F3] transition-colors text-left cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-stone-100 text-[#5C564E] flex items-center justify-center font-bold text-xs">
+                            ⚙️
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-[#3E3A36]">進階模式與帳號管理</div>
+                            <div className="text-xs text-[#8C8475]">本機沙盒、切換帳號、登出</div>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-[#B5AFA6] group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* =========================================================================
+                  B. 子頁面 1：稱呼設定 (輕量現代化卡片)
+                  ========================================================================= */}
+              {subView === 'nickname' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] space-y-4 shadow-xs">
+                    <div>
+                      <h3 className="font-bold text-sm text-[#3E3A36]">稱呼字數偏好</h3>
+                      <p className="text-xs text-[#8C8475] mt-0.5">選擇在導覽列、代墊紀錄與推播中優先顯示的長度：</p>
+                    </div>
+
+                    {/* 模式切換 Segment Control */}
+                    <div className="grid grid-cols-2 gap-2 bg-[#F4F1EA] p-1 rounded-xl border border-[#E8E4D9]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLengthPref('1-char');
+                          handleSaveNickname('1-char', n1Input, n2Input);
+                        }}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          lengthPref === '1-char'
+                            ? 'bg-white text-amber-900 shadow-xs'
+                            : 'text-[#706B62] hover:text-[#3E3A36]'
+                        }`}
+                      >
+                        <span>單字模式</span>
+                        <span className="font-mono bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded text-[11px]">
+                          {n1Input.trim() || userFirstChar}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLengthPref('2-char');
+                          handleSaveNickname('2-char', n1Input, n2Input);
+                        }}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          lengthPref === '2-char'
+                            ? 'bg-white text-amber-900 shadow-xs'
+                            : 'text-[#706B62] hover:text-[#3E3A36]'
+                        }`}
+                      >
+                        <span>雙字模式</span>
+                        <span className="font-mono bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded text-[11px]">
+                          {n2Input.trim() || userShort}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* 輸入表單 */}
+                    <div className="space-y-3 pt-1">
+                      <div>
+                        <label className="block text-xs font-bold text-[#5C564E] mb-1">
+                          單字稱呼（限 1 個字）：
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={1}
+                            value={n1Input}
+                            onChange={(e) => {
+                              const val = e.target.value.trim();
+                              setN1Input(val);
+                              if (val.length === 1) handleSaveNickname(lengthPref, val, n2Input);
+                            }}
+                            className="w-16 text-center font-bold text-base py-1.5 bg-[#FAF8F3] border border-[#DDD6C8] rounded-xl focus:border-amber-600 focus:bg-white focus:outline-none"
+                          />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {[userFirstChar, '廖', '周', '寶'].filter(Boolean).map((char) => (
+                              <button
+                                key={char}
+                                type="button"
+                                onClick={() => {
+                                  setN1Input(char);
+                                  handleSaveNickname(lengthPref, char, n2Input);
+                                }}
+                                className="px-2.5 py-1 text-xs bg-[#F5F2EA] hover:bg-amber-100 text-[#5C564E] font-bold rounded-lg border border-[#E6E0D2] transition-colors cursor-pointer"
+                              >
+                                {char}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#5C564E] mb-1">
+                          雙字暱稱（限 2 個字）：
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            maxLength={2}
+                            value={n2Input}
+                            onChange={(e) => {
+                              const val = e.target.value.trim();
+                              setN2Input(val);
+                              if (val.length === 2) handleSaveNickname(lengthPref, n1Input, val);
+                            }}
+                            className="w-24 text-center font-bold text-sm py-1.5 bg-[#FAF8F3] border border-[#DDD6C8] rounded-xl focus:border-amber-600 focus:bg-white focus:outline-none"
+                          />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {[userShort, '寶貝', '阿寶'].filter(Boolean).map((pair) => (
+                              <button
+                                key={pair}
+                                type="button"
+                                onClick={() => {
+                                  setN2Input(pair);
+                                  handleSaveNickname(lengthPref, n1Input, pair);
+                                }}
+                                className="px-2.5 py-1 text-xs bg-[#F5F2EA] hover:bg-amber-100 text-[#5C564E] font-bold rounded-lg border border-[#E6E0D2] transition-colors cursor-pointer"
+                              >
+                                {pair}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {nicknameSavedToast && (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold flex items-center gap-1.5 animate-in fade-in">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>稱呼設定已即時儲存並生效！</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* =========================================================================
+                  B. 子頁面 2：伴侶邀請與連線
+                  ========================================================================= */}
+              {subView === 'partner' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  {isAdmin ? (
+                    <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] space-y-3.5 shadow-xs">
                       <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2">
                         <div className="flex items-center gap-1 bg-[#F5F2EA] p-0.5 rounded-xl border border-[#E6E0D2]">
                           <button
                             type="button"
                             onClick={() => setPartnerSubTab('share')}
                             className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              partnerSubTab === 'share'
-                                ? 'bg-white text-rose-800 shadow-2xs'
-                                : 'text-[#7A7366] hover:text-[#3E3A36]'
+                              partnerSubTab === 'share' ? 'bg-white text-rose-800 shadow-xs' : 'text-[#7A7366]'
                             }`}
                           >
-                            💌 派發我的邀請碼
+                            💌 派發邀請碼
                           </button>
                           <button
                             type="button"
                             onClick={() => setPartnerSubTab('join')}
                             className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                              partnerSubTab === 'join'
-                                ? 'bg-white text-rose-800 shadow-2xs'
-                                : 'text-[#7A7366] hover:text-[#3E3A36]'
+                              partnerSubTab === 'join' ? 'bg-white text-rose-800 shadow-xs' : 'text-[#7A7366]'
                             }`}
                           >
                             🔗 加入伴侶帳本
                           </button>
                         </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
-                          {partnerSubTab === 'share' ? '管理員模式' : '切換為伴侶'}
-                        </span>
                       </div>
-                      
+
                       {partnerSubTab === 'share' ? (
-                        <>
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EBE7DC]">
-                            <div>
-                              <div className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
-                                <span>專屬伴侶配對代碼：</span>
-                                <span className="font-mono bg-white px-2 py-0.5 rounded-lg border border-[#DDD8CE] text-rose-700 font-extrabold text-sm">
-                                  {currentInviteCode}
-                                </span>
+                        <div className="space-y-3">
+                          <div className="bg-[#FAF8F3] p-3.5 rounded-xl border border-[#EBE7DC] space-y-2">
+                            <div className="text-xs font-bold text-[#3E3A36]">專屬伴侶配對代碼</div>
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-lg font-extrabold text-rose-700 bg-white px-3 py-1 rounded-lg border border-[#DDD8CE]">
+                                {currentInviteCode}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {onGenerateNewInviteCode && (
+                                  <button
+                                    type="button"
+                                    onClick={onGenerateNewInviteCode}
+                                    className="p-2 rounded-xl bg-white border border-[#E6E0D2] hover:bg-[#F2EFE7] cursor-pointer"
+                                    title="重新生成邀請碼"
+                                  >
+                                    <RefreshCw className="w-3.5 h-3.5 text-[#5C564E]" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={handleCopyCode}
+                                  className="px-3 py-1.5 bg-white border border-[#E6E0D2] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1 cursor-pointer"
+                                >
+                                  {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                                  <span>{copiedCode ? '已複製' : '複製'}</span>
+                                </button>
+                                {onCopyInviteShare && (
+                                  <button
+                                    type="button"
+                                    onClick={handleCopyShareText}
+                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Share2 className="w-3.5 h-3.5" />
+                                    <span>{copiedShare ? '已複製' : '分享'}</span>
+                                  </button>
+                                )}
                               </div>
-                              <p className="text-[11px] text-[#8C8475] mt-1">
-                                伴侶登入後可透過此代碼即時雙向連線，共同記帳並即時接收推播
-                              </p>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              {onGenerateNewInviteCode && (
-                                <button
-                                  type="button"
-                                  onClick={onGenerateNewInviteCode}
-                                  className="p-1.5 rounded-xl bg-white hover:bg-[#F2EFE7] text-[#5C564E] border border-[#E6E0D2] transition-all cursor-pointer shadow-2xs"
-                                  title="重新隨機派發新邀請碼"
-                                >
-                                  <RefreshCw className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={handleCopyCode}
-                                className="px-3 py-1.5 bg-white hover:bg-[#F2EFE7] border border-[#E6E0D2] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1 transition-all cursor-pointer"
-                              >
-                                {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                                <span>{copiedCode ? '已複製' : '複製代碼'}</span>
-                              </button>
-
-                              {onCopyInviteShare && (
-                                <button
-                                  type="button"
-                                  onClick={handleCopyShareText}
-                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
-                                >
-                                  {copiedShare ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
-                                  <span>{copiedShare ? '已複製連結' : '分享邀請'}</span>
-                                </button>
-                              )}
                             </div>
                           </div>
 
-                          {/* 伴侶綁定狀態 */}
-                          <div className="bg-[#FAF8F3] p-2.5 rounded-xl border border-[#EBE7DC] text-xs flex items-center justify-between">
-                            <span className="text-[11px] text-[#8C8475] font-bold">伴侶狀態：</span>
+                          <div className="p-3 bg-[#FAF8F3] rounded-xl border border-[#EBE7DC] flex items-center justify-between text-xs">
+                            <span className="text-[#8C8475]">伴侶連線狀態：</span>
                             {partnerBindingInfo?.partnerEmail ? (
                               <div className="flex items-center gap-2">
-                                <span className="text-emerald-700 font-bold flex items-center gap-1 text-[11px]">
+                                <span className="text-emerald-700 font-bold flex items-center gap-1">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                   <span>已綁定 ({partnerBindingInfo.partnerName || '伴侶'})</span>
                                 </span>
@@ -467,303 +745,152 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                                   <button
                                     type="button"
                                     onClick={onUnbindPartner}
-                                    className="text-[10px] text-rose-600 hover:text-rose-800 underline font-bold cursor-pointer"
+                                    className="text-[11px] text-rose-600 underline font-bold cursor-pointer"
                                   >
-                                    解除綁定
+                                    解除
                                   </button>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 text-[10px]">
-                                ⏳ 等待伴侶輸入邀請碼
+                              <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 text-[11px]">
+                                ⏳ 等待伴侶加入
                               </span>
                             )}
                           </div>
-                        </>
+                        </div>
                       ) : (
-                        /* 加入伴侶帳本輸入表單 */
-                        <div className="bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EBE7DC] space-y-3">
-                          <p className="text-xs text-[#5C564E] leading-relaxed">
-                            輸入另一半發給您的專屬邀請碼 (如：BB-XXXX) 或完整邀請連結，即可立即加入伴侶帳本並同步所有收支紀錄：
-                          </p>
-
-                          <div className="space-y-2">
-                            <div className="relative flex items-center">
-                              <div className="absolute left-3 text-[#8C8475] pointer-events-none">
-                                <KeyRound className="w-4 h-4 text-amber-700" />
-                              </div>
-                              <input
-                                type="text"
-                                value={manualJoinCode}
-                                onChange={(e) => {
-                                  setManualJoinCode(e.target.value);
-                                  setJoinErrorMessage('');
-                                }}
-                                placeholder="輸入伴侶的 6 碼邀請碼 (如 BB-8924) 或貼上邀請連結"
-                                className="w-full bg-white border border-[#DDD6C8] focus:border-rose-400 focus:ring-2 focus:ring-rose-100 rounded-xl pl-9 pr-20 py-2.5 text-xs text-[#3E3A36] placeholder-[#A09A8F] tracking-wide font-mono transition-all"
-                              />
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  try {
-                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                      const text = await navigator.clipboard.readText();
-                                      if (text) {
-                                        setManualJoinCode(text.trim());
-                                        setJoinErrorMessage('');
-                                      }
-                                    }
-                                  } catch (e) {}
-                                }}
-                                className="absolute right-2 px-2.5 py-1 bg-[#F4EFE6] hover:bg-[#EAE4D6] text-[#5C564E] rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
-                              >
-                                <ClipboardPaste className="w-3 h-3 text-amber-800" />
-                                <span>貼上</span>
-                              </button>
-                            </div>
-
-                            {joinErrorMessage && (
-                              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
-                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                                <span>{joinErrorMessage}</span>
-                              </div>
-                            )}
-
-                            <button
-                              type="button"
-                              disabled={!manualJoinCode.trim() || isSubmittingJoin}
-                              onClick={async () => {
-                                if (!onBindPartnerInvite || !manualJoinCode.trim()) return;
-                                setIsSubmittingJoin(true);
+                        <div className="space-y-3">
+                          <p className="text-xs text-[#5C564E]">輸入伴侶發給您的 6 碼邀請碼 (如 BB-8924)：</p>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={manualJoinCode}
+                              onChange={(e) => {
+                                setManualJoinCode(e.target.value);
                                 setJoinErrorMessage('');
-                                try {
-                                  const result = await onBindPartnerInvite(manualJoinCode.trim());
-                                  if (result.success) {
-                                    setManualJoinCode('');
-                                    onClose();
-                                  } else {
-                                    setJoinErrorMessage(result.message || '驗證失敗，查無此邀請碼');
-                                  }
-                                } catch (err: any) {
-                                  setJoinErrorMessage(err?.message || '配對綁定過程發生錯誤');
-                                } finally {
-                                  setIsSubmittingJoin(false);
-                                }
                               }}
-                              className="w-full py-2.5 px-4 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-98 disabled:opacity-50"
-                            >
-                              {isSubmittingJoin ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin text-white" />
-                                  <span>正在驗證並連動伴侶帳本...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Heart className="w-4 h-4 fill-white" />
-                                  <span>驗證並加入伴侶帳本</span>
-                                </>
-                              )}
-                            </button>
+                              placeholder="輸入邀請碼"
+                              className="w-full bg-[#FAF8F3] border border-[#DDD6C8] rounded-xl px-3 py-2 text-xs font-mono"
+                            />
                           </div>
+                          {joinErrorMessage && (
+                            <div className="p-2 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-lg">
+                              {joinErrorMessage}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            disabled={!manualJoinCode.trim() || isSubmittingJoin}
+                            onClick={async () => {
+                              if (!onBindPartnerInvite || !manualJoinCode.trim()) return;
+                              setIsSubmittingJoin(true);
+                              try {
+                                const res = await onBindPartnerInvite(manualJoinCode.trim());
+                                if (res.success) {
+                                  setManualJoinCode('');
+                                  setSubView(null);
+                                } else {
+                                  setJoinErrorMessage(res.message || '驗證失敗');
+                                }
+                              } catch (e: any) {
+                                setJoinErrorMessage(e?.message || '發生錯誤');
+                              } finally {
+                                setIsSubmittingJoin(false);
+                              }
+                            }}
+                            className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            {isSubmittingJoin ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Heart className="w-3.5 h-3.5" />}
+                            <span>驗證並加入</span>
+                          </button>
                         </div>
                       )}
                     </div>
                   ) : (
-                    /* 伴侶專屬：帳本連線狀態卡片 (不顯示派發/分享邀請碼按鈕) */
-                    <div className="bg-gradient-to-br from-rose-50/70 to-[#FFF9F9] rounded-2xl p-4 sm:p-5 border border-rose-200 space-y-3 shadow-2xs">
+                    <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] space-y-3 shadow-xs">
                       <div className="flex items-center justify-between border-b border-rose-100 pb-2">
-                        <h4 className="text-xs font-extrabold text-rose-900 flex items-center gap-1.5">
+                        <span className="font-bold text-sm text-rose-900 flex items-center gap-1.5">
                           <Heart className="w-4 h-4 text-rose-600 fill-rose-500" />
-                          <span>💖 已加入情侶共同帳本</span>
-                        </h4>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
-                          伴侶已連線
+                          <span>已加入情侶帳本</span>
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">
+                          伴侶端
                         </span>
                       </div>
-
-                      <div className="bg-white rounded-xl p-3 border border-rose-100 space-y-2 text-xs">
-                        <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
-                          <span>👑 帳本主管理者：</span>
-                          <span className="font-bold text-[#3E3A36]">
-                            {currentUser?.adminName || partnerBindingInfo?.adminName || '主管理員'}
-                            {(currentUser?.adminEmail || partnerBindingInfo?.adminEmail) ? ` (${currentUser?.adminEmail || partnerBindingInfo?.adminEmail})` : ''}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
-                          <span>🔑 使用邀請碼：</span>
-                          <span className="font-mono font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded">
-                            {currentUser?.inviteCode || partnerBindingInfo?.inviteCode || currentInviteCode}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
-                          <span>🟢 資料庫狀態：</span>
-                          <span className="font-bold text-emerald-700">即時雙向連動中</span>
-                        </div>
+                      <div className="text-xs text-[#5C564E] space-y-1.5 bg-[#FAF8F3] p-3 rounded-xl">
+                        <div>👑 主管理者：<strong>{currentUser?.adminName || partnerBindingInfo?.adminName || '主管理員'}</strong></div>
+                        <div>🔑 邀請代碼：<span className="font-mono font-bold text-rose-700">{currentUser?.inviteCode || partnerBindingInfo?.inviteCode || currentInviteCode}</span></div>
                       </div>
-
-                      <div className="bg-rose-100/60 p-2.5 rounded-xl border border-rose-200 text-[11px] text-rose-900 flex items-start gap-1.5">
-                        <ShieldCheck className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                        <span>
-                          API 與試算表連線設定由主管理員統一維護，伴侶端可無憂進行日常記帳、借還代墊與採購清單！
-                        </span>
-                      </div>
-
                       {onUnbindPartner && (
                         <button
                           type="button"
                           onClick={() => {
                             onUnbindPartner();
-                            onClose();
+                            setSubView(null);
                           }}
-                          className="w-full py-2 px-3 rounded-xl bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs border border-rose-300 flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+                          className="w-full py-2 border border-rose-300 text-rose-700 rounded-xl text-xs font-bold hover:bg-rose-50 cursor-pointer"
                         >
-                          <Unlink className="w-3.5 h-3.5" />
-                          <span>更換邀請碼或解除綁定</span>
+                          解除綁定或更換帳本
                         </button>
                       )}
                     </div>
-                  )
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
 
-            {/* 2. 試算表連線金鑰 */}
-            {activeSection === 'gas' && (
-              <div className="space-y-4">
-                {(!currentUser || isGuestMode) ? (
-                  <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
-                    <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <Key className="w-4 h-4 text-stone-400" />
-                        <h4 className="text-xs font-extrabold text-[#3E3A36]">Google 試算表雲端資料庫連線</h4>
+              {/* =========================================================================
+                  B. 子頁面 3：Google 試算表連線
+                  ========================================================================= */}
+              {subView === 'gas' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] space-y-3 shadow-xs">
+                    <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2">
+                      <span className="font-bold text-sm text-[#3E3A36]">Google 試算表 API 連線</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          gasWebUrl ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {gasWebUrl ? '已連線' : '尚未設定'}
+                        </span>
+                        {!isAdmin && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 flex items-center gap-1">
+                            <ShieldCheck className="w-3 h-3" />
+                            <span>伴侶受保護模式</span>
+                          </span>
+                        )}
                       </div>
-                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 bg-stone-100 text-stone-600 border border-stone-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-stone-400" />
-                        <span>本機單機模式（未連線）</span>
-                      </span>
-                    </div>
-
-                    <div className="bg-[#FAF8F5] p-4 rounded-2xl border border-[#EDE7D9] space-y-2.5 text-xs">
-                      <div className="flex items-center gap-2 font-bold text-amber-900">
-                        <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
-                        <span>本機模式體驗中，不可登入或設定試算表金鑰</span>
-                      </div>
-                      <p className="text-[11px] text-[#7A7366] leading-relaxed">
-                        您目前正以「本機體驗模式」使用記帳與旅遊功能，所有紀錄均安全保留於本機瀏覽器內。在未登入 Google 帳戶前，系統不開放輸入、設定或登入 Google 試算表 Web App 金鑰。
-                      </p>
-                      <p className="text-[11px] text-[#7A7366] leading-relaxed">
-                        如需啟用 Google 試算表永續雲端備份、雙向即時對帳或邀請伴侶共同記帳，請先登入 Google 帳號以解除鎖定。
-                      </p>
-                    </div>
-
-                    <div className="pt-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          if (onLoginGoogle) {
-                            onLoginGoogle();
-                          } else {
-                            onSwitchAccount();
-                          }
-                        }}
-                        className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-[0.99]"
-                      >
-                        <LogIn className="w-3.5 h-3.5 text-amber-300" />
-                        <span>登入 Google 帳號以解鎖試算表連線</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
-                    <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <Key className="w-4 h-4 text-amber-600" />
-                        <h4 className="text-xs font-extrabold text-[#3E3A36]">
-                          Google 試算表雲端資料庫連線 {isPartner ? '（伴侶模式）' : ''}
-                        </h4>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1 ${
-                        gasWebUrl 
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                          : 'bg-amber-100 text-amber-800 border border-amber-300'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${gasWebUrl ? 'bg-emerald-600' : 'bg-amber-600 animate-ping'}`} />
-                        <span>{gasWebUrl ? (isPartner ? '已連線情侶共享庫' : '已成功綁定') : '尚未綁定'}</span>
-                      </span>
                     </div>
 
                     <p className="text-xs text-[#5C564E] leading-relaxed">
-                      {isPartner ? (
-                        `您已加入情侶共同帳本，所有記帳、代墊對帳與採購清單均自動即時同步至主管理員 (${currentUser?.adminName || partnerBindingInfo?.adminName || '主管理員'}) 的私有 Google 雲端試算表，雙向數據即時更新。`
-                      ) : (
-                        '透過 Google Apps Script (GAS) 部署 Web App，伴伴記所有日常代墊、公積金存入與採購紀錄將自動同步存入您的個人 Google 雲端試算表，完全保有 100% 隱私與永續存取權。'
-                      )}
+                      {isAdmin 
+                        ? '透過 Google Apps Script Web App 連結私有試算表，享有 100% 個人隱私與永續存取權。'
+                        : '您已透過伴侶邀請共用此私有試算表資料庫。為維護帳本穩定，金鑰由主管理者統一管理。'}
                     </p>
 
-                    <div className="bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EAE6DC] space-y-2">
-                      <div className="text-[11px] font-bold text-[#8C8475]">
-                        {isPartner ? '情侶共享 Web App API 連線狀態：' : '當前 Web App URL 金鑰：'}
+                    <div className="bg-[#FAF8F3] p-3 rounded-xl border border-[#EAE6DC] space-y-1 text-xs">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-[#8C8475]">
+                        <span>目前 Web App URL 金鑰：</span>
+                        {!isAdmin && (
+                          <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded">🔒 僅管理者可變更</span>
+                        )}
                       </div>
-                      <div className="font-mono text-[11px] text-[#3E3A36] break-all bg-white p-2.5 rounded-xl border border-[#DDD8CE]">
-                        {gasWebUrl ? (
-                          isPartner ? '🟢 已連通主管理員之 Google 雲端試算表 API' : gasWebUrl
-                        ) : '尚未設定任何 GAS Web App URL'}
-                      </div>
-                    </div>
-
-                    {/* 📊 試算表 8 大工作頁清單 */}
-                    <div className="bg-[#FAF8F3] rounded-2xl p-3.5 border border-[#EAE6DC] space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>試算表已連線之 8 大工作頁</span>
-                        </span>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
-                          8/8 完整支援
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5 text-[11px] text-[#5C564E]">
-                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#EAE6DC] flex items-center gap-1.5">
-                          <span>🌸</span> <span>1. 流水帳資料庫</span>
-                        </div>
-                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#EAE6DC] flex items-center gap-1.5">
-                          <span>🗓️</span> <span>2. 月度核銷狀態</span>
-                        </div>
-                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#EAE6DC] flex items-center gap-1.5">
-                          <span>💳</span> <span>3. 代墊明細</span>
-                        </div>
-                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#EAE6DC] flex items-center gap-1.5">
-                          <span>🛒</span> <span>4. 購物清單</span>
-                        </div>
-                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#EAE6DC] flex items-center gap-1.5">
-                          <span>🏪</span> <span>5. 常用商店</span>
-                        </div>
-                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#EAE6DC] flex items-center gap-1.5">
-                          <span>✈️</span> <span>6. 旅遊行程</span>
-                        </div>
-                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#EAE6DC] flex items-center gap-1.5">
-                          <span>🧾</span> <span>7. 旅遊支出明細</span>
-                        </div>
-                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-[#EAE6DC] flex items-center gap-1.5">
-                          <span>💡</span> <span>8. 旅遊心願清單</span>
-                        </div>
+                      <div className="font-mono text-[11px] text-[#3E3A36] break-all bg-white p-2 rounded-lg border border-[#DDD8CE]">
+                        {gasWebUrl || '尚未設定 URL'}
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-                      {deploySheetUrl ? (
+                    <div className="flex items-center justify-between gap-2 pt-2">
+                      {deploySheetUrl && (
                         <a
                           href={deploySheetUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="px-3 py-2 bg-white hover:bg-[#F2EFE7] border border-[#E0DCD3] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1.5 transition-all"
+                          className="px-3 py-2 bg-[#FAF8F3] hover:bg-[#F2EFE7] border border-[#DDD6C8] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1.5"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
-                          <span>開啟 Google 雲端試算表</span>
+                          <span>開啟試算表</span>
                         </a>
-                      ) : <div />}
-
+                      )}
                       {isAdmin ? (
                         <button
                           type="button"
@@ -771,194 +898,321 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                             onClose();
                             onOpenGasDeploy();
                           }}
-                          className="px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 ml-auto"
+                          className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer ml-auto"
                         >
-                          <Key className="w-3.5 h-3.5" />
-                          <span>設定 / 更新 GAS 連線金鑰</span>
+                          <Key className="w-3.5 h-3.5 text-amber-300" />
+                          <span>設定 / 更新金鑰</span>
                         </button>
                       ) : (
-                        <div className="text-[11px] text-rose-700 font-bold flex items-center gap-1 ml-auto">
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          <span>API 由主管理員維護</span>
+                        <div className="text-[11px] text-[#8C8475] italic ml-auto">
+                          由主管理者 ({currentUser?.adminName || partnerBindingInfo?.adminName || '主管理員'}) 掌控金鑰
                         </div>
                       )}
                     </div>
                   </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* 3. 資料備份與對帳 */}
-            {activeSection === 'backup' && (
-              <div className="space-y-4">
-                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
-                  <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <Database className="w-4 h-4 text-blue-600" />
-                      <h4 className="text-xs font-extrabold text-[#3E3A36]">資料備份、還原與離線同步佇列</h4>
+              {/* =========================================================================
+                  B. 子頁面 4：資料備份與還原
+                  ========================================================================= */}
+              {subView === 'backup' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] space-y-3.5 shadow-xs">
+                    <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2">
+                      <span className="font-bold text-sm text-[#3E3A36]">資料備份與對帳</span>
+                      <span className="text-[10px] text-[#8C8475]">最後同步：{lastSyncedAt}</span>
                     </div>
-                    <span className="text-[10px] text-[#8C8475] font-mono">
-                      最後同步：{lastSyncedAt}
-                    </span>
-                  </div>
 
-                  <p className="text-xs text-[#5C564E] leading-relaxed">
-                    伴伴記具備離線優先 (Offline-First) 架構。當網路不穩時，您的記帳操作會安全存於本地佇列，並在恢復網路時自動背景同步。
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#FAF8F3] p-3 rounded-xl border border-[#EAE6DC]">
-                      <div className="text-[10px] text-[#8C8475] font-medium">離線暫存待同步佇列</div>
-                      <div className="text-lg font-black text-[#3E3A36] mt-0.5">
-                        {pendingQueueCount} 筆
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="p-3 bg-[#FAF8F3] rounded-xl border border-[#EAE6DC]">
+                        <div className="text-[10px] text-[#8C8475]">待同步佇列</div>
+                        <div className="text-base font-bold text-[#3E3A36] mt-0.5">{pendingQueueCount} 筆</div>
+                      </div>
+                      <div className="p-3 bg-[#FAF8F3] rounded-xl border border-[#EAE6DC]">
+                        <div className="text-[10px] text-[#8C8475]">連線狀態</div>
+                        <div className={`text-xs font-bold mt-1 ${isOnline ? 'text-emerald-700' : 'text-amber-700'}`}>
+                          {isOnline ? '● 在線正常' : '○ 離線模式'}
+                        </div>
                       </div>
                     </div>
-                    <div className="bg-[#FAF8F3] p-3 rounded-xl border border-[#EAE6DC]">
-                      <div className="text-[10px] text-[#8C8475] font-medium">連線狀態</div>
-                      <div className={`text-xs font-extrabold mt-1.5 flex items-center gap-1.5 ${isOnline ? 'text-emerald-700' : 'text-amber-700'}`}>
-                        <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
-                        <span>{isOnline ? '線上正常連線' : '離線模式中'}</span>
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="pt-2 flex justify-end">
                     <button
                       type="button"
                       onClick={() => {
                         onClose();
                         onOpenDataBackup();
                       }}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Database className="w-3.5 h-3.5" />
-                      <span>開啟資料備份與匯入匯出中心</span>
+                      <span>開啟資料備份與匯出中心</span>
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* 4. 手機桌面 App (PWA) */}
-            {activeSection === 'pwa' && (
-              <div className="space-y-4">
-                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
-                  <div className="flex items-center gap-2 border-b border-[#F2EDE1] pb-2.5">
-                    <Smartphone className="w-4 h-4 text-rose-600" />
-                    <h4 className="text-xs font-extrabold text-[#3E3A36]">將伴伴記安裝至手機桌面 (PWA)</h4>
-                  </div>
-
-                  <p className="text-xs text-[#5C564E] leading-relaxed">
-                    安裝至手機主畫面後，伴伴記可如原生 App 一般全螢幕開啟、零延遲啟動，享有更佳的操作體驗與離線記帳能力。
-                  </p>
-
-                  <div className="bg-rose-50/70 border border-rose-200/90 rounded-2xl p-4 space-y-2">
-                    <div className="text-xs font-bold text-rose-900">📲 快速安裝步驟：</div>
-                    <ul className="text-xs text-[#5C564E] space-y-1.5 list-disc list-inside">
-                      <li><strong>iOS (Safari)</strong>：點擊瀏覽器底部的「分享」圖示 ➔ 選擇「加入主畫面」。</li>
-                      <li><strong>Android (Chrome)</strong>：點擊右上角「更多 (三個點)」 ➔ 選擇「安裝應用程式」或「加到主畫面」。</li>
-                    </ul>
-                  </div>
-
-                  <div className="pt-2 flex justify-end">
+              {/* =========================================================================
+                  B. 子頁面 5：手機桌面 App (PWA)
+                  ========================================================================= */}
+              {subView === 'pwa' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] space-y-3.5 shadow-xs">
+                    <div className="font-bold text-sm text-[#3E3A36] border-b border-[#F2EDE1] pb-2">
+                      安裝至手機桌面 (PWA)
+                    </div>
+                    <p className="text-xs text-[#5C564E] leading-relaxed">
+                      免下載安裝包，將伴伴記加入主畫面，即可享有全螢幕與無延遲快速啟動體驗。
+                    </p>
+                    <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl text-xs text-purple-900 space-y-1">
+                      <div>• <strong>iOS (Safari)</strong>：點底部「分享」圖示 ➔ 選擇「加入主畫面」。</div>
+                      <div>• <strong>Android (Chrome)</strong>：點右上角三個點 ➔ 選擇「加到主畫面」。</div>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
                         onClose();
                         onOpenPwaInstall();
                       }}
-                      className="px-4 py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                      className="w-full py-2.5 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Smartphone className="w-3.5 h-3.5" />
-                      <span>開啟手機安裝引導畫面</span>
+                      <span>查看詳細安裝引導</span>
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* 5. 進階與離線模式 */}
-            {activeSection === 'advanced' && (
-              <div className="space-y-4">
-                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
-                  <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5 border-b border-[#F2EDE1] pb-2">
-                    <Terminal className="w-4 h-4 text-[#3E3A36]" />
-                    <span>本機離線試用與帳戶管理</span>
-                  </h4>
+              {/* =========================================================================
+                  B. 子頁面 6：進階與帳號管理
+                  ========================================================================= */}
+              {subView === 'advanced' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] space-y-4 shadow-xs">
+                    <div className="font-bold text-sm text-[#3E3A36] border-b border-[#F2EDE1] pb-2">
+                      進階與本機沙盒
+                    </div>
 
-                  {/* 沙盒開關 */}
-                  <div className="flex items-center justify-between p-3.5 bg-[#FAF8F3] rounded-2xl border border-[#EAE6DC]">
-                    <div>
-                      <div className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
-                        <span>本機離線試用模式</span>
-                        {isSandboxMode && (
-                          <span className="text-[9px] bg-amber-100 text-amber-900 font-bold px-1.5 rounded">啟用中</span>
-                        )}
+                    <div className="p-3 bg-[#FAF8F3] rounded-xl border border-[#EAE6DC] space-y-1">
+                      <div className="flex items-center justify-between text-xs font-bold text-[#3E3A36]">
+                        <span>系統識別碼 ID (Gmail 帳號)</span>
+                        <span className="text-[10px] font-mono text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                          {currentUser ? '已綁定' : '未登入'}
+                        </span>
                       </div>
-                      <p className="text-[10px] text-[#8C8475] mt-0.5">
-                        不需設定 Google 試算表，直接在本機快取中體驗所有記帳與代墊功能
+                      <div className="text-xs font-mono text-[#5C564E] break-all bg-white px-2 py-1 rounded-lg border border-[#E8E4D9]">
+                        {currentUser?.email || currentUser?.id || '未登入 Google 帳戶 (以訪客模式執行)'}
+                      </div>
+                      <p className="text-[11px] text-[#8C8475] leading-relaxed">
+                        系統中所有行程、支出紀錄、心願清單與雲端權限，皆以此 Gmail 地址作為唯一識別碼。
                       </p>
                     </div>
 
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isSandboxMode}
-                        onChange={(e) => onToggleSandboxMode(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-[#DDD8CE] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600"></div>
-                    </label>
-                  </div>
+                    <div className="flex items-center justify-between p-3 bg-[#FAF8F3] rounded-xl border border-[#EAE6DC]">
+                      <div>
+                        <div className="text-xs font-bold text-[#3E3A36]">本機離線試用模式</div>
+                        <div className="text-[11px] text-[#8C8475]">不發送雲端請求，以本機資料體驗</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onToggleSandboxMode(!isSandboxMode)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          isSandboxMode ? 'bg-amber-600' : 'bg-stone-300'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                            isSandboxMode ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
 
-                  {/* 帳號切換與登出 */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#F2EDE1]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onSwitchAccount();
-                      }}
-                      className="px-3.5 py-2 bg-[#FAF8F3] hover:bg-[#F2EFE7] border border-[#E0DCD3] rounded-xl text-xs font-bold text-[#5C564E] flex items-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 text-[#8C8475]" />
-                      <span>切換 Google 登入帳號</span>
-                    </button>
+                    <div className="pt-2 border-t border-[#F0EDE6] space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onSwitchAccount();
+                        }}
+                        className="w-full py-2.5 bg-[#FAF8F3] hover:bg-[#F2EFE7] border border-[#DDD6C8] text-[#5C564E] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <User className="w-3.5 h-3.5" />
+                        <span>切換或更換帳號</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onLogout();
-                      }}
-                      className="px-3.5 py-2 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl text-xs font-bold text-red-700 flex items-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>登出帳號</span>
-                    </button>
+                      {currentUser && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onLogout();
+                          }}
+                          className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                          <span>登出目前帳戶</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+              {/* =========================================================================
+                  B. 子頁面 7：推播與系統提醒設定 (各自獨立儲存)
+                  ========================================================================= */}
+              {subView === 'notify' && (
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <div className="bg-white rounded-2xl p-4 border border-[#E8E4D9] space-y-3.5 shadow-xs">
+                    <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2">
+                      <div>
+                        <div className="font-bold text-sm text-[#3E3A36] flex items-center gap-1.5">
+                          <Bell className="w-4 h-4 text-amber-600" />
+                          <span>系統提醒與推播偏好</span>
+                        </div>
+                        <p className="text-[11px] text-[#8C8475] mt-0.5">
+                          獨立綁定於 <span className="font-mono font-bold text-[#3E3A36]">{currentUser?.email || '本地訪客'}</span>
+                        </p>
+                      </div>
 
-          {/* 側邊選單頁尾 */}
-          <div className="p-4 bg-white border-t border-[#E8E4D9] flex justify-between items-center shrink-0">
-            <div className="flex items-center gap-1.5 text-[11px] text-[#8C8475]">
-              <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
-              <span>{currentUser?.email ? `已同步：${currentUser.email}` : '訪客離線模式（本機運作）'}</span>
+                      {setAllNotifySettings && (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setAllNotifySettings(true)}
+                            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                          >
+                            全開
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAllNotifySettings(false)}
+                            className="px-2 py-1 bg-[#F2EDE1] hover:bg-[#E8E2D2] text-[#706B62] rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                          >
+                            全關
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-2.5 bg-amber-50/60 rounded-xl border border-amber-200/60 text-xs text-amber-900 leading-relaxed">
+                      💡 <strong>雙方獨立設定</strong>：您與伴侶可各自選擇想收到的即時推播通知，不互相干擾，且登出切換帳號時自動切換為該使用者的專屬偏好。
+                    </div>
+
+                    {notifySettings && toggleNotifySetting && (
+                      <div className="space-y-2 pt-1">
+                        {[
+                          {
+                            key: 'notifyOnAdd' as keyof AppNotifySettings,
+                            title: '日常代墊記帳推播',
+                            desc: '伴侶或自己在代墊分帳新增支出時即時通知',
+                            icon: '💳'
+                          },
+                          {
+                            key: 'notifyOnIncome' as keyof AppNotifySettings,
+                            title: '公積金存入通知',
+                            desc: '存入公積金款項時發送推播與金額提醒',
+                            icon: '💰'
+                          },
+                          {
+                            key: 'notifyOnEdit' as keyof AppNotifySettings,
+                            title: '帳目修改更新通知',
+                            desc: '品名、金額或分攤比例被編輯時提醒',
+                            icon: '✏️'
+                          },
+                          {
+                            key: 'notifyOnDelete' as keyof AppNotifySettings,
+                            title: '帳目刪除警示通知',
+                            desc: '既有支出或公積金被刪除時安全提醒',
+                            icon: '🗑️'
+                          },
+                          {
+                            key: 'notifyOnSettle' as keyof AppNotifySettings,
+                            title: '代墊平帳結算完成通知',
+                            desc: '進行月度對帳清償時推播結算確認報告',
+                            icon: '⚖️'
+                          },
+                          {
+                            key: 'showBalance' as keyof AppNotifySettings,
+                            title: '公積金剩餘額度警戒',
+                            desc: '公積金結餘低於設定水位時警示推播',
+                            icon: '⚠️'
+                          },
+                          {
+                            key: 'notifyOnShoppingAdd' as keyof AppNotifySettings,
+                            title: '採購待買清單新增',
+                            desc: '加入想要或需要購買的食材與日用品時推播',
+                            icon: '🛒'
+                          },
+                          {
+                            key: 'notifyOnShoppingComplete' as keyof AppNotifySettings,
+                            title: '採購物品已買回勾選',
+                            desc: '物品被標記為已購買或轉代墊時推播',
+                            icon: '✅'
+                          },
+                          {
+                            key: 'notifyOnShoppingDelete' as keyof AppNotifySettings,
+                            title: '採購清單項目刪除',
+                            desc: '採購記事內的品項被移除時通知',
+                            icon: '📝'
+                          }
+                        ].map((item) => {
+                          const isChecked = !!notifySettings[item.key];
+                          return (
+                            <label
+                              key={item.key}
+                              className={`p-2.5 rounded-xl border transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                                isChecked
+                                  ? 'bg-white border-[#DDD7C9] shadow-2xs'
+                                  : 'bg-[#FAF8F3] border-[#EAE6DC] opacity-70'
+                              }`}
+                            >
+                              <div className="flex items-start gap-2.5 min-w-0">
+                                <span className="text-base shrink-0 mt-0.5">{item.icon}</span>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-extrabold text-[#3E3A36]">
+                                    {item.title}
+                                  </div>
+                                  <p className="text-[11px] text-[#8C8475] mt-0.5 leading-snug">
+                                    {item.desc}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleNotifySetting(item.key)}
+                                className="w-4 h-4 accent-emerald-600 rounded cursor-pointer shrink-0"
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {onTestNotification && (
+                      <button
+                        type="button"
+                        onClick={onTestNotification}
+                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                      >
+                        <Bell className="w-3.5 h-3.5" />
+                        <span>發送測試推播與鈴聲</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2 bg-[#4D4942] hover:bg-[#322F2A] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95"
-            >
-              關閉選單
-            </button>
-          </div>
-        </motion.aside>
-      </div>
-    )}
-  </AnimatePresence>
-);
+
+            {/* 3. Footer 底部版本資訊 */}
+            <div className="px-4 py-2.5 border-t border-[#E8E4D9] bg-white text-center text-[10px] text-[#A39E92] font-mono shrink-0">
+              伴伴記帳 • BanBan Accounting v2.5
+            </div>
+          </motion.aside>
+        </div>
+      )}
+    </AnimatePresence>
+  );
 };

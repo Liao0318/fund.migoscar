@@ -150,9 +150,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   };
 
-  const defaultPresets = currentUser?.role === '周' || currentUser?.userRole === 'partner'
-    ? ['沛', '周', '沛緹', '小周', '寶貝']
-    : ['丞', '廖', '尹丞', '小廖', '主理'];
+  const userFirstChar = currentUser?.name ? currentUser.name.charAt(0) : (isAdmin ? '主' : '伴');
+  const userShort = currentUser?.name && currentUser.name.length >= 2 ? currentUser.name.slice(0, 2) : (isAdmin ? '管理' : '伴侶');
+  const defaultPresets = currentUser?.userRole === 'partner'
+    ? [userFirstChar, userShort, '寶貝', `小${userFirstChar}`, '隊友']
+    : [userFirstChar, userShort, '主理', `小${userFirstChar}`, '寶貝'];
   const quickPresets = defaultPresets.filter(p => p.length < 3);
 
   return (
@@ -263,7 +265,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                               ? 'bg-gradient-to-br from-amber-600 to-amber-700'
                               : 'bg-gradient-to-br from-rose-500 to-rose-600'
                           } text-white font-black text-xl flex items-center justify-center`}>
-                            {currentUser?.nickname?.[0] || currentUser?.role || (isAdmin ? '廖' : '周')}
+                            {currentUser?.nickname?.[0] || currentUser?.name?.[0] || (isAdmin ? '主' : '伴')}
                           </div>
                         )}
                       </div>
@@ -308,7 +310,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   </div>
 
                   {/* 🔄 同步 Google 大頭貼按鈕 */}
-                  {onSyncGoogleAvatar && (
+                  {onSyncGoogleAvatar && currentUser && !currentUser.isDevSandbox && currentUser.authMethod === 'google_oauth' && (
                     <div className="flex items-center justify-between p-2.5 bg-[#FAF8F3] rounded-xl border border-[#EDE7D9] text-xs">
                       <div className="flex items-center gap-1.5 text-[#5C564E]">
                         <Camera className="w-3.5 h-3.5 text-amber-700" />

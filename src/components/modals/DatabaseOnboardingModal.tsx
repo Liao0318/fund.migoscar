@@ -11,18 +11,22 @@ import {
   Share2, 
   RefreshCw, 
   ArrowRight, 
-  ArrowLeft,
-  X,
-  AlertCircle,
-  Key,
-  Crown,
-  ClipboardPaste,
-  ShieldCheck,
-  HelpCircle,
-  Database
+  ArrowLeft, 
+  X, 
+  AlertCircle, 
+  Key, 
+  Crown, 
+  ClipboardPaste, 
+  ShieldCheck, 
+  HelpCircle, 
+  Database,
+  Download,
+  FileSpreadsheet,
+  ExternalLink
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData } from '../../types';
 import { resolveInviteCodeOrToken, fetchInviteCodeOnline } from '../../utils/partnerInvite';
+import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
 
 interface DatabaseOnboardingModalProps {
   isOpen: boolean;
@@ -592,6 +596,39 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
                         <p className="text-[11px] text-amber-900/80 leading-relaxed">
                           伴伴記使用 Google 試算表作為您與伴侶的私有資料庫。請在下方輸入您的試算表網址，並複製系統為您客製化產生的 Apps Script 後端程式碼。
                         </p>
+                      </div>
+
+                      {/* 📥 官方空白資料庫 Excel 範本與建立試算表 */}
+                      <div className="bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EAE4D6] space-y-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-emerald-700 text-white flex items-center justify-center text-xs">
+                            <FileSpreadsheet className="w-3.5 h-3.5" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-[#3E3A36]">官方空白資料庫 Excel 範本 (8 大工作表)</span>
+                            <p className="text-[10px] text-[#8C8475]">初次使用可先下載範本並上傳至 Google 雲端硬碟建立試算表</p>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => downloadDatabaseExcelTemplate()}
+                            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-2xs cursor-pointer transition-all active:scale-95"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>下載空白 Excel 範本 (.xlsx)</span>
+                          </button>
+                          <a
+                            href={GOOGLE_SHEETS_NEW_URL}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 bg-white hover:bg-[#F5F2EA] text-[#3E3A36] border border-[#DDD6C8] rounded-xl text-xs font-bold flex items-center gap-1 shadow-2xs transition-all"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-amber-800" />
+                            <span>建立新 Google 試算表 (sheets.new)</span>
+                          </a>
+                        </div>
                       </div>
 
                       {/* 試算表網址輸入 */}

@@ -83,8 +83,9 @@ export async function signInWithGooglePopup(): Promise<{ user: AuthUser; accessT
     const cleanFbName = cleanGoogleDisplayName(fbUser.displayName || '');
     const role = determineUserRole(cleanFbName, fbUser.email || '');
 
+    const userEmail = (fbUser.email || '').trim().toLowerCase();
     const user: AuthUser = {
-      id: fbUser.email || fbUser.uid,
+      id: userEmail || fbUser.uid,
       name: cleanFbName || fbUser.email?.split('@')[0] || (role === '廖' ? '廖尹丞' : '周沛緹'),
       email: fbUser.email || '',
       avatar: fbUser.photoURL || undefined,
@@ -128,8 +129,9 @@ export async function fetchGoogleUserInfo(accessToken: string): Promise<{
     }
 
     const data = await res.json();
+    const userEmail = (data.email || '').trim().toLowerCase();
     return {
-      id: data.email || data.sub || data.id,
+      id: userEmail || data.sub || data.id,
       email: data.email,
       name: data.name || data.given_name || data.email.split('@')[0],
       picture: data.picture
@@ -173,9 +175,10 @@ export async function requestGoogleOAuthToken(): Promise<{ user: AuthUser; acces
           }
 
           const cleanName = cleanGoogleDisplayName(userInfo.name || '');
-          const role = determineUserRole(cleanName, userInfo.email);
+          const cleanEmail = (userInfo.email || '').trim().toLowerCase();
+          const role = determineUserRole(cleanName, cleanEmail);
           const user: AuthUser = {
-            id: userInfo.email,
+            id: cleanEmail,
             name: cleanName || (role === '廖' ? '廖尹丞' : '周沛緹'),
             email: userInfo.email,
             avatar: userInfo.picture,
@@ -202,10 +205,19 @@ export async function requestGoogleOAuthToken(): Promise<{ user: AuthUser; acces
   });
 }
 
-export async function syncGoogleUserProfile(): Promise<{ avatar?: string; name?: string; email?: string } | null> {
+export async function syncGoogleUserProfile(targetEmail?: string): Promise<{ avatar?: string; name?: string; email?: string } | null> {
   try {
+    const cleanTargetEmail = (targetEmail || '').trim().toLowerCase();
+
     const fbUser = auth.currentUser;
     if (fbUser) {
+      const fbEmail = (fbUser.email || '').trim().toLowerCase();
+      // 🛡️ 若指定了目標 targetEmail，嚴格驗證目前 Firebase 登入的帳號是否為同一個使用者
+      if (cleanTargetEmail && fbEmail && fbEmail !== cleanTargetEmail) {
+        console.warn(`[GoogleOAuth] Firebase session user (${fbEmail}) does not match current user (${cleanTargetEmail}). Sync skipped.`);
+        return null;
+      }
+
       // 重新整理 Firebase 使用者資訊
       await fbUser.reload().catch(() => {});
       return {
@@ -218,6 +230,12 @@ export async function syncGoogleUserProfile(): Promise<{ avatar?: string; name?:
     if (cachedAccessToken) {
       const userInfo = await fetchGoogleUserInfo(cachedAccessToken);
       if (userInfo) {
+        const tokenEmail = (userInfo.email || '').trim().toLowerCase();
+        if (cleanTargetEmail && tokenEmail && tokenEmail !== cleanTargetEmail) {
+          console.warn(`[GoogleOAuth] Cached token user (${tokenEmail}) does not match current user (${cleanTargetEmail}). Sync skipped.`);
+          return null;
+        }
+
         return {
           avatar: userInfo.picture,
           name: userInfo.name,

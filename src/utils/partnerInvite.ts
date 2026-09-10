@@ -8,11 +8,26 @@ const PARTNER_BINDING_STORAGE_KEY = 'banban_partner_binding';
 
 /**
  * 隨機生成 6 碼情侶專屬邀請碼 (格式：BB-XXXX)
+ * 使用 Web Crypto API (高隨機性安全隨機數) 與排除混淆字元的字符池
  */
 export function generateRandomInviteCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  // 排除易混淆字符 0, O, 1, I 以確保行動裝置與手動輸入時零錯誤
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const len = 4;
+  
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+    const randomBytes = new Uint8Array(len);
+    window.crypto.getRandomValues(randomBytes);
+    let randomStr = '';
+    for (let i = 0; i < len; i++) {
+      randomStr += chars[randomBytes[i] % chars.length];
+    }
+    return `BB-${randomStr}`;
+  }
+
+  // 備用隨機生成
   let randomStr = '';
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < len; i++) {
     randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return `BB-${randomStr}`;
@@ -199,56 +214,89 @@ export async function removePartnerBinding(email?: string): Promise<void> {
 }
 
 /**
+ * 從任意輸入文字、邀請卡內容、或 URL 網址中智慧萃取出標準的 6 碼伴侶邀請碼 (BB-XXXX) 或 Token
+ */
+export function extractInviteCode(input: string): string | null {
+  if (!input) return null;
+  const str = input.trim();
+
+  // 1. 若含有 BB- 開頭的 4~8 碼正規格式（例如 BB-XXXX、BB - 1234、包含中括號 【BB-XXXX】等）
+  const matchBB = str.match(/BB\s*-\s*([A-Za-z0-9]{4,8})/i);
+  if (matchBB && matchBB[1]) {
+    return `BB-${matchBB[1].toUpperCase()}`;
+  }
+
+  // 2. 若為 URL 且含有 invite= (Base64 Token)
+  if (str.includes('invite=')) {
+    try {
+      const url = new URL(str.startsWith('http') ? str : `https://dummy.local/${str}`);
+      const token = url.searchParams.get('invite');
+      if (token) return token;
+    } catch (e) {}
+  }
+
+  // 3. 若含有 #join= 或 #code= 或 join= 或 code=
+  const matchParam = str.match(/(?:#|\?|&)(?:join|code)=([A-Za-z0-9_-]+)/i);
+  if (matchParam && matchParam[1]) {
+    const raw = matchParam[1].toUpperCase();
+    return raw.startsWith('BB-') ? raw : `BB-${raw}`;
+  }
+
+  // 4. 若去除空格與符號後為 4~8 碼英數字
+  const cleanChars = str.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  if (cleanChars.length >= 4 && cleanChars.length <= 8) {
+    return cleanChars.startsWith('BB') && cleanChars.length > 4 
+      ? `BB-${cleanChars.slice(2)}` 
+      : `BB-${cleanChars}`;
+  }
+
+  return null;
+}
+
+/**
  * 根據邀請碼或 Token 搜尋邀請資訊（同步解析本地與 Token，嚴格拒絕偽造無效代碼）
  */
 export function resolveInviteCodeOrToken(input: string): PartnerInviteData | null {
   if (!input) return null;
   const clean = input.trim();
 
-  // 1. 若 input 包含 URL (例如 https://.../?invite=xxx 或 #join=BB-XXXX 或 ?code=xxx)
-  try {
-    if (clean.includes('invite=') || clean.includes('code=') || clean.includes('join=')) {
-      // 擷取 #join=BB-XXXX 或 #code=BB-XXXX
-      if (clean.includes('#join=')) {
-        const joinCode = clean.split('#join=')[1]?.split('&')[0]?.split('?')[0]?.trim();
-        if (joinCode) {
-          const res = resolveInviteCodeOrToken(joinCode);
-          if (res) return res;
-        }
-      }
-      if (clean.includes('#code=')) {
-        const code = clean.split('#code=')[1]?.split('&')[0]?.split('?')[0]?.trim();
-        if (code) {
-          const res = resolveInviteCodeOrToken(code);
-          if (res) return res;
-        }
-      }
-
-      // 解析 URL 查詢參數
-      const url = new URL(clean.startsWith('http') ? clean : `https://dummy.local/${clean}`);
-      const tokenParam = url.searchParams.get('invite');
-      if (tokenParam) {
-        const decoded = decodeInvitePayload(tokenParam);
-        if (decoded && decoded.adminEmail) return decoded;
-      }
-      const codeParam = url.searchParams.get('code') || url.searchParams.get('join');
-      if (codeParam) {
-        const res = resolveInviteCodeOrToken(codeParam);
-        if (res) return res;
-      }
-    }
-  } catch (e) {}
-
-  // 2. 若 input 本身為 Base64 Token
+  // 1. 若 input 為 Base64 Token，直接解碼
   const fromToken = decodeInvitePayload(clean);
   if (fromToken && fromToken.adminEmail && (fromToken.gasWebUrl || fromToken.inviteCode)) {
     return fromToken;
   }
 
-  // 3. 從本地註冊表比對真實存在的邀請紀錄 (必須含有發行者 email)
-  const registry = getInviteRegistry();
+  // 2. 智慧萃取標準代碼或網址內的 token
+  const extracted = extractInviteCode(clean);
+  if (extracted) {
+    // 檢查是否為解碼 token
+    const tokenDecoded = decodeInvitePayload(extracted);
+    if (tokenDecoded && tokenDecoded.adminEmail) {
+      return tokenDecoded;
+    }
+
+    const upperCode = extracted.toUpperCase();
+    const registry = getInviteRegistry();
+    if (registry[upperCode] && registry[upperCode].adminEmail) {
+      return registry[upperCode];
+    }
+
+    // 比對目前啟用的邀請碼
+    try {
+      const active = localStorage.getItem(ACTIVE_INVITE_STORAGE_KEY);
+      if (active) {
+        const parsed = JSON.parse(active) as PartnerInviteData;
+        if (parsed && parsed.adminEmail && parsed.inviteCode?.toUpperCase() === upperCode) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. 原生從本地註冊表與快取進行相容比對
   const rawUpper = clean.toUpperCase();
   const formattedUpper = rawUpper.startsWith('BB-') ? rawUpper : `BB-${rawUpper}`;
+  const registry = getInviteRegistry();
 
   if (registry[rawUpper] && registry[rawUpper].adminEmail) {
     return registry[rawUpper];
@@ -257,53 +305,27 @@ export function resolveInviteCodeOrToken(input: string): PartnerInviteData | nul
     return registry[formattedUpper];
   }
 
-  // 4. 比對目前啟用的邀請碼 (必須含有發行者 email)
-  try {
-    const active = localStorage.getItem(ACTIVE_INVITE_STORAGE_KEY);
-    if (active) {
-      const parsed = JSON.parse(active) as PartnerInviteData;
-      if (
-        parsed &&
-        parsed.adminEmail &&
-        (parsed.inviteCode?.toUpperCase() === rawUpper || parsed.inviteCode?.toUpperCase() === formattedUpper)
-      ) {
-        return parsed;
-      }
-    }
-  } catch (e) {}
-
-  // 🚫 嚴格拒絕所有未註冊的隨機虛擬假代碼，不再返回空偽造物件
   return null;
 }
 
 /**
- * 線上非同步解析邀請碼（嚴格向 Firestore 雲端資料庫查詢真實存在的邀請碼）
+ * 線上非同步解析邀請碼（向 Firestore 雲端資料庫查詢真實存在的邀請碼，具備多層備援機制）
  */
 export async function fetchInviteCodeOnline(input: string): Promise<PartnerInviteData | null> {
   if (!input) return null;
   const cleanInput = input.trim();
 
-  // 先嘗試以 Token 或本機既有真實紀錄解析
+  // 1. 先嘗試以 Token 或本機既有真實紀錄解析
   const localResolved = resolveInviteCodeOrToken(cleanInput);
   if (localResolved && localResolved.gasWebUrl && localResolved.adminEmail) {
     return localResolved;
   }
 
-  // 擷取乾淨的 BB-XXXX 格式字串
-  let codeToQuery = cleanInput.toUpperCase();
-  if (codeToQuery.includes('#JOIN=')) {
-    codeToQuery = codeToQuery.split('#JOIN=')[1]?.split('&')[0]?.split('?')[0]?.trim();
-  } else if (codeToQuery.includes('CODE=')) {
-    codeToQuery = codeToQuery.split('CODE=')[1]?.split('&')[0]?.split('?')[0]?.trim();
-  }
-  
-  // 移除前後多餘符號與空白
-  codeToQuery = codeToQuery.replace(/[^A-Z0-9-]/g, '');
-  if (!codeToQuery.startsWith('BB-')) {
-    codeToQuery = `BB-${codeToQuery}`;
-  }
+  // 2. 智慧萃取出乾淨的代碼 (例如 BB-XXXX)
+  const extractedCode = extractInviteCode(cleanInput);
+  const codeToQuery = (extractedCode || cleanInput).toUpperCase();
 
-  // 向 Firestore 查詢真實存在的邀請紀錄
+  // 3. 向 Firestore 查詢真實存在的邀請紀錄
   if (isFirestoreAvailable() && db && codeToQuery) {
     try {
       const inviteRef = doc(db, 'partner_invites', codeToQuery);
@@ -311,22 +333,48 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
       if (snap.exists()) {
         const cloudInvite = snap.data() as PartnerInviteData;
         if (cloudInvite && cloudInvite.inviteCode && cloudInvite.adminEmail) {
-          // 快取至本地
+          // 若雲端邀請紀錄齊全，直接快取並返回
+          if (cloudInvite.gasWebUrl && cloudInvite.gasWebUrl.startsWith('http')) {
+            saveActiveInviteCode(cloudInvite);
+            return cloudInvite;
+          }
+
+          // 🛡️ 雙重保險備援：若邀請紀錄缺失 gasWebUrl，自動向管理者的 user_configs 集合查詢補齊
+          try {
+            const adminEmailClean = cloudInvite.adminEmail.trim().toLowerCase();
+            const adminConfigRef = doc(db, 'user_configs', adminEmailClean);
+            const adminSnap = await getDoc(adminConfigRef);
+            if (adminSnap.exists()) {
+              const adminData = adminSnap.data() as any;
+              if (adminData && adminData.gasWebUrl) {
+                const enrichedInvite: PartnerInviteData = {
+                  ...cloudInvite,
+                  gasWebUrl: adminData.gasWebUrl,
+                  deploySheetUrl: adminData.deploySheetUrl || cloudInvite.deploySheetUrl || ''
+                };
+                saveActiveInviteCode(enrichedInvite);
+                return enrichedInvite;
+              }
+            }
+          } catch (err) {
+            console.warn('Fallback admin config fetch failed:', err);
+          }
+
           saveActiveInviteCode(cloudInvite);
           return cloudInvite;
         }
       }
     } catch (err) {
-      console.warn('Firestore fetchInviteCodeOnline failed:', err);
+      console.warn('Firestore fetchInviteCodeOnline query failed:', err);
     }
   }
 
-  // 若 Token 解碼出有效資料但無雲端快取，亦可允許
+  // 4. 若 Token 解碼出有效資料，亦予認可
   if (localResolved && localResolved.adminEmail) {
     return localResolved;
   }
 
-  // 查無此邀請碼，返回 null 嚴格拒絕
+  // 查無此邀請碼
   return null;
 }
 

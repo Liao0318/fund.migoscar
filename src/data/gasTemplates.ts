@@ -47,6 +47,10 @@ export const SPLIT_INDEX_HTML_TEMPLATE = `<!DOCTYPE html>
 </html>`;
 
 export const CODE_GS_TEMPLATE = `var HARDCODED_SPREADSHEET_ID = "";
+var DEFAULT_USER_A_NAME = "廖尹丞";
+var DEFAULT_USER_A_SHORT = "廖";
+var DEFAULT_USER_B_NAME = "周沛緹";
+var DEFAULT_USER_B_SHORT = "周";
 /**
  * 伴伴記❤️ - Google Apps Script 後端處理 (Code.gs)
  * 輕量高效率 Google 試算表資料庫與即時對帳 API 服務。
@@ -230,7 +234,7 @@ function setupDatabase() {
   };
 
   var sheetsDef = [
-    { name: "流水帳資料庫", headers: ["月份", "日期", "項目", "出錢人", "出錢金額", "類型", "時間戳記"] },
+    { name: "流水帳資料庫", headers: ["ID", "月份", "日期", "項目", "出錢人", "出錢金額", "類型", "時間戳記"] },
     { name: "月度核銷狀態", headers: ["月份", "已撥款核銷"] },
     { name: "代墊明細", headers: ["ID", "時間", "代墊人", "分帳模式", "項目描述", "總金額", "分帳結果", "狀態", "結清時間", "備註"] },
     { name: "購物清單", headers: ["ID", "分類", "品項名稱", "購買地點", "預計購買日期", "狀態", "建立者", "建立時間", "備註細項"] },
@@ -247,6 +251,31 @@ function setupDatabase() {
       headerStyle(sh, def.headers);
     }
   });
+
+  // 檢查既有流水帳資料庫是否需要升級 ID 欄位 (若首欄仍為「月份」則自動插入 ID 欄位)
+  try {
+    var flowSheet = ss.getSheetByName("流水帳資料庫");
+    if (flowSheet && flowSheet.getLastRow() >= 1) {
+      var firstHeader = String(flowSheet.getRange(1, 1).getValue() || "").trim();
+      if (firstHeader === "月份") {
+        flowSheet.insertColumnBefore(1);
+        flowSheet.getRange(1, 1).setValue("ID")
+          .setBackground("#F4F1EA")
+          .setFontColor("#3E3A36")
+          .setFontWeight("bold")
+          .setHorizontalAlignment("center");
+        
+        var totalRows = flowSheet.getLastRow();
+        if (totalRows > 1) {
+          var idColValues = [];
+          for (var r = 2; r <= totalRows; r++) {
+            idColValues.push(["rec_" + new Date().getTime() + "_" + Math.floor(Math.random() * 10000) + "_" + r]);
+          }
+          flowSheet.getRange(2, 1, totalRows - 1, 1).setValues(idColValues);
+        }
+      }
+    }
+  } catch (migErr) {}
 
   return "所有 8 張工作表初始化已就緒！";
 }
@@ -296,26 +325,45 @@ function getDashboardData() {
 
     if (lastRow <= 1) return response;
 
-    var values = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    var maxCols = Math.max(sheet.getLastColumn(), 8);
+    var values = sheet.getRange(2, 1, lastRow - 1, maxCols).getValues();
+    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
+    var hasIdCol = (firstHeader === "ID");
+
     var liaoTotal = 0;
     var zhouTotal = 0;
     var recordsList = [];
 
     for (var i = values.length - 1; i >= 0; i--) {
       var row = values[i];
-      var monthVal = row[0];
+      var idVal, monthVal, dateVal, item, payer, amount, type, timestampVal;
+
+      if (hasIdCol) {
+        idVal = String(row[0] || ("rec_" + (i + 2)));
+        monthVal = row[1];
+        dateVal = row[2];
+        item = String(row[3] || "");
+        payer = String(row[4] || "");
+        amount = parseFloat(row[5]) || 0;
+        type = String(row[6] || "");
+        timestampVal = row[7];
+      } else {
+        idVal = i + 2;
+        monthVal = row[0];
+        dateVal = row[1];
+        item = String(row[2] || "");
+        payer = String(row[3] || "");
+        amount = parseFloat(row[4]) || 0;
+        type = String(row[5] || "");
+        timestampVal = row[6];
+      }
+
       var month = monthVal instanceof Date ? Utilities.formatDate(monthVal, "GMT+8", "yyyy-MM") : String(monthVal || "").substring(0, 7);
-      var dateVal = row[1];
       var dateStr = dateVal instanceof Date ? Utilities.formatDate(dateVal, "GMT+8", "yyyy-MM-dd") : String(dateVal || (month ? month + "-01" : ""));
-      var item = String(row[2] || "");
-      var payer = String(row[3] || "");
-      var amount = parseFloat(row[4]) || 0;
-      var type = String(row[5] || "");
-      var timestampVal = row[6];
       var timestampStr = timestampVal ? (timestampVal instanceof Date ? formatAmPmTime(timestampVal) : String(timestampVal)) : dateStr + " 上午 12:00";
 
       recordsList.push({
-        id: i + 2,
+        id: idVal,
         month: month,
         date: dateStr,
         item: item,
@@ -326,8 +374,8 @@ function getDashboardData() {
       });
 
       if (type.indexOf("支出") !== -1) {
-        if (payer === "廖尹丞") liaoTotal += amount;
-        else if (payer === "周沛緹") zhouTotal += amount;
+        if (payer.indexOf(DEFAULT_USER_A_SHORT) !== -1 || payer.indexOf(DEFAULT_USER_A_NAME) !== -1 || payer.indexOf("廖") !== -1) liaoTotal += amount;
+        else if (payer.indexOf(DEFAULT_USER_B_SHORT) !== -1 || payer.indexOf(DEFAULT_USER_B_NAME) !== -1 || payer.indexOf("周") !== -1) zhouTotal += amount;
       }
     }
 
@@ -343,23 +391,39 @@ function getDashboardData() {
 function addRecord(data) {
   try {
     var sheet = getDbSheet();
+    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
+    var hasIdCol = (firstHeader === "ID");
+
+    var id = String(data.id || ("rec_" + new Date().getTime() + "_" + Math.floor(Math.random() * 10000)));
     var now = new Date();
     var dateStr = data.date || Utilities.formatDate(now, "GMT+8", "yyyy-MM-dd");
     var monthStr = dateStr.substring(0, 7);
     var amount = parseFloat(data.amount) || 0;
     var timestampStr = formatAmPmTime(now);
 
-    var newRow = [
-      monthStr,
-      dateStr,
-      data.item || "未分類項目",
-      data.payer || "廖尹丞",
-      amount,
-      data.type || "支出-日常代墊",
-      timestampStr
-    ];
-    sheet.appendRow(newRow);
-    return { success: true, message: "成功寫入一筆記帳資料！" };
+    if (hasIdCol) {
+      sheet.appendRow([
+        id,
+        monthStr,
+        dateStr,
+        data.item || "未分類項目",
+        data.payer || DEFAULT_USER_A_NAME,
+        amount,
+        data.type || "支出-日常代墊",
+        timestampStr
+      ]);
+    } else {
+      sheet.appendRow([
+        monthStr,
+        dateStr,
+        data.item || "未分類項目",
+        data.payer || DEFAULT_USER_A_NAME,
+        amount,
+        data.type || "支出-日常代墊",
+        timestampStr
+      ]);
+    }
+    return { success: true, id: id, message: "成功寫入一筆記帳資料！" };
   } catch (e) {
     return { success: false, message: "寫入失敗：" + e.toString() };
   }
@@ -368,19 +432,56 @@ function addRecord(data) {
 function updateRecordByRow(data) {
   try {
     var sheet = getDbSheet();
-    var rowId = parseInt(data.id || data.rowId, 10);
-    if (!rowId || rowId < 2) return { success: false, message: "無效的紀錄編號" };
+    var targetId = String(data.id || data.rowId || "").trim();
+    if (!targetId) return { success: false, message: "無效的紀錄識別碼 ID" };
 
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "資料庫目前沒有任何紀錄可供更新" };
+
+    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
+    var hasIdCol = (firstHeader === "ID");
+
+    var foundRow = -1;
+    var values = sheet.getRange(2, 1, lastRow - 1, hasIdCol ? 8 : 7).getValues();
+
+    for (var i = 0; i < values.length; i++) {
+      var physicalRow = i + 2;
+      if (hasIdCol) {
+        if (String(values[i][0]).trim() === targetId) {
+          foundRow = physicalRow;
+          break;
+        }
+      } else {
+        if (String(physicalRow) === targetId) {
+          foundRow = physicalRow;
+          break;
+        }
+      }
+    }
+
+    // 相容純數字行號比對
+    if (foundRow === -1 && /^\d+$/.test(targetId)) {
+      var rowNum = parseInt(targetId, 10);
+      if (rowNum >= 2 && rowNum <= lastRow) {
+        foundRow = rowNum;
+      }
+    }
+
+    if (foundRow === -1) {
+      return { success: false, message: "找不到對應識別碼的記帳紀錄: " + targetId };
+    }
+
+    var colOffset = hasIdCol ? 1 : 0;
     var now = new Date();
     var dateStr = data.date || Utilities.formatDate(now, "GMT+8", "yyyy-MM-dd");
     var monthStr = dateStr.substring(0, 7);
     var amount = parseFloat(data.amount) || 0;
 
-    sheet.getRange(rowId, 1, 1, 6).setValues([[
+    sheet.getRange(foundRow, 1 + colOffset, 1, 6).setValues([[
       monthStr,
       dateStr,
       data.item || "未分類項目",
-      data.payer || "廖尹丞",
+      data.payer || DEFAULT_USER_A_NAME,
       amount,
       data.type || "支出-日常代墊"
     ]]);
@@ -392,10 +493,47 @@ function updateRecordByRow(data) {
 
 function deleteRecordByRow(payload) {
   try {
-    var rowId = parseInt(typeof payload === 'object' ? (payload.id || payload.rowId) : payload, 10);
-    if (!rowId || rowId < 2) return { success: false, message: "無效的紀錄編號" };
+    var targetId = String(typeof payload === 'object' ? (payload.id || payload.rowId || '') : payload).trim();
+    if (!targetId) return { success: false, message: "無效的紀錄識別碼 ID" };
+
     var sheet = getDbSheet();
-    sheet.deleteRow(rowId);
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: false, message: "資料庫目前沒有任何紀錄可供刪除" };
+
+    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
+    var hasIdCol = (firstHeader === "ID");
+
+    var foundRow = -1;
+    var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+
+    for (var i = 0; i < values.length; i++) {
+      var physicalRow = i + 2;
+      if (hasIdCol) {
+        if (String(values[i][0]).trim() === targetId) {
+          foundRow = physicalRow;
+          break;
+        }
+      } else {
+        if (String(physicalRow) === targetId) {
+          foundRow = physicalRow;
+          break;
+        }
+      }
+    }
+
+    // 相容純數字行號比對
+    if (foundRow === -1 && /^\d+$/.test(targetId)) {
+      var rowNum = parseInt(targetId, 10);
+      if (rowNum >= 2 && rowNum <= lastRow) {
+        foundRow = rowNum;
+      }
+    }
+
+    if (foundRow === -1) {
+      return { success: false, message: "找不到欲刪除的紀錄 (ID: " + targetId + ")" };
+    }
+
+    sheet.deleteRow(foundRow);
     return { success: true, message: "已成功刪除記帳紀錄！" };
   } catch (e) {
     return { success: false, message: "刪除失敗：" + e.toString() };
@@ -487,7 +625,7 @@ function getSplitData() {
       items.push({
         id: String(row[0]),
         date: row[1] instanceof Date ? Utilities.formatDate(row[1], "GMT+8", "yyyy-MM-dd HH:mm") : String(row[1] || ""),
-        payer: String(row[2] || "廖尹丞"),
+        payer: String(row[2] || DEFAULT_USER_A_NAME),
         splitMode: String(row[3] || "equal"),
         description: String(row[4] || ""),
         amount: parseFloat(row[5]) || 0,
@@ -518,7 +656,7 @@ function addSplitRecord(data) {
     var row = [
       id,
       data.date || nowStr,
-      data.payer || "廖尹丞",
+      data.payer || DEFAULT_USER_A_NAME,
       data.splitMode || "equal",
       data.description || "日常代墊",
       parseFloat(data.amount) || 0,
@@ -635,7 +773,7 @@ function addShoppingItem(data) {
       data.store || "隨意",
       data.deadline || "儘快",
       data.status || "pending",
-      data.creator || "廖尹丞",
+      data.creator || DEFAULT_USER_A_NAME,
       data.createdTime || nowStr,
       data.note || ""
     ];
@@ -807,7 +945,7 @@ function getTravelData() {
         else if (status === "settled" || status === "completed") status = "已結算";
 
         var themeColor = String(r[10] || "rose");
-        var members = ["廖", "周"];
+        var members = [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT];
         try {
           if (r[11]) {
             if (typeof r[11] === "string" && (r[11].indexOf("[") === 0 || r[11].indexOf("{") === 0)) {
@@ -817,7 +955,7 @@ function getTravelData() {
             }
           }
         } catch (e) {
-          members = ["廖", "周"];
+          members = [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT];
         }
 
         var tripObj = {
@@ -850,7 +988,7 @@ function getTravelData() {
       id: "trip-default",
       currency: "KRW",
       exchangeRate: 0.024,
-      members: ["廖", "周"]
+      members: [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT]
     };
 
     // 2. 智慧讀取旅遊支出明細 (自適應 10 欄 Excel 模板與 21 欄資料庫格式，支援後端批量直接記帳)
@@ -991,7 +1129,9 @@ function getTravelData() {
         }
 
         // 4. 解析代墊人/付款人
-        var payer = String(rawPayer || "廖").trim();
+        var payer = String(rawPayer || DEFAULT_USER_A_SHORT).trim();
+        if (payer === DEFAULT_USER_A_NAME) payer = DEFAULT_USER_A_SHORT;
+        if (payer === DEFAULT_USER_B_NAME) payer = DEFAULT_USER_B_SHORT;
         if (payer === "廖尹丞") payer = "廖";
         if (payer === "周沛緹") payer = "周";
 
@@ -999,7 +1139,7 @@ function getTravelData() {
         var splitTargetStr = String(rawSplitTarget || "").trim();
         var splitMode = "全體AA";
         var splitTarget = undefined;
-        var participants = matchedTrip.members || ["廖", "周"];
+        var participants = matchedTrip.members || [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT];
         var debtor = "";
         var debtorAmountTWD = 0;
         var memberSplits = {};
@@ -1012,18 +1152,18 @@ function getTravelData() {
           var cleanTarget = splitTargetStr.replace(/\(.*?\)/g, "").trim();
           if (cleanTarget === "全體AA" || cleanTarget === "AA平分" || cleanTarget === "AA" || cleanTarget === "平分" || cleanTarget === "全部") {
             splitMode = "全體AA";
-            participants = matchedTrip.members || ["廖", "周"];
+            participants = matchedTrip.members || [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT];
           } else if (cleanTarget.indexOf("+") !== -1 || cleanTarget.indexOf("、") !== -1 || cleanTarget.indexOf(",") !== -1) {
             splitMode = "參與者AA";
             participants = cleanTarget.split(/[+、, ]+/).map(function(s){ return s.trim(); }).filter(Boolean);
-          } else if (cleanTarget === payer || cleanTarget === (payer === "廖" ? "廖尹丞" : "周沛緹")) {
+          } else if (cleanTarget === payer || cleanTarget === (payer === DEFAULT_USER_A_SHORT ? DEFAULT_USER_A_NAME : DEFAULT_USER_B_NAME) || cleanTarget === (payer === "廖" ? "廖尹丞" : "周沛緹")) {
             splitMode = "個人自付";
             splitTarget = payer;
             debtor = "";
             debtorAmountTWD = 0;
           } else {
-            // 指定特定單人代墊 (例如: 代墊人=廖, 分帳對象=周)
-            var targetPerson = cleanTarget === "周沛緹" ? "周" : cleanTarget === "廖尹丞" ? "廖" : cleanTarget;
+            // 指定特定單人代墊 (例如: 代墊人=A, 分帳對象=B)
+            var targetPerson = cleanTarget === DEFAULT_USER_B_NAME ? DEFAULT_USER_B_SHORT : cleanTarget === DEFAULT_USER_A_NAME ? DEFAULT_USER_A_SHORT : (cleanTarget === "周沛緹" ? "周" : cleanTarget === "廖尹丞" ? "廖" : cleanTarget);
             splitMode = "全額代墊";
             splitTarget = targetPerson;
             debtor = targetPerson;
@@ -1034,7 +1174,7 @@ function getTravelData() {
 
         // 計算分攤金額
         if (splitMode === "全體AA" || splitMode === "AA平分") {
-          var pList = (participants && participants.length > 0) ? participants : (matchedTrip.members || ["廖", "周"]);
+          var pList = (participants && participants.length > 0) ? participants : (matchedTrip.members || [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT]);
           var sharePerPerson = Math.round(totalAmountTWD / Math.max(pList.length, 1));
           var otherMembers = pList.filter(function(m){ return m !== payer; });
           debtorAmountTWD = sharePerPerson * otherMembers.length;
@@ -1205,7 +1345,7 @@ function saveTravelTrip(data) {
       parseFloat(data.budgetTWD !== undefined ? data.budgetTWD : data.budgetTwd) || 0,
       data.status || "進行中",
       data.themeColor || "rose",
-      JSON.stringify(data.members || ["廖", "周"]),
+      JSON.stringify(data.members || [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT]),
       data.createdAt || Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd HH:mm"),
       data.creatorEmail || data.userEmail || "",
       data.createdBy || data.creatorName || ""
@@ -1297,7 +1437,7 @@ function addTravelExpense(data) {
     var rate = parseFloat(data.exchangeRate) || 1;
     var origAmt = parseFloat(data.originalAmount !== undefined ? data.originalAmount : data.amount) || 0;
     var totalTWD = parseFloat(data.totalAmountTWD !== undefined ? data.totalAmountTWD : data.amountTwd) || Math.round(origAmt * rate);
-    var payer = data.payer || "廖";
+    var payer = data.payer || DEFAULT_USER_A_SHORT;
     var splitMode = data.splitMode || "全體AA";
     var splitTarget = data.splitTarget || (splitMode === "全體AA" ? "全體AA" : "");
 
@@ -1313,7 +1453,7 @@ function addTravelExpense(data) {
       rate,
       totalTWD,
       splitMode,
-      JSON.stringify(data.participants || data.splitMembers || ["廖", "周"]),
+      JSON.stringify(data.participants || data.splitMembers || [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT]),
       JSON.stringify(data.memberSplits || data.memberSplitShares || {}),
       data.debtor || "",
       parseFloat(data.debtorAmountTWD !== undefined ? data.debtorAmountTWD : data.debtAmount) || 0,
@@ -1358,7 +1498,7 @@ function updateTravelExpense(data) {
     var rate = parseFloat(data.exchangeRate) || 1;
     var origAmt = parseFloat(data.originalAmount !== undefined ? data.originalAmount : data.amount) || 0;
     var totalTWD = parseFloat(data.totalAmountTWD !== undefined ? data.totalAmountTWD : data.amountTwd) || Math.round(origAmt * rate);
-    var payer = data.payer || "廖";
+    var payer = data.payer || DEFAULT_USER_A_SHORT;
     var splitMode = data.splitMode || "全體AA";
 
     var rowVals = [
@@ -1373,7 +1513,7 @@ function updateTravelExpense(data) {
       rate,
       totalTWD,
       splitMode,
-      JSON.stringify(data.participants || data.splitMembers || ["廖", "周"]),
+      JSON.stringify(data.participants || data.splitMembers || [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT]),
       JSON.stringify(data.memberSplits || data.memberSplitShares || {}),
       data.debtor || "",
       parseFloat(data.debtorAmountTWD !== undefined ? data.debtorAmountTWD : data.debtAmount) || 0,
@@ -1415,7 +1555,7 @@ function addBatchTravelExpenses(payload) {
       var rate = parseFloat(data.exchangeRate) || 1;
       var origAmt = parseFloat(data.originalAmount !== undefined ? data.originalAmount : data.amount) || 0;
       var totalTWD = parseFloat(data.totalAmountTWD !== undefined ? data.totalAmountTWD : data.amountTwd) || Math.round(origAmt * rate);
-      var payer = data.payer || "廖";
+      var payer = data.payer || DEFAULT_USER_A_SHORT;
       var splitMode = data.splitMode || "全體AA";
 
       rows.push([
@@ -1430,7 +1570,7 @@ function addBatchTravelExpenses(payload) {
         rate,
         totalTWD,
         splitMode,
-        JSON.stringify(data.participants || data.splitMembers || ["廖", "周"]),
+        JSON.stringify(data.participants || data.splitMembers || [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT]),
         JSON.stringify(data.memberSplits || data.memberSplitShares || {}),
         data.debtor || "",
         parseFloat(data.debtorAmountTWD !== undefined ? data.debtorAmountTWD : data.debtAmount) || 0,
@@ -1542,7 +1682,7 @@ function addTravelWishItem(data) {
       data.itemName || data.title || "心願項目",
       data.category || "景點",
       parseFloat(data.estimatedAmountTWD !== undefined ? data.estimatedAmountTWD : data.estimatedTwd) || 0,
-      data.addedBy || data.proposedBy || "廖",
+      data.addedBy || data.proposedBy || DEFAULT_USER_A_SHORT,
       data.status || "待預訂",
       data.note || "",
       data.creatorEmail || data.userEmail || "",

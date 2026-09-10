@@ -20,8 +20,10 @@ export const NicknameSettingsSection: React.FC<NicknameSettingsSectionProps> = (
 }) => {
   const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail);
   const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
-  const default1Char = isAdmin ? '廖' : '周';
-  const default2Char = isAdmin ? '廖廖' : '周周';
+  const userFirstChar = currentUser?.name ? currentUser.name.charAt(0) : (isAdmin ? '我' : '伴');
+  const userShort = currentUser?.name && currentUser.name.length >= 2 ? currentUser.name.slice(0, 2) : (isAdmin ? '管理' : '伴侶');
+  const default1Char = userFirstChar;
+  const default2Char = userShort;
 
   // 稱呼字數偏好狀態：'1-char' (單字) 或 '2-char' (雙字)
   const [lengthPref, setLengthPref] = useState<NicknameLengthPreference>(() => {
@@ -82,13 +84,23 @@ export const NicknameSettingsSection: React.FC<NicknameSettingsSectionProps> = (
   const currentPreview = lengthPref === '1-char' ? cleanN1 || default1Char : cleanN2 || default2Char;
 
   // 快速標籤清單
-  const quickPresets1Char = isAdmin
-    ? ['廖', '丞', '寶', '哥', '翁']
-    : ['周', '沛', '緹', '寶', '妞'];
+  const quickPresets1Char = Array.from(new Set([
+    userFirstChar,
+    ...(currentUser?.name?.slice(1, 2) ? [currentUser.name.slice(1, 2)] : []),
+    ...(currentUser?.name?.slice(2, 3) ? [currentUser.name.slice(2, 3)] : []),
+    '寶',
+    isAdmin ? '哥' : '妹',
+    '親'
+  ])).slice(0, 5);
 
-  const quickPresets2Char = isAdmin
-    ? ['廖廖', '尹丞', '小廖', '寶貝', '阿丞']
-    : ['周周', '沛緹', '小周', '寶貝', '阿緹'];
+  const quickPresets2Char = Array.from(new Set([
+    userShort,
+    `${userFirstChar}${userFirstChar}`,
+    `小${userFirstChar}`,
+    '寶貝',
+    `阿${userFirstChar}`,
+    isAdmin ? '主理' : '伴侶'
+  ])).slice(0, 5);
 
   const handleSave = () => {
     if (!onUpdateNickname) return;

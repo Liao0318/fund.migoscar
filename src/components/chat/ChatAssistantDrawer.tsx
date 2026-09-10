@@ -38,7 +38,7 @@ import {
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { AppNotification, AppNotifySettings, SmartCommandResult, SmartCommandCardData, AuthUser, CoupleBindingInfo } from '../../types';
 import { formatAmPmTime, isIncomingFromPartner } from '../../utils/formatters';
-import { resolveUserPersonas } from '../../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
 
 export interface ChatMessage {
   id: string;
@@ -201,6 +201,21 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
     window.addEventListener('banban:new_chat_message', handleIncomingChatMessage);
     return () => window.removeEventListener('banban:new_chat_message', handleIncomingChatMessage);
   }, []);
+
+  // 開啟抽屜時鎖定背景滾動，避免滾輪穿透到底層頁面
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      const originalTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        document.body.style.touchAction = originalTouchAction;
+      };
+    }
+  }, [isOpen]);
 
   // 儲存對話紀錄
   useEffect(() => {
@@ -999,11 +1014,11 @@ export const ChatAssistantDrawer: React.FC<ChatAssistantDrawerProps> = ({
                                   )}
                                   {n.actorRole && (
                                     <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-bold ${
-                                      n.actorRole === '周' || n.actorRole?.includes('周')
+                                      isRecordOfUserB(n.actorRole, userA, userB)
                                         ? 'bg-rose-100 text-rose-800 border border-rose-200'
                                         : 'bg-amber-100 text-amber-800 border border-amber-200'
                                     }`}>
-                                      {n.actorRole === '周' || n.actorRole?.includes('周')
+                                      {isRecordOfUserB(n.actorRole, userA, userB)
                                         ? (userB.isPendingBinding ? '⏳ 待確認伴侶' : `💖 ${userB.displayName}`)
                                         : `👑 ${userA.displayName}`}
                                     </span>

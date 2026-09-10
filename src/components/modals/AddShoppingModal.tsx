@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Pencil, ShoppingBag, X, Store, MapPin, Plus, User } from 'lucide-react';
 import { ShoppingItem, AuthUser, CoupleBindingInfo } from '../../types';
-import { resolveUserPersonas } from '../../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
 
 interface AddShoppingModalProps {
   isOpen: boolean;
@@ -253,7 +253,7 @@ export const AddShoppingModal: React.FC<AddShoppingModalProps> = ({
                       type="button"
                       onClick={() => setShoppingForm({ ...shoppingForm, creator: userA.name })}
                       className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 ${
-                        shoppingForm.creator === userA.name || shoppingForm.creator === userA.nickname || shoppingForm.creator === '廖尹丞'
+                        isRecordOfUserA(shoppingForm.creator, userA, userB)
                           ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
                           : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
                       }`}
@@ -273,7 +273,7 @@ export const AddShoppingModal: React.FC<AddShoppingModalProps> = ({
                       </div>
                       {userA.isCurrentUser && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
-                          shoppingForm.creator === userA.name || shoppingForm.creator === userA.nickname || shoppingForm.creator === '廖尹丞'
+                          isRecordOfUserA(shoppingForm.creator, userA, userB)
                             ? 'bg-sky-800 text-sky-100'
                             : 'bg-sky-100 text-sky-700'
                         }`}>
@@ -285,7 +285,7 @@ export const AddShoppingModal: React.FC<AddShoppingModalProps> = ({
                       type="button"
                       onClick={() => setShoppingForm({ ...shoppingForm, creator: userB.name })}
                       className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 ${
-                        shoppingForm.creator === userB.name || shoppingForm.creator === userB.nickname || shoppingForm.creator === '周沛緹' || shoppingForm.creator === '待確認' || shoppingForm.creator === '待確認伴侶'
+                        isRecordOfUserB(shoppingForm.creator, userA, userB)
                           ? (userB.isPendingBinding ? 'bg-neutral-800 text-white border-neutral-900 shadow-xs' : 'bg-rose-600 text-white border-rose-700 shadow-xs')
                           : (userB.isPendingBinding ? 'bg-neutral-50/80 border-dashed border-neutral-300 text-neutral-600 hover:bg-white' : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white')
                       }`}

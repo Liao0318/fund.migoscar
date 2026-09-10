@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Bell, LogIn, Menu } from 'lucide-react';
+import { Bell, LogIn, Menu } from 'lucide-react';
 import { BrandLogo } from './BrandLogo.tsx';
 import { AuthUser } from '../../types';
 
@@ -23,6 +23,7 @@ interface HeaderProps {
   onOpenUserProfile?: () => void;
   onOpenGasDeploy?: () => void;
   unreadNotificationCount?: number;
+  onOpenDevSettings?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -37,42 +38,45 @@ export const Header: React.FC<HeaderProps> = ({
   pendingQueueCount = 0,
   currentUser,
   isSandboxMode = false,
-  gasWebUrl = ''
+  gasWebUrl = '',
+  onOpenDevSettings
 }) => {
   return (
     <header className="fixed top-0 left-0 right-0 z-40 w-full font-sans bg-[#FAF9F5]/95 backdrop-blur-xl border-b border-[#EAE6DC] shadow-[0_2px_12px_rgba(62,58,54,0.04)]">
-      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-1.5 sm:py-2.5">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-1.5 sm:py-2">
         
-        {/* 頂部主列：品牌識別與功能操作 */}
+        {/* 頂部極簡主列：左邊選單 + Logo + 模式切換 + 簡潔右側 */}
         <div className="flex items-center justify-between gap-2">
           
-          {/* 左側：側邊選單按鈕與品牌 Logo */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-            {/* 側邊選單 Hamburger 觸發鈕 (由左往右滑出) */}
+          {/* 左側：側邊選單按鈕 (左側滑出) 與品牌 Logo */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* 側邊選單 Hamburger 觸發鈕 (由左向右滑出抽屜) */}
             <button
               type="button"
               onClick={onOpenSettings}
-              className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-[#F4F0E6] hover:bg-[#EAE4D8] text-[#5C564E] hover:text-[#3E3A36] border border-[#E0DBD0] flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
-              title="開啟側邊選單設定 (亦可由螢幕左邊緣向右滑動)"
-              aria-label="開啟側邊選單設定"
+              className="h-8.5 w-8.5 sm:h-9 sm:w-9 rounded-xl bg-[#F4F0E6] hover:bg-[#EAE4D8] text-[#5C564E] hover:text-[#3E3A36] border border-[#E0DBD0] flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
+              title="開啟左側選單設定"
+              aria-label="開啟選單設定"
             >
               <Menu className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
             </button>
 
-            <BrandLogo className="w-7 h-7 sm:w-8.5 sm:h-8.5 shrink-0 select-none drop-shadow-2xs rounded-xl" />
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-sm sm:text-lg font-black text-[#3E3A36] leading-tight flex items-center gap-1">
-                  伴伴記<span className="text-rose-500 text-xs sm:text-base animate-pulse">❤️</span>
-                </h1>
-                {isSandboxMode && (
-                  <span className="text-[9px] sm:text-[9.5px] font-extrabold bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded-md border border-amber-300 flex items-center gap-0.5 shrink-0" title="目前為本機離線試用模式">
-                    <Sparkles className="w-2.5 h-2.5 text-amber-700" />
-                    <span>試用</span>
-                  </span>
-                )}
-              </div>
-              <p className="hidden sm:block text-[10px] text-[#8C8475] font-normal mt-0.5 leading-none">雙人公積金與代墊分帳</p>
+            <BrandLogo className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 select-none drop-shadow-2xs rounded-xl" />
+            
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-sm sm:text-base font-black text-[#3E3A36] leading-tight flex items-center gap-1">
+                伴伴記<span className="text-rose-500 text-xs sm:text-sm animate-pulse">❤️</span>
+              </h1>
+              {currentUser?.isDevSandbox && (
+                <button
+                  type="button"
+                  onClick={onOpenDevSettings}
+                  className="text-[9px] font-extrabold bg-purple-100 hover:bg-purple-200 text-purple-900 px-1.5 py-0.5 rounded-md border border-purple-300 flex items-center gap-0.5 shrink-0 cursor-pointer shadow-2xs active:scale-95"
+                  title="開啟 DEV 控制台"
+                >
+                  <span>🛠️ DEV</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -89,7 +93,7 @@ export const Header: React.FC<HeaderProps> = ({
                   window.location.hash = '';
                 }
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap active:scale-95 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap active:scale-95 ${
                 appMode === 'fund'
                   ? 'bg-white text-[#3E3A36] shadow-xs border border-[#DCD6C9]'
                   : 'text-[#8C8475] hover:text-[#3E3A36]'
@@ -108,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
                 } catch (e) {}
                 window.location.hash = '/split';
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 relative whitespace-nowrap active:scale-95 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 relative whitespace-nowrap active:scale-95 ${
                 appMode === 'split'
                   ? 'bg-gradient-to-r from-rose-600 to-rose-700 text-white shadow-xs'
                   : 'text-[#8C8475] hover:text-[#3E3A36]'
@@ -126,13 +130,13 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* 右側按鈕群：匯率 + 通知 + 設定頭像 */}
+          {/* 右側按鈕群：極簡化（僅保留匯率、通知與個人頭像） */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* ✈️ 💱 即時匯率按鈕 */}
             <button
               type="button"
               onClick={onOpenTravelCalculator}
-              className="h-8.5 px-2.5 sm:px-3 rounded-xl bg-[#F4F0E6] hover:bg-[#EAE4D8] text-[#5C564E] border border-[#E0DBD0] flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95 text-xs font-bold"
+              className="h-8.5 px-2.5 rounded-xl bg-[#F4F0E6] hover:bg-[#EAE4D8] text-[#5C564E] border border-[#E0DBD0] flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95 text-xs font-bold"
               title="開啟出國各國即時匯率換算器"
               aria-label="即時匯率換算"
             >
@@ -158,7 +162,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* ⚙️ 設定 / 使用者頭像或訪客登入 */}
+            {/* 👤 使用者頭像 (點擊打開左側抽屜設定) */}
             <button
               type="button"
               onClick={() => {
@@ -168,16 +172,12 @@ export const Header: React.FC<HeaderProps> = ({
                   onOpenSettings();
                 }
               }}
-              className={`h-8.5 px-2.5 sm:px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 relative font-bold text-xs ${
-                currentUser
-                  ? 'bg-white hover:bg-[#F7F5EE] text-[#3E3A36] border border-[#DDD7C9]'
-                  : 'bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-950 border border-amber-300 ring-1 ring-amber-200/50'
-              }`}
-              title={currentUser ? '開啟側邊設定與帳戶中心' : '目前為訪客模式（未登入）• 點擊返回初始登入主畫面'}
-              aria-label={currentUser ? '側邊設定' : '返回登入畫面'}
+              className="h-8.5 px-2 rounded-xl flex items-center justify-center gap-1.5 bg-white hover:bg-[#F7F5EE] text-[#3E3A36] border border-[#DDD7C9] transition-all cursor-pointer shadow-2xs active:scale-95 relative font-bold text-xs"
+              title={currentUser ? '開啟設定與帳戶中心' : '點擊登入'}
+              aria-label={currentUser ? '設定' : '登入'}
             >
               {currentUser?.avatar ? (
-                <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-[#D5D0C3] ring-1 ring-rose-300">
+                <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-[#D5D0C3]">
                   <img
                     src={currentUser.avatar}
                     alt={currentUser.nickname || currentUser.name}
@@ -186,18 +186,19 @@ export const Header: React.FC<HeaderProps> = ({
                   />
                 </div>
               ) : currentUser ? (
-                <span className="text-sm">⚙️</span>
+                <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center text-[10px] font-bold">
+                  {(currentUser.nickname || currentUser.name || '我')[0]}
+                </span>
               ) : (
                 <LogIn className="w-3.5 h-3.5 text-amber-800 shrink-0" />
               )}
-              <span
-                className="text-xs font-black truncate max-w-[65px] min-[360px]:max-w-[90px] sm:max-w-[120px]"
-                title={currentUser ? (currentUser.nickname || currentUser.name) : '訪客 (登入)'}
-              >
-                {currentUser ? (currentUser.nickname || currentUser.name) : '訪客 (登入)'}
+              
+              <span className="hidden min-[460px]:inline-block text-xs font-bold truncate max-w-[70px]">
+                {currentUser ? (currentUser.nickname || currentUser.name) : '登入'}
               </span>
+
               {(!gasWebUrl || pendingQueueCount > 0) && currentUser && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-500 border-2 border-white animate-pulse" />
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 border border-white animate-pulse" />
               )}
             </button>
           </div>
@@ -260,4 +261,3 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
-

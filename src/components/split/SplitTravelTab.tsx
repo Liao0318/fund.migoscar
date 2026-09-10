@@ -1068,8 +1068,8 @@ export const SplitTravelTab: React.FC<SplitTravelTabProps> = ({
         location: expLocation.trim(),
         note: expNote.trim(),
         creatorEmail: editingExpenseId 
-          ? (expenses.find(e => e.id === editingExpenseId)?.creatorEmail || currentUser?.email || 'oscargh3359@gmail.com')
-          : (currentUser?.email || 'oscargh3359@gmail.com'),
+          ? (expenses.find(e => e.id === editingExpenseId)?.creatorEmail || currentUser?.email || userA.email || '')
+          : (currentUser?.email || userA.email || ''),
         createdBy: editingExpenseId
           ? (expenses.find(e => e.id === editingExpenseId)?.createdBy || creatorDisplayName)
           : creatorDisplayName,

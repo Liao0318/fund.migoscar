@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 伴侶邀請碼集合：供管理者發行、伴侶驗證與綁定
+    match /partner_invites/{inviteCode} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 情侶雙向配對綁定紀錄：以管理者或伴侶 email 為 key
+    match /couple_bindings/{userEmail} {
+      allow read, write: if request.auth != null;
+    }
+
+    // 使用者個人雲端設定快取（頭像、暱稱、GAS Web App API 網址）
+    match /user_configs/{userEmail} {
+      allow read, write: if request.auth != null;
+    }
+
+    // 預設規則
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

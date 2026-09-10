@@ -145,3 +145,33 @@ export function getUserNotifySettings(email?: string): AppNotifySettings | null 
   } catch (e) {}
   return null;
 }
+
+/**
+  * 登出時徹底清空全域與工作階段快取（Zero-Trace 登出機制，避免多使用者換機資料殘留）
+  */
+export function clearAllSessionLedgerCache(): void {
+  const keysToRemove = [
+    'banban_auth_user',
+    'muji_gas_web_url',
+    'muji_sheet_url',
+    'muji_deploy_sheet_url',
+    'muji_ledger_data',
+    'banban_split_records',
+    'banban_shopping_items',
+    'banban_partner_binding',
+    'banban_active_invite',
+    'banban_chat_messages',
+    'muji_notifications',
+    'muji_notification_day',
+    'muji_notification_settings',
+    'banban_app_notify_settings',
+    'banban_is_sandbox_mode',
+    'banban_is_guest_mode'
+  ];
+
+  keysToRemove.forEach(k => {
+    try {
+      localStorage.removeItem(k);
+    } catch (e) {}
+  });
+}

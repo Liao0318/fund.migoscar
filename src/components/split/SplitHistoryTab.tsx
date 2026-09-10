@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { SplitRecordItem, AuthUser, CoupleBindingInfo } from '../../types';
 import { exportSplitRecordsToCSV } from '../../utils/exportCsv';
-import { resolveUserPersonas } from '../../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
 
 interface SplitHistoryTabProps {
   items: SplitRecordItem[];
@@ -83,13 +83,11 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
   }
 
   const isItemPayerUserA = (payerStr?: string) => {
-    const p = (payerStr || '').trim();
-    return p === userA.shortName || p === userA.name || p === userA.displayName || p === '廖';
+    return isRecordOfUserA(payerStr, userA, userB);
   };
 
   const isItemDebtorUserA = (debtorStr?: string) => {
-    const d = (debtorStr || '').trim();
-    return d === userA.shortName || d === userA.name || d === userA.displayName || d === '廖';
+    return isRecordOfUserA(debtorStr, userA, userB);
   };
 
   const filteredItems = safeItems
@@ -159,10 +157,10 @@ export const SplitHistoryTab: React.FC<SplitHistoryTabProps> = ({
   }, 0);
 
   const userAAdvancedSum = filteredItems
-    .filter(i => i?.payer === '廖')
+    .filter(i => isRecordOfUserA(i?.payer, userA, userB))
     .reduce((acc, i) => acc + (Number(i?.totalAmount) || 0), 0);
   const userBAdvancedSum = filteredItems
-    .filter(i => i?.payer === '周')
+    .filter(i => isRecordOfUserB(i?.payer, userA, userB))
     .reduce((acc, i) => acc + (Number(i?.totalAmount) || 0), 0);
   const liaoAdvancedSum = userAAdvancedSum;
   const zhouAdvancedSum = userBAdvancedSum;

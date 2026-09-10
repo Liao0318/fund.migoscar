@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Plus, Save, Store, MapPin, Sparkles, User } from 'lucide-react';
 import { ShoppingItem, AuthUser, CoupleBindingInfo } from '../../types';
 import { CURRENCIES, DEFAULT_RATES_MAP } from '../../utils/formatters';
-import { resolveUserPersonas } from '../../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
 
 interface AddRecordModalProps {
   isOpen: boolean;
@@ -168,7 +168,7 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                     <div className="flex flex-wrap items-center gap-1.5 pt-1">
                       <span className="text-[10px] text-[#A09A8F] font-bold">常用：</span>
                       {(formData.type === '收入-固定公積金' ? [
-                        '每月固定公積金', '廖廖補貼款', '周周補貼款', '年度獎金公款', '生活備用金', '退款/利息'
+                        '每月固定公積金', `${userA.displayName}補貼款`, `${userB.displayName}補貼款`, '年度獎金公款', '生活備用金', '退款/利息'
                       ] : [
                         '午餐', '晚餐', '早餐', '叫外送', '全聯採買', '好市多', '手搖飲料', '超商 7-11', '日用品', '水果食材', '水電瓦斯', '房租', '加油交通', '看診醫藥'
                       ]).map((tag) => (
@@ -404,7 +404,7 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                           onClick={() => setFormData(prev => ({
                             ...prev,
                             type: '支出-日常代墊',
-                            payer: prev.payer === '共同帳戶' ? '廖尹丞' : prev.payer
+                            payer: prev.payer === '共同帳戶' ? (userA.name || '主要出資人') : prev.payer
                           }))}
                           className={`p-3 rounded-2xl border-2 transition-all text-left cursor-pointer active:scale-98 relative overflow-hidden ${
                             formData.type === '支出-日常代墊'
@@ -501,7 +501,7 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                             type="button"
                             onClick={() => setFormData({ ...formData, payer: userA.name })}
                             className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 relative ${
-                              formData.payer === userA.name || formData.payer === userA.nickname || formData.payer === '廖尹丞'
+                              isRecordOfUserA(formData.payer, userA, userB)
                                 ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
                                 : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white'
                             }`}
@@ -521,7 +521,7 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                             </div>
                             {userA.isCurrentUser && (
                               <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
-                                formData.payer === userA.name || formData.payer === userA.nickname || formData.payer === '廖尹丞'
+                                isRecordOfUserA(formData.payer, userA, userB)
                                   ? 'bg-sky-800 text-sky-100'
                                   : 'bg-sky-100 text-sky-700'
                               }`}>
@@ -533,7 +533,7 @@ export const AddRecordModal: React.FC<AddRecordModalProps> = ({
                             type="button"
                             onClick={() => setFormData({ ...formData, payer: userB.name })}
                             className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 active:scale-95 relative ${
-                              formData.payer === userB.name || formData.payer === userB.nickname || formData.payer === '周沛緹' || formData.payer === '待確認' || formData.payer === '待確認伴侶'
+                              isRecordOfUserB(formData.payer, userA, userB)
                                 ? (userB.isPendingBinding ? 'bg-neutral-800 text-white border-neutral-900 shadow-xs' : 'bg-rose-600 text-white border-rose-700 shadow-xs')
                                 : (userB.isPendingBinding ? 'bg-neutral-50/80 border-dashed border-neutral-300 text-neutral-600 hover:bg-white' : 'bg-[#FAF9F5] border-[#DDD9CE] text-[#6E6659] hover:bg-white')
                             }`}

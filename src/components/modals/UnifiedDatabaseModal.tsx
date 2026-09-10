@@ -24,11 +24,16 @@ import {
   HelpCircle,
   Link as LinkIcon,
   PlayCircle,
-  Unlink
+  Unlink,
+  LogOut,
+  RotateCcw,
+  Download,
+  FileSpreadsheet
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData, CoupleBindingInfo } from '../../types';
-import { resolveInviteCodeOrToken, fetchInviteCodeOnline } from '../../utils/partnerInvite';
+import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode } from '../../utils/partnerInvite';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
+import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
 
 interface UnifiedDatabaseModalProps {
   isOpen: boolean;
@@ -38,7 +43,7 @@ interface UnifiedDatabaseModalProps {
   setGasWebUrl: (v: string) => void;
   deploySheetUrl: string;
   setDeploySheetUrl: (v: string) => void;
-  saveDeployConfig: () => void;
+  saveDeployConfig: (overrideGas?: string, overrideSheet?: string) => void;
   customizedCodeGs: string;
   currentInviteCode: string;
   onGenerateNewInviteCode?: () => void;
@@ -46,10 +51,14 @@ interface UnifiedDatabaseModalProps {
   onBindPartnerInvite?: (inviteInput: string) => Promise<{ success: boolean; message?: string }>;
   partnerBindingInfo?: CoupleBindingInfo | null;
   onUnbindPartner?: () => void;
+  onResetAccountDatabase?: () => void;
   isSandboxMode?: boolean;
   onToggleSandboxMode?: (enabled: boolean) => void;
   initialTab?: 'wizard' | 'settings' | 'code' | 'partner';
   initialWizardRole?: 'admin' | 'partner';
+  isForcedOnboarding?: boolean;
+  onCompleteOnboarding?: () => void;
+  onLogout?: () => void;
 }
 
 export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
@@ -68,10 +77,14 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
   onBindPartnerInvite,
   partnerBindingInfo,
   onUnbindPartner,
+  onResetAccountDatabase,
   isSandboxMode = false,
   onToggleSandboxMode,
   initialTab = 'wizard',
-  initialWizardRole
+  initialWizardRole,
+  isForcedOnboarding = false,
+  onCompleteOnboarding,
+  onLogout
 }) => {
   // 主分頁：'wizard' (引導小精靈) ｜ 'settings' (直接輸入與設定) ｜ 'code' (部署代碼庫) ｜ 'partner' (伴侶邀請與綁定)
   const [activeTab, setActiveTab] = useState<'wizard' | 'settings' | 'code' | 'partner'>(initialTab);
@@ -107,17 +120,31 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
   const [adminValidationError, setAdminValidationError] = useState<string | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
 
+  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
+  const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
+
   // 同步外部傳入的初始設定
   useEffect(() => {
     if (isOpen) {
       if (deploySheetUrl) setInputSheetUrl(deploySheetUrl);
       if (gasWebUrl) setInputGasUrl(gasWebUrl);
-      if (initialTab) setActiveTab(initialTab);
+
+      // 🛡️ 權限防護：伴侶不可進入 settings 或 code 分頁
+      if (isPartner) {
+        if (initialTab === 'settings' || initialTab === 'code') {
+          setActiveTab('partner');
+        } else {
+          setActiveTab(initialTab || 'partner');
+        }
+      } else {
+        if (initialTab) setActiveTab(initialTab);
+      }
+
       if (initialWizardRole === 'admin') setWizardRole('admin_flow');
       else if (initialWizardRole === 'partner') setWizardRole('partner_flow');
       else if (gasWebUrl && gasWebUrl.startsWith('http')) {
         // 若已連線，預設開啟設定分頁或引導管理者
-        setWizardRole('admin_flow');
+        setWizardRole(isPartner ? 'partner_flow' : 'admin_flow');
         setAdminWizardStep(3);
       } else {
         setWizardRole('select_role');
@@ -126,10 +153,24 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
       setPartnerError(null);
       setAdminValidationError(null);
       setSaveSuccessMsg(false);
+
+      // 自動從 URL 讀取伴侶專屬邀請代碼或 Token 預填
+      try {
+        if (typeof window !== 'undefined') {
+          const href = window.location.href;
+          if (href.includes('#join=') || href.includes('invite=') || href.includes('code=')) {
+            const extracted = extractInviteCode(href);
+            if (extracted) {
+              setInviteInput(extracted);
+              setWizardRole('partner_flow');
+            }
+          }
+        }
+      } catch (e) {}
     }
   }, [isOpen, deploySheetUrl, gasWebUrl, initialTab, initialWizardRole]);
 
-  // 即時聯網解析伴侶邀請碼
+  // 即時聯網解析伴侶邀請碼（支援整段文案、網址或純代碼）
   useEffect(() => {
     let isMounted = true;
     const clean = inviteInput.trim();
@@ -146,22 +187,30 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
       return;
     }
 
-    const isCodePattern = /^BB-[A-Z0-9]{4,8}$/i.test(clean) || /^[A-Z0-9]{4,8}$/i.test(clean) || clean.includes('http') || clean.includes('#join=') || clean.includes('invite=');
+    const extracted = extractInviteCode(clean);
+    const isCodePattern = Boolean(extracted) || 
+      /^BB-[A-Z0-9]{4,8}$/i.test(clean) || 
+      /^[A-Z0-9]{4,8}$/i.test(clean) || 
+      clean.includes('http') || 
+      clean.includes('#join=') || 
+      clean.includes('invite=');
+
     if (isCodePattern) {
-      fetchInviteCodeOnline(clean).then(cloudResolved => {
+      const codeToQuery = extracted || clean;
+      fetchInviteCodeOnline(codeToQuery).then(cloudResolved => {
         if (!isMounted) return;
-        if (cloudResolved && cloudResolved.adminEmail && cloudResolved.gasWebUrl) {
+        if (cloudResolved && cloudResolved.adminEmail) {
           setResolvedInvite(cloudResolved);
           setPartnerError(null);
         } else {
           setResolvedInvite(null);
-          setPartnerError(`查無此邀請碼【${clean.length <= 12 ? clean.toUpperCase() : '代碼'}】，請確認代碼或向伴侶索取最新邀請碼`);
+          setPartnerError(`查無此邀請碼【${extracted || (clean.length <= 12 ? clean.toUpperCase() : '代碼')}】，請確認代碼或向伴侶索取最新邀請碼`);
         }
       }).catch(() => {
         if (!isMounted) return;
         setResolvedInvite(null);
       });
-    } else if (clean.length >= 3) {
+    } else if (clean.length >= 6) {
       setResolvedInvite(null);
       setPartnerError('邀請碼格式通常為「BB-XXXX」或完整邀請連結');
     }
@@ -239,14 +288,22 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
       if (res.success) {
         setPartnerBindSuccess(true);
         setTimeout(() => {
-          onClose();
+          if (onCompleteOnboarding) {
+            onCompleteOnboarding();
+          } else {
+            onClose();
+          }
         }, 1200);
       } else {
         setPartnerError(res.message || '邀請碼綁定失敗，請確認代碼是否正確');
       }
     } else {
       setIsPartnerBindingLoading(false);
-      onClose();
+      if (onCompleteOnboarding) {
+        onCompleteOnboarding();
+      } else {
+        onClose();
+      }
     }
   };
 
@@ -282,13 +339,15 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
       localStorage.setItem('muji_sheet_url', cleanSheet);
     } catch (e) {}
 
+    // 立即傳入乾淨的 API 網址與試算表網址，確保雲端邀請碼即刻綁定
+    saveDeployConfig(cleanGas, cleanSheet);
+
     setTimeout(() => {
-      saveDeployConfig();
       setIsAdminBindingLoading(false);
       setAdminWizardStep(3); // 進入綁定成功與邀請伴侶步驟
       setSaveSuccessMsg(true);
       setTimeout(() => setSaveSuccessMsg(false), 3000);
-    }, 500);
+    }, 400);
   };
 
   const handleDirectSave = () => {
@@ -302,13 +361,12 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
       localStorage.setItem('muji_sheet_url', cleanSheet);
     } catch (e) {}
 
-    saveDeployConfig();
+    saveDeployConfig(cleanGas, cleanSheet);
     setSaveSuccessMsg(true);
     setTimeout(() => setSaveSuccessMsg(false), 3000);
   };
 
   const isConnected = Boolean(gasWebUrl && gasWebUrl.startsWith('http'));
-  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
 
   return (
     <AnimatePresence>
@@ -329,7 +387,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-extrabold text-[#3E3A36] text-sm sm:text-base">
-                      資料庫設定與引導小精靈
+                      {isForcedOnboarding ? '✨ 帳本啟用引導小精靈' : '資料庫設定與引導小精靈'}
                     </h3>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
                       isConnected 
@@ -337,25 +395,30 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                         : 'bg-amber-100 text-amber-800 border border-amber-300'
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-600' : 'bg-amber-600 animate-ping'}`} />
-                      <span>{isConnected ? (isPartner ? '伴侶連線中' : '資料庫已連通') : '初始待連線'}</span>
+                      <span>{isConnected ? (isPartner ? '伴侶連線中' : '資料庫已連通') : (isForcedOnboarding ? '新帳號初次設定' : '初始待連線')}</span>
                     </span>
                   </div>
                   <p className="text-[11px] text-[#8C8475] font-medium mt-0.5">
-                    整合 Google 試算表連線、Web App API 設定、代碼部署與伴侶邀請
+                    {isForcedOnboarding 
+                      ? '請選擇您的使用身分（主管理者或伴侶模式），完成資料庫連線或邀請碼配對' 
+                      : '整合 Google 試算表連線、Web App API 設定、代碼部署與伴侶邀請'}
                   </p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-8 h-8 rounded-full bg-[#EFECE3] hover:bg-[#E5E1D5] flex items-center justify-center text-[#8C8475] transition-all cursor-pointer shrink-0"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {!isForcedOnboarding && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-8 h-8 rounded-full bg-[#EFECE3] hover:bg-[#E5E1D5] flex items-center justify-center text-[#8C8475] transition-all cursor-pointer shrink-0"
+                  title="關閉視窗"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
-            {/* 4 大功能分頁切換列 */}
+            {/* 4 大功能分頁切換列 (強制引導時僅開放引導小精靈，或允許進階設定) */}
             <div className="bg-[#F5F2EA] px-4 py-2 border-b border-[#E8E4D9] flex items-center justify-between gap-1 overflow-x-auto shrink-0">
               <div className="flex items-center gap-1">
                 <button
@@ -371,44 +434,67 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                   <span>引導小精靈</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('settings')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    activeTab === 'settings'
-                      ? 'bg-white text-amber-900 shadow-2xs'
-                      : 'text-[#7A7366] hover:text-[#3E3A36]'
-                  }`}
-                >
-                  <Sliders className="w-3.5 h-3.5 text-amber-700" />
-                  <span>資料庫與 API 設定</span>
-                </button>
+                {!isForcedOnboarding && (
+                  <>
+                    {!isPartner ? (
+                      /* 👑 主管理員專屬分頁 */
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('settings')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                            activeTab === 'settings'
+                              ? 'bg-white text-amber-900 shadow-2xs'
+                              : 'text-[#7A7366] hover:text-[#3E3A36]'
+                          }`}
+                        >
+                          <Sliders className="w-3.5 h-3.5 text-amber-700" />
+                          <span>資料庫與 API 設定</span>
+                        </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('code')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    activeTab === 'code'
-                      ? 'bg-white text-amber-900 shadow-2xs'
-                      : 'text-[#7A7366] hover:text-[#3E3A36]'
-                  }`}
-                >
-                  <FileCode className="w-3.5 h-3.5 text-amber-700" />
-                  <span>後端代碼庫</span>
-                </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('code')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                            activeTab === 'code'
+                              ? 'bg-white text-amber-900 shadow-2xs'
+                              : 'text-[#7A7366] hover:text-[#3E3A36]'
+                          }`}
+                        >
+                          <FileCode className="w-3.5 h-3.5 text-amber-700" />
+                          <span>後端代碼庫</span>
+                        </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('partner')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                    activeTab === 'partner'
-                      ? 'bg-white text-rose-900 shadow-2xs'
-                      : 'text-[#7A7366] hover:text-[#3E3A36]'
-                  }`}
-                >
-                  <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
-                  <span>伴侶邀請</span>
-                </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('partner')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                            activeTab === 'partner'
+                              ? 'bg-white text-rose-900 shadow-2xs'
+                              : 'text-[#7A7366] hover:text-[#3E3A36]'
+                          }`}
+                        >
+                          <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
+                          <span>伴侶邀請管理</span>
+                        </button>
+                      </>
+                    ) : (
+                      /* 💖 伴侶專屬分頁 */
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('partner')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                          activeTab === 'partner'
+                            ? 'bg-white text-rose-900 shadow-2xs'
+                            : 'text-[#7A7366] hover:text-[#3E3A36]'
+                        }`}
+                      >
+                        <Heart className="w-3.5 h-3.5 text-rose-600 fill-rose-600" />
+                        <span>💖 伴侶帳本連線狀態</span>
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
 
               {saveSuccessMsg && (
@@ -427,15 +513,15 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                   {wizardRole === 'select_role' && (
                     <div className="space-y-4">
                       <div className="text-center space-y-1.5 py-2">
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold border border-amber-200">
                           <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-                          <span>請選擇您的帳本使用身分</span>
+                          <span>系統自動識別：初次登入新用戶設定提示</span>
                         </div>
                         <h4 className="text-lg font-black text-[#3E3A36]">
-                          您好 {currentUser?.nickname || currentUser?.name || '朋友'}！想如何開始記帳？
+                          歡迎新朋友 {currentUser?.nickname || currentUser?.name || ''}！請依您的角色開始使用
                         </h4>
-                        <p className="text-xs text-[#7A7366]">
-                          情侶共同記帳只需其中一人建立 Google 試算表，另一半透過邀請碼即可加入！
+                        <p className="text-xs text-[#7A7366] max-w-md mx-auto leading-relaxed">
+                          系統偵測到您尚未建立專屬帳本或綁定伴侶。情侶共同記帳只需其中一人建立 Google 試算表，另一半輸入 6 碼邀請碼即可加入！
                         </p>
                       </div>
 
@@ -491,6 +577,21 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                           </div>
                         </div>
                       </div>
+
+                      {isForcedOnboarding && (
+                        <div className="pt-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onCompleteOnboarding) onCompleteOnboarding();
+                              onClose();
+                            }}
+                            className="text-xs text-[#8C8475] hover:text-[#3E3A36] underline cursor-pointer hover:font-bold transition-all"
+                          >
+                            先跳過設定，以本機離線模式體驗（稍後隨時可在側邊選單連線）
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -538,16 +639,68 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                         <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
                           <div className="space-y-1">
                             <h4 className="text-sm font-extrabold text-[#3E3A36] flex items-center gap-2">
-                              <span>第 1 步：輸入 Google 試算表網址並複製 Code.gs</span>
+                              <Sparkles className="w-4 h-4 text-amber-700" />
+                              <span>第 1 步：建立 Google 試算表資料庫並複製 Code.gs</span>
                             </h4>
                             <p className="text-xs text-[#7A7366] leading-relaxed">
-                              請於下方填入您的專屬 Google 試算表網址。系統會自動將試算表 ID 寫入 Code.gs 代碼中。
+                              初次使用您可以直接下載官方預置的 8 大工作表空白 Excel 範本匯入 Google 雲端硬碟，或是建立空白試算表，系統會在連線時自動為您完成初始化。
                             </p>
                           </div>
 
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-[#5C564E]">
-                              Google 試算表網址或 Spreadsheet ID
+                          {/* 📥 官方空白資料庫 Excel 範本與快速開檔專區 */}
+                          <div className="bg-gradient-to-br from-[#FAF8F3] to-[#F5F1E6] p-4 rounded-2xl border border-[#E8E2D2] space-y-3 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                                  <FileSpreadsheet className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <div className="text-xs font-black text-[#3E3A36] flex items-center gap-1.5">
+                                    <span>官方預置空白資料庫 Excel 範本 (.xlsx)</span>
+                                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.2 rounded-full">
+                                      8 大工作表預先建置
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-[#8C8475]">
+                                    內含「流水帳資料庫、代墊明細、購物清單、常用商店、旅遊行程/支出/心願、月度核銷」完整欄位與格式
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <button
+                                type="button"
+                                onClick={() => downloadDatabaseExcelTemplate()}
+                                className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all active:scale-95"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>下載空白資料庫 Excel 範本 (.xlsx)</span>
+                              </button>
+
+                              <a
+                                href={GOOGLE_SHEETS_NEW_URL}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3.5 py-2 bg-white hover:bg-[#FAF8F3] text-[#3E3A36] border border-[#DDD6C8] rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5 text-amber-800" />
+                                <span>一鍵前往建立新 Google 試算表 (sheets.new)</span>
+                              </a>
+                            </div>
+
+                            <div className="text-[10px] text-[#7A7366] bg-white/80 p-2.5 rounded-xl border border-[#EAE4D6] space-y-1">
+                              <div className="font-bold text-[#3E3A36]">💡 使用建議：</div>
+                              <p className="leading-relaxed">
+                                下載 Excel 範本後，直接將檔案拖曳上傳至您的 <a href="https://drive.google.com" target="_blank" rel="noreferrer" className="text-amber-800 underline font-bold">Google 雲端硬碟</a> 並選擇以「Google 試算表」開啟，即可獲得完美格式的後端資料庫！
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5 pt-1">
+                            <label className="text-xs font-bold text-[#5C564E] flex items-center justify-between">
+                              <span>Google 試算表網址或 Spreadsheet ID</span>
+                              <span className="text-[10px] text-[#8C8475]">（貼上瀏覽器上方的試算表完整網址）</span>
                             </label>
                             <input
                               type="text"
@@ -720,7 +873,13 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                           <div className="flex justify-end pt-2">
                             <button
                               type="button"
-                              onClick={onClose}
+                              onClick={() => {
+                                if (onCompleteOnboarding) {
+                                  onCompleteOnboarding();
+                                } else {
+                                  onClose();
+                                }
+                              }}
                               className="px-6 py-2.5 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95 cursor-pointer"
                             >
                               完成並開啟帳本 🚀
@@ -871,7 +1030,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                   </div>
 
                   {/* 8 大工作頁清單 */}
-                  <div className="bg-[#FAF8F3] rounded-2xl p-3.5 border border-[#EAE6DC] space-y-2">
+                  <div className="bg-[#FAF8F3] rounded-2xl p-3.5 border border-[#EAE6DC] space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -907,6 +1066,33 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                         <span>💡</span> <span>8. 旅遊心願清單</span>
                       </div>
                     </div>
+
+                    {/* 快速下載範本捷徑 */}
+                    <div className="pt-2 border-t border-[#EAE4D6] flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-[11px] text-[#7A7366] flex items-center gap-1">
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>需要全新 Google 試算表資料庫範本？</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => downloadDatabaseExcelTemplate()}
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer active:scale-95"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>下載 Excel 範本 (.xlsx)</span>
+                        </button>
+                        <a
+                          href={GOOGLE_SHEETS_NEW_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2.5 py-1 bg-white hover:bg-[#FAF8F3] text-[#3E3A36] border border-[#DDD6C8] rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                        >
+                          <ExternalLink className="w-3 h-3 text-amber-800" />
+                          <span>建立新 Google 試算表</span>
+                        </a>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between pt-2">
@@ -921,6 +1107,21 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                       <Sparkles className="w-3.5 h-3.5" />
                       <span>開啟引導小精靈逐步設定</span>
                     </button>
+
+                    {onResetAccountDatabase && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('⚠️ 確定要重設此 Google 帳號的資料庫連線嗎？\n\n重設後將清空本帳號的試算表與 API 設定，初始化為乾淨系統，並重新開啟引導小精靈。')) {
+                            onResetAccountDatabase();
+                          }
+                        }}
+                        className="text-xs text-rose-700 hover:text-rose-900 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>重設此帳號資料庫（初始化）</span>
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -1073,20 +1274,75 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                         </div>
                       </div>
                     ) : (
-                      /* 伴侶專屬狀態 */
-                      <div className="bg-gradient-to-br from-rose-50/70 to-white rounded-2xl p-4 border border-rose-200 space-y-3">
-                        <div className="text-xs space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#8C8475]">👑 帳本主管理者：</span>
+                      /* 💖 伴侶專屬狀態與權限說明面板 */
+                      <div className="bg-gradient-to-br from-rose-50/70 via-white to-amber-50/30 rounded-2xl p-4 sm:p-5 border border-rose-200 space-y-4 shadow-2xs">
+                        <div className="flex items-center gap-2.5 border-b border-rose-100 pb-3">
+                          <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">
+                            <Heart className="w-5 h-5 fill-rose-600 text-rose-600" />
+                          </div>
+                          <div>
+                            <h4 className="text-xs font-black text-rose-950 flex items-center gap-1.5">
+                              <span>已加入情侶共享帳本</span>
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                🟢 雲端雙向同步中
+                              </span>
+                            </h4>
+                            <p className="text-[11px] text-rose-800/80 mt-0.5">
+                              您正以伴侶身分協同記帳，享有完整的日常生活財務管理權限
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 帳本資訊卡片 */}
+                        <div className="bg-white rounded-xl p-3.5 border border-rose-100 space-y-2.5 text-xs shadow-2xs">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[#8C8475] font-medium">👑 帳本主管理者：</span>
                             <span className="font-bold text-[#3E3A36]">
-                              {partnerBindingInfo?.adminName || currentUser?.adminName || '主管理員'} ({partnerBindingInfo?.adminEmail || currentUser?.adminEmail})
+                              {partnerBindingInfo?.adminName || currentUser?.adminName || '主管理員'} 
+                              {(partnerBindingInfo?.adminEmail || currentUser?.adminEmail) ? ` (${partnerBindingInfo?.adminEmail || currentUser?.adminEmail})` : ''}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[#8C8475]">🔑 邀請代碼：</span>
-                            <span className="font-mono font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded">
-                              {partnerBindingInfo?.inviteCode || currentUser?.inviteCode}
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[#8C8475] font-medium">🔑 配對邀請代碼：</span>
+                            <span className="font-mono font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                              {partnerBindingInfo?.inviteCode || currentUser?.inviteCode || '已成功綁定'}
                             </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-[#8C8475] font-medium">✨ 您的權限角色：</span>
+                            <span className="font-bold text-rose-700 bg-rose-100/60 px-2 py-0.5 rounded-full text-[10px]">
+                              甜蜜伴侶 (日常記帳/代墊/心願/旅遊協作)
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 權限差異說明卡 */}
+                        <div className="bg-[#FAF8F5] p-3 rounded-xl border border-[#EDE7D9] space-y-2 text-xs">
+                          <div className="font-bold text-[#3E3A36] flex items-center gap-1 text-[11px]">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>伴侶權限說明與安全保護</span>
+                          </div>
+                          <p className="text-[11px] text-[#7A7366] leading-relaxed">
+                            • <strong>主管理員職責</strong>：負責 Google 試算表底層建置、Apps Script API 金鑰部署與派發邀請碼。<br />
+                            • <strong>伴侶專屬權利</strong>：可自由新增、修改公積金收支、個人代墊借還、心願採購與旅遊花費，資料自動即時同步，無須手動設定任何 API 代碼！
+                          </p>
+                        </div>
+
+                        {/* 8 大工作頁連線狀態 */}
+                        <div className="bg-white p-3 rounded-xl border border-rose-100 space-y-2">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-[#3E3A36]">試算表 8 大工作頁連線清單</span>
+                            <span className="text-[10px] text-emerald-700 font-bold">8/8 完整同步</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 text-[10px] text-[#5C564E]">
+                            <div className="bg-[#FAF9F5] p-1.5 rounded-lg border border-[#EAE6DC]">🌸 1. 公積金流水帳</div>
+                            <div className="bg-[#FAF9F5] p-1.5 rounded-lg border border-[#EAE6DC]">🗓️ 2. 月度核銷對帳</div>
+                            <div className="bg-[#FAF9F5] p-1.5 rounded-lg border border-[#EAE6DC]">💳 3. 代墊借還清單</div>
+                            <div className="bg-[#FAF9F5] p-1.5 rounded-lg border border-[#EAE6DC]">🛒 4. 心願採購清單</div>
+                            <div className="bg-[#FAF9F5] p-1.5 rounded-lg border border-[#EAE6DC]">🏪 5. 常用採購商店</div>
+                            <div className="bg-[#FAF9F5] p-1.5 rounded-lg border border-[#EAE6DC]">✈️ 6. 旅遊出遊行程</div>
+                            <div className="bg-[#FAF9F5] p-1.5 rounded-lg border border-[#EAE6DC]">🧾 7. 旅遊支出明細</div>
+                            <div className="bg-[#FAF9F5] p-1.5 rounded-lg border border-[#EAE6DC]">💡 8. 旅遊心願清單</div>
                           </div>
                         </div>
 
@@ -1094,10 +1350,10 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                           <button
                             type="button"
                             onClick={onUnbindPartner}
-                            className="w-full py-2 px-3 rounded-xl bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs border border-rose-300 flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
+                            className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs border border-rose-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-98"
                           >
                             <Unlink className="w-3.5 h-3.5" />
-                            <span>解除伴侶綁定</span>
+                            <span>更換邀請碼或解除伴侶綁定</span>
                           </button>
                         )}
                       </div>
@@ -1111,7 +1367,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
             {/* Modal 底部關閉列 */}
             <div className="p-3.5 sm:p-4 bg-white border-t border-[#E8E4D9] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                {onToggleSandboxMode && (
+                {onToggleSandboxMode && !isForcedOnboarding && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1128,15 +1384,37 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                     <span>{isSandboxMode ? '關閉測試沙盒' : '體驗測試沙盒'}</span>
                   </button>
                 )}
+
+                {isForcedOnboarding && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[#8C8475] hidden sm:flex items-center gap-1 font-medium">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+                      <span>初次登入請先完成帳本角色配置或資料庫綁定</span>
+                    </span>
+                    {onLogout && (
+                      <button
+                        type="button"
+                        onClick={onLogout}
+                        className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                        title="登出並返回 Google 登入入口畫面"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>登出返回</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-5 py-2 bg-[#EFECE3] hover:bg-[#E5E1D5] text-[#3E3A36] rounded-xl text-xs font-bold transition-all cursor-pointer"
-              >
-                關閉視窗
-              </button>
+              {!isForcedOnboarding && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2 bg-[#EFECE3] hover:bg-[#E5E1D5] text-[#3E3A36] rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  關閉視窗
+                </button>
+              )}
             </div>
           </motion.div>
         </div>

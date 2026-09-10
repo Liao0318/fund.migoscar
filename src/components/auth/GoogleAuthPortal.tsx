@@ -1,16 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  ShieldAlert, 
+  ShieldCheck, 
   Loader2,
-  Heart,
-  ExternalLink,
-  Lock,
-  KeyRound,
-  ClipboardPaste,
-  CheckCircle2,
+  Check,
+  HelpCircle,
+  X,
   Sparkles,
-  X
+  ArrowRight,
+  HeartHandshake,
+  CloudCheck,
+  UserCheck,
+  Terminal,
+  Key,
+  Eye,
+  EyeOff,
+  Rocket,
+  Sliders,
+  Palette
 } from 'lucide-react';
 import { BrandLogo } from '../common/BrandLogo';
 import { AuthUser, PartnerInviteData } from '../../types';
@@ -18,11 +25,7 @@ import {
   signInWithGooglePopup, 
   requestGoogleOAuthToken
 } from '../../utils/googleOAuthService';
-import { 
-  resolveInviteCodeOrToken, 
-  fetchInviteCodeOnline,
-  fetchPartnerBindingInfoOnline
-} from '../../utils/partnerInvite';
+import { fetchPartnerBindingInfoOnline } from '../../utils/partnerInvite';
 import { getUserCloudConfig } from '../../utils/userConfigService';
 
 interface GoogleAuthPortalProps {
@@ -33,109 +36,46 @@ interface GoogleAuthPortalProps {
 
 export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
   onLogin,
+  onEnterDevSandbox,
   onEnterGuestMode
 }) => {
+  // DEV 與上路正式系統切換（預設依前次存取或上路系統）
+  const [activePortalTab, setActivePortalTab] = useState<'prod' | 'dev'>(() => {
+    try {
+      return localStorage.getItem('banban_active_system_env') === 'dev' ? 'dev' : 'prod';
+    } catch (e) {
+      return 'prod';
+    }
+  });
+
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // 伴侶邀請碼輸入與偵測狀態
-  const [manualInviteCode, setManualInviteCode] = useState<string>('');
-  const [detectedInvite, setDetectedInvite] = useState<PartnerInviteData | null>(null);
-  const [isValidatingCode, setIsValidatingCode] = useState<boolean>(false);
-  const [inviteStatus, setInviteStatus] = useState<{
-    valid: boolean;
-    message: string;
-    data: PartnerInviteData | null;
-  } | null>(null);
-
-  const handleCodeChange = async (code: string) => {
-    setManualInviteCode(code);
-    if (!code.trim()) {
-      setInviteStatus(null);
-      setDetectedInvite(null);
-      return;
-    }
-    const clean = code.trim();
-    const resolved = resolveInviteCodeOrToken(clean);
-    if (resolved && resolved.gasWebUrl && resolved.adminEmail) {
-      setDetectedInvite(resolved);
-      setInviteStatus({
-        valid: true,
-        message: `✅ 已成功識別伴侶【${resolved.adminName || '主管理員'}】的帳本邀請！`,
-        data: resolved
-      });
-      return;
-    }
-
-    // 線上從 Firestore 查詢真實存在的邀請碼
-    const isCodePattern = /^BB-[A-Z0-9]{4,8}$/i.test(clean) || /^[A-Z0-9]{4,8}$/i.test(clean) || clean.includes('http') || clean.includes('#join=') || clean.includes('invite=');
-    if (isCodePattern) {
-      const formattedCode = clean.toUpperCase().startsWith('BB-') ? clean.toUpperCase() : `BB-${clean.toUpperCase()}`;
-      setIsValidatingCode(true);
-      try {
-        const cloudResolved = await fetchInviteCodeOnline(clean);
-        if (cloudResolved && cloudResolved.adminEmail && cloudResolved.gasWebUrl) {
-          setDetectedInvite(cloudResolved);
-          setInviteStatus({
-            valid: true,
-            message: `✅ 已成功識別伴侶【${cloudResolved.adminName || '主管理員'}】的帳本邀請！登入後將自動連動所有帳目與資料庫`,
-            data: cloudResolved
-          });
-          setIsValidatingCode(false);
-          return;
-        }
-      } catch (e) {}
-      setIsValidatingCode(false);
-
-      // 查無此有效邀請碼：嚴格拒絕，不予放行
-      setDetectedInvite(null);
-      setInviteStatus({
-        valid: false,
-        message: `❌ 查無此邀請碼【${clean.length <= 12 ? clean.toUpperCase() : '輸入之代碼'}】，請確認代碼是否輸入正確或向另一半索取最新邀請碼`,
-        data: null
-      });
-    } else {
-      setDetectedInvite(null);
-      setInviteStatus({
-        valid: false,
-        message: '❌ 邀請碼格式不符（格式如：BB-XXXX 或貼上伴侶專屬邀請連結）',
-        data: null
-      });
-    }
-  };
-
-  const handlePasteClipboard = async () => {
+  const [rememberAccount, setRememberAccount] = useState<boolean>(() => {
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
-        const text = await navigator.clipboard.readText();
-        if (text) {
-          handleCodeChange(text);
-        }
-      }
+      return localStorage.getItem('banban_remember_login') !== 'false';
     } catch (e) {
-      console.warn('Cannot read clipboard', e);
+      return true;
     }
-  };
+  });
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showSignUpNotice, setShowSignUpNotice] = useState(false);
+  
+  // 開發通道通行碼（安全脫敏）
+  const [showDevPasswordModal, setShowDevPasswordModal] = useState(false);
+  const [devPasswordInput, setDevPasswordInput] = useState('');
+  const [devPasswordError, setDevPasswordError] = useState<string | null>(null);
+  const [showDevPasswordText, setShowDevPasswordText] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+  const toggleRememberAccount = () => {
+    const nextVal = !rememberAccount;
+    setRememberAccount(nextVal);
     try {
-      const url = new URL(window.location.href);
-      const inviteParam = url.searchParams.get('invite') || url.searchParams.get('code');
-      let hashCode = '';
-      if (window.location.hash.includes('join=')) {
-        hashCode = window.location.hash.split('join=')[1]?.split('&')[0] || '';
-      }
-
-      const candidate = inviteParam || hashCode;
-      if (candidate) {
-        handleCodeChange(candidate);
-      }
+      localStorage.setItem('banban_remember_login', String(nextVal));
     } catch (e) {}
-  }, []);
+  };
 
   /**
-   * 完成登入並同步使用者雲端資料庫設定與自訂暱稱
+   * 處理成功登入流程，自動連結雲端帳本配置
    */
   const processSuccessfulUser = async (rawUser: AuthUser) => {
     let cloudGas = '';
@@ -184,11 +124,11 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
       authMethod: 'google_oauth'
     };
 
-    onLogin(enhancedUser, detectedInvite, cloudGas, cloudSheet);
+    onLogin(enhancedUser, null, cloudGas, cloudSheet);
   };
 
   /**
-   * 觸發 Google 官方 OAuth 授權登入頁面
+   * 觸發 Google 官方 OAuth 授權登入流程
    */
   const handleGoogleOfficialOAuthLogin = async () => {
     setErrorMessage(null);
@@ -207,7 +147,7 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
       
       // 使用者主動取消或關閉視窗
       if (fbErr?.code === 'auth/popup-closed-by-user' || fbErr?.message?.includes('closed-by-user')) {
-        setErrorMessage('Google 登入視窗已關閉。請點擊按鈕重新開啟 Google 登入頁面完成驗證。');
+        setErrorMessage('Google 登入視窗已關閉。請點擊登入按鈕重新進行驗證。');
         setIsLoggingIn(false);
         return;
       }
@@ -223,7 +163,7 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
       } catch (gsiErr: any) {
         console.warn('Google GSI Token Client error:', gsiErr);
         if (gsiErr?.message?.includes('popup_closed_by_user') || gsiErr?.type === 'popup_closed') {
-          setErrorMessage('Google 登入視窗已關閉。請再次點擊登入。');
+          setErrorMessage('Google 登入視窗已關閉，請再次點擊登入。');
         } else {
           setErrorMessage('無法開啟 Google 授權頁面，請確認瀏覽器是否允許快顯視窗（Pop-up），並點擊按鈕重試。');
         }
@@ -233,191 +173,222 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
     }
   };
 
+  /**
+   * 處理開發通道通行碼登入（安全脫敏驗證）
+   */
+  const handleDevPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setDevPasswordError(null);
+    const entered = devPasswordInput.trim();
+    const storedDevPassword = localStorage.getItem('banban_dev_password') || '1912';
+
+    if (entered && (entered === storedDevPassword || (!localStorage.getItem('banban_dev_password') && entered === '1912'))) {
+      setShowDevPasswordModal(false);
+      setDevPasswordInput('');
+      try {
+        localStorage.setItem('banban_active_system_env', 'dev');
+      } catch (err) {}
+      if (onEnterDevSandbox) {
+        onEnterDevSandbox();
+      }
+    } else {
+      setDevPasswordError('通道通行密碼不正確，請重新確認後輸入。');
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#FAF9F5] via-[#F4EFE6] to-[#ECE6D8] text-[#3E3A36] flex flex-col justify-between p-4 sm:p-6 font-sans relative overflow-hidden">
-      {/* 裝飾背景柔光圓 */}
-      <div className="absolute top-[-8%] right-[-8%] w-[380px] sm:w-[540px] h-[380px] sm:h-[540px] bg-rose-200/25 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[-8%] left-[-8%] w-[320px] sm:w-[480px] h-[320px] sm:h-[480px] bg-amber-200/25 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#FDFBF7] text-[#2E2924] flex flex-col justify-between font-sans relative overflow-x-hidden selection:bg-[#F2ECE1]">
+      {/* 頂部暖杏與日系自然弧形光暈裝飾 */}
+      <div className="absolute top-0 right-0 w-[280px] sm:w-[460px] h-[220px] sm:h-[340px] bg-gradient-to-bl from-[#F6EDE2] via-[#FDF5E6]/60 to-transparent rounded-bl-[100%] opacity-80 pointer-events-none -z-0" />
+      <div className="absolute top-16 -left-16 w-56 h-56 bg-[#F5EFE6]/50 rounded-full blur-3xl pointer-events-none -z-0" />
 
-      {/* 迎賓主要畫面區 (置中排版) */}
-      <main className="max-w-md w-full mx-auto my-auto py-4 sm:py-6 z-10 space-y-5">
-        {/* 🌟 去背置中迎賓品牌視覺 */}
-        <motion.div
-          initial={{ opacity: 0, y: -16, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-          className="text-center flex flex-col items-center justify-center space-y-2.5"
-        >
-          {/* 去背 Logo 圖案 */}
+      {/* 主體置中容器 */}
+      <div className="w-full max-w-md mx-auto flex-1 flex flex-col justify-between px-6 sm:px-8 pt-10 sm:pt-14 pb-8 sm:pb-10 z-10 relative">
+        
+        {/* 🌸 頂部品牌主視覺區 */}
+        <div className="text-center pt-2 sm:pt-4 mb-6 sm:mb-8">
           <motion.div
-            whileHover={{ scale: 1.05, rotate: 2 }}
-            transition={{ type: 'spring', stiffness: 300 }}
-            className="cursor-default drop-shadow-md"
+            initial={{ opacity: 0, y: -16, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.4 }}
+            className="flex flex-col items-center"
           >
-            <BrandLogo transparent className="w-18 h-18 sm:w-22 sm:h-22" />
-          </motion.div>
-
-          {/* 去背字樣標題 */}
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-[#3E3A36] flex items-center justify-center">
-              伴伴記<span className="text-rose-500 inline-block animate-pulse">❤️</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-[#7A7366] font-medium tracking-wide">
-              情侶專屬生活記帳・Google 官方帳號安全登入
-            </p>
-          </div>
-        </motion.div>
-
-        {/* 登入操作卡片 */}
-        <motion.div
-          initial={{ opacity: 0, y: 16, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="bg-white/95 backdrop-blur-xl rounded-3xl p-5 sm:p-6 border border-[#E8E2D5] shadow-[0_12px_40px_rgba(62,58,54,0.08)] space-y-4"
-        >
-          {/* 💌 伴侶邀請碼輸入/配對專屬區塊 */}
-          <div className="bg-[#FAF8F5] border border-[#E8E2D5] rounded-2xl p-3.5 sm:p-4 text-left space-y-2.5 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-[#4A4641] flex items-center gap-1.5">
-                <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />
-                <span>伴侶邀請碼配對（選填）</span>
-              </label>
-              {manualInviteCode && (
-                <button
-                  type="button"
-                  onClick={() => handleCodeChange('')}
-                  className="text-[11px] text-[#8C8475] hover:text-rose-600 flex items-center gap-0.5 cursor-pointer"
-                >
-                  <X className="w-3 h-3" />
-                  <span>清除</span>
-                </button>
-              )}
-            </div>
-
-            <div className="relative flex items-center">
-              <div className="absolute left-3 text-[#8C8475] pointer-events-none">
-                <KeyRound className="w-4 h-4 text-amber-700" />
+            {/* 伴伴記官方專屬 Logo */}
+            <div className="mb-4 relative">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white shadow-[0_8px_24px_rgba(82,68,54,0.08)] border border-[#EDE5DA] flex items-center justify-center p-3 transition-transform hover:scale-105">
+                <BrandLogo size={68} transparent={false} />
               </div>
-              <input
-                type="text"
-                value={manualInviteCode}
-                onChange={(e) => handleCodeChange(e.target.value)}
-                placeholder="輸入邀請碼 (如 BB-9X2K) 或貼上邀請連結"
-                className="w-full bg-white border border-[#DDD6C8] focus:border-rose-400 focus:ring-2 focus:ring-rose-100 rounded-xl pl-9 pr-18 py-2.5 text-xs text-[#3E3A36] placeholder-[#A09A8F] tracking-wide transition-all font-mono"
-              />
-              <button
-                type="button"
-                onClick={handlePasteClipboard}
-                className="absolute right-2 px-2.5 py-1 bg-[#F4EFE6] hover:bg-[#EAE4D6] text-[#5C564E] rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
-                title="貼上剪貼簿內容"
-              >
-                <ClipboardPaste className="w-3 h-3 text-amber-800" />
-                <span>貼上</span>
-              </button>
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] shadow-sm font-bold border-2 border-white">
+                ♥
+              </div>
             </div>
 
-            {/* 驗證回饋提示 */}
-            {inviteStatus && (
-              <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`p-2.5 rounded-xl text-xs flex items-start gap-2 ${
-                  inviteStatus.valid
-                    ? 'bg-rose-50/90 text-rose-900 border border-rose-200'
-                    : 'bg-amber-50 text-amber-900 border border-amber-200'
-                }`}
-              >
-                {inviteStatus.valid ? (
-                  <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                ) : (
-                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                )}
-                <div className="text-[11px] leading-relaxed font-medium">
-                  {inviteStatus.message}
-                </div>
-              </motion.div>
-            )}
+            {/* 品牌名稱 */}
+            <h1 className="text-3xl sm:text-4xl font-black text-[#2D2823] tracking-tight font-sans">
+              伴伴記
+            </h1>
+            
+            {/* 副標語 */}
+            <p className="text-sm sm:text-base font-medium text-[#7D7569] mt-2 tracking-wide">
+              情侶公積金與日常甜蜜記帳
+            </p>
+          </motion.div>
+        </div>
 
-            {!inviteStatus && (
-              <p className="text-[10px] text-[#8C8475] leading-relaxed">
-                💡 若另一半已提供專屬邀請碼或邀請網址，請在此輸入。登入後將自動建立情侶帳本關聯！
-              </p>
-            )}
-          </div>
+        {/* 🧭 系統環境切換：🚀 上路正式系統 ｜ 🛠️ DEV 開發環境 */}
+        <div className="flex p-1 bg-[#EDE6DC] rounded-2xl border border-[#DDD5C7] mb-4 sm:mb-5 shadow-xs shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setActivePortalTab('prod');
+              setErrorMessage(null);
+              try {
+                localStorage.setItem('banban_active_system_env', 'prod');
+              } catch (e) {}
+            }}
+            className={`flex-1 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activePortalTab === 'prod'
+                ? 'bg-white text-[#2D2823] shadow-xs scale-[1.01]'
+                : 'text-[#7D7569] hover:text-[#2D2823]'
+            }`}
+          >
+            <Rocket className="w-4 h-4 text-emerald-700" />
+            <span>🚀 上路正式系統</span>
+          </button>
 
-          {/* 錯誤警示提示窗 */}
-          <AnimatePresence>
-            {errorMessage && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl p-3.5 text-xs flex items-start gap-2.5 overflow-hidden shadow-2xs text-left"
-              >
-                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <div className="flex-1 space-y-1">
-                  <div className="font-bold">Google 登入提示</div>
-                  <div className="text-[11px] text-rose-700 leading-normal">{errorMessage}</div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <button
+            type="button"
+            onClick={() => {
+              setActivePortalTab('dev');
+              setDevPasswordError(null);
+              try {
+                localStorage.setItem('banban_active_system_env', 'dev');
+              } catch (e) {}
+            }}
+            className={`flex-1 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+              activePortalTab === 'dev'
+                ? 'bg-[#2E2822] text-amber-300 shadow-xs scale-[1.01]'
+                : 'text-[#7D7569] hover:text-[#2D2823]'
+            }`}
+          >
+            <Terminal className="w-4 h-4 text-purple-400" />
+            <span>🛠️ DEV 開發環境</span>
+          </button>
+        </div>
 
-          {/* 官方 Google 帳戶登入按鈕 */}
-          <div className="space-y-3 pt-1">
-            <button
-              type="button"
-              onClick={handleGoogleOfficialOAuthLogin}
-              disabled={isLoggingIn}
-              className="w-full py-3.5 px-4 rounded-2xl text-sm font-bold border-2 shadow-xs hover:shadow-md flex items-center justify-center gap-3 transition-all cursor-pointer active:scale-[0.99] group bg-white hover:bg-[#F8F9FA] text-[#3C4043] border-[#DADCE0] hover:border-[#4285F4] disabled:opacity-75"
-            >
-              {isLoggingIn ? (
-                <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-              ) : (
-                /* Google 4 色官方 Logo */
-                <svg className="w-5 h-5 group-hover:scale-105 transition-transform shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-              )}
-              <span className="font-extrabold text-[#3C4043]">
-                {isLoggingIn
-                  ? '正在開啟 Google 授權視窗...'
-                  : detectedInvite
-                  ? '使用 Google 帳戶登入並配對'
-                  : '使用 Google 帳戶登入'}
+        {/* 🪟 中央登入卡片區域 */}
+        {activePortalTab === 'prod' ? (
+          <div className="space-y-4 my-auto py-1">
+            {/* 上路正式系統專屬提示 */}
+            <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-2.5 sm:p-3 text-[11px] sm:text-xs text-emerald-950 flex items-center justify-between text-left">
+              <span className="flex items-center gap-1.5 font-bold">
+                <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                <span>上路正式系統：情侶真實記帳與雲端同步</span>
               </span>
-            </button>
-
-            {/* 安全登入提示 */}
-            <div className="flex items-center justify-center gap-1.5 text-[11px] text-[#8C8475] pt-1">
-              <Lock className="w-3.5 h-3.5 text-emerald-600" />
-              <span>點擊後將開啟 Google 官方登入頁面選擇帳號</span>
+              <span className="text-[10px] bg-emerald-100/90 text-emerald-900 px-1.5 py-0.5 rounded font-bold border border-emerald-300/80 shrink-0">
+                帳號獨立隔離
+              </span>
             </div>
 
-            {/* 分隔線 */}
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-[#E8E2D5]" />
-              <span className="shrink-0 mx-3 text-[11px] text-[#A09A8F] font-bold">或</span>
-              <div className="flex-grow border-t border-[#E8E2D5]" />
+            {/* 主 Google 登入入口卡片 */}
+            <div 
+              onClick={handleGoogleOfficialOAuthLogin}
+              className="w-full bg-white border-2 border-[#E8E1D5] hover:border-amber-700/60 rounded-2xl p-4 sm:p-5 cursor-pointer transition-all shadow-[0_4px_16px_rgba(82,68,54,0.04)] hover:shadow-[0_6px_20px_rgba(82,68,54,0.08)] group relative overflow-hidden"
+            >
+              <div className="flex items-center gap-3.5">
+                {/* Google 4 色官方大 Logo 圖標底座 */}
+                <div className="w-12 h-12 rounded-xl bg-[#FAF9F5] border border-[#EDE7DC] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-2xs">
+                  <svg className="w-6 h-6" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                </div>
+
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="flex items-center justify-between">
+                    <span className="text-base sm:text-lg font-black text-[#2D2823] tracking-tight group-hover:text-amber-900 transition-colors">
+                      以 Google 帳號登入
+                    </span>
+                    <ArrowRight className="w-4 h-4 text-[#A89F91] group-hover:text-amber-800 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </div>
+                  <p className="text-xs text-[#8A8275] mt-0.5 font-medium truncate">
+                    免記密碼・一鍵登入・雲端即時同步
+                  </p>
+                </div>
+              </div>
+
+              {/* 底部功能亮點標籤 */}
+              <div className="mt-3.5 pt-3 border-t border-[#F5EFEB] flex items-center justify-between text-[11px] text-[#7A7366]">
+                <span className="flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  Google 官方安全驗證
+                </span>
+                <span className="flex items-center gap-1">
+                  <CloudCheck className="w-3.5 h-3.5 text-blue-500" />
+                  試算表自動同步
+                </span>
+                <span className="flex items-center gap-1">
+                  <HeartHandshake className="w-3.5 h-3.5 text-rose-500" />
+                  情侶雙人協作
+                </span>
+              </div>
             </div>
 
-            {/* 本機離線體驗模式按鈕 */}
-            <div className="space-y-2">
+            {/* 核取方塊：保持登入狀態 */}
+            <div className="pt-1 flex items-center justify-between">
+              <label 
+                onClick={toggleRememberAccount}
+                className="inline-flex items-center gap-2 cursor-pointer select-none group py-1"
+              >
+                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                  rememberAccount 
+                    ? 'bg-amber-800 border-amber-800 text-white' 
+                    : 'bg-white border-[#B0A799]'
+                }`}>
+                  {rememberAccount && (
+                    <Check className="w-3 h-3 stroke-[3]" />
+                  )}
+                </div>
+                <span className="text-xs sm:text-sm font-bold text-[#544D42] group-hover:text-[#2D2823]">
+                  保持登入狀態
+                </span>
+              </label>
+
+              <span className="text-xs text-[#999083]">
+                個人專屬帳本隔離
+              </span>
+            </div>
+
+            {/* 錯誤警示提示 */}
+            <AnimatePresence>
+              {errorMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-xs flex items-start gap-2 text-left"
+                >
+                  <div className="leading-relaxed font-medium">{errorMessage}</div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* 橫排輔助連結：訪客登入 ｜ 使用說明 ｜ 加入會員 */}
+            <div className="flex items-center justify-center gap-3 sm:gap-4 text-[#8C7A63] font-bold text-xs sm:text-sm pt-4 select-none">
               <button
                 type="button"
                 onClick={() => {
@@ -430,27 +401,411 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
                     window.location.reload();
                   }
                 }}
-                className="w-full py-3 px-4 rounded-2xl text-xs font-bold border border-[#DDD6C8] bg-[#F7F5F0] hover:bg-[#EFECE4] text-[#5C564E] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-[0.99]"
+                className="hover:text-amber-900 hover:underline cursor-pointer active:scale-95 transition-all flex items-center gap-1"
               >
-                <span>📱</span>
-                <span>暫不登入，直接以本機模式體驗</span>
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>訪客登入</span>
               </button>
 
-              <div className="bg-amber-50/80 border border-amber-200/70 rounded-xl p-2.5 text-[11px] text-amber-900 leading-relaxed text-left">
-                <div className="font-bold flex items-center gap-1 mb-0.5 text-amber-950">
-                  <span>💡 本機模式說明：</span>
+              <span className="text-[#DDD6CB] font-light">|</span>
+
+              <button
+                type="button"
+                onClick={() => setShowHelpModal(true)}
+                className="hover:text-amber-900 hover:underline cursor-pointer active:scale-95 transition-all flex items-center gap-1"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>使用說明</span>
+              </button>
+
+              <span className="text-[#DDD6CB] font-light">|</span>
+
+              <button
+                type="button"
+                onClick={() => setShowSignUpNotice(true)}
+                className="hover:text-amber-900 hover:underline cursor-pointer active:scale-95 transition-all flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+                <span>加入會員</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* 🛠️ DEV 開發環境專屬通道中央卡片 */
+          <div className="space-y-4 my-auto py-1">
+            <div className="bg-white border-2 border-purple-200/90 rounded-2xl p-4 sm:p-5 shadow-[0_4px_16px_rgba(75,0,130,0.06)] text-left space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#2F2B28] to-[#423D38] flex items-center justify-center text-amber-300 shadow-xs shrink-0">
+                  <Terminal className="w-5 h-5" />
                 </div>
-                <span>所有資料皆僅存在本機手機中。若需連接 Google 試算表雲端備份或啟用伴侶配對同步，登入 Google 帳號即可解鎖！</span>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-[#2D2823] tracking-tight">
+                    DEV 系統功能與介面設計通道
+                  </h3>
+                  <p className="text-xs text-[#7A7366] mt-0.5 font-medium">
+                    所有功能調整與介面設計均在此進行
+                  </p>
+                </div>
+              </div>
+
+              {/* 隔離安全說明 */}
+              <div className="p-3 bg-purple-50/80 rounded-xl border border-purple-200/80 text-xs text-purple-950 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <ShieldCheck className="w-4 h-4 text-purple-700 shrink-0" />
+                  <span>DEV 與上路正式帳號絕對分離</span>
+                </div>
+                <p className="text-[11px] text-purple-900/85 leading-relaxed pl-5">
+                  此處登入使用獨立 DEV 開發身分，配備專屬模擬數據沙盒，所有操作絕不污染上路正式帳本。
+                </p>
+              </div>
+
+              {/* 密碼輸入表單 */}
+              <form onSubmit={handleDevPasswordSubmit} className="space-y-3 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-[#4E473D] mb-1.5">
+                    請輸入 DEV 通道通行密碼：
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showDevPasswordText ? 'text' : 'password'}
+                      value={devPasswordInput}
+                      onChange={(e) => setDevPasswordInput(e.target.value)}
+                      placeholder="請輸入通道通行密碼"
+                      autoFocus
+                      className="w-full px-3.5 py-2.5 pr-10 bg-[#FAF8F5] border border-[#D5CDC0] rounded-xl text-xs sm:text-sm font-mono font-bold focus:outline-none focus:border-purple-700 focus:bg-white tracking-wider transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowDevPasswordText(!showDevPasswordText)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9E9588] hover:text-[#3E3A36] cursor-pointer"
+                    >
+                      {showDevPasswordText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {devPasswordError && (
+                  <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 p-2.5 rounded-xl font-medium flex items-center gap-1.5">
+                    <span>{devPasswordError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-[#2F2B28] to-[#4A433D] hover:from-[#1F1C1A] hover:to-[#38332E] text-amber-300 font-bold text-sm tracking-wide transition-all cursor-pointer shadow-md active:scale-[0.99] flex items-center justify-center gap-2"
+                >
+                  <Key className="w-4 h-4 text-amber-300" />
+                  <span>驗證進入 DEV 開發環境</span>
+                </button>
+              </form>
+
+              {/* 功能亮點清單 */}
+              <div className="pt-2 border-t border-[#F0EBE0] grid grid-cols-2 gap-2 text-[11px] text-[#6E6659]">
+                <div className="flex items-center gap-1.5">
+                  <Palette className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                  <span>全介面排版與動效即時預覽</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                  <span>全功能除錯與上線整備</span>
+                </div>
               </div>
             </div>
           </div>
-        </motion.div>
-      </main>
+        )}
 
-      {/* 底部頁腳 */}
-      <footer className="max-w-md w-full mx-auto text-center py-2 text-[11px] text-[#9E9789] z-10">
-        ©2026 伴伴記記帳系統｜Google 官方 OAuth 授權安全驗證
-      </footer>
+        {/* 🚀 底部主按鈕區域 */}
+        <div className="space-y-3 pt-6 sm:pt-8 mt-auto">
+          {activePortalTab === 'prod' ? (
+            <>
+              {/* 主按鈕：以 Google 帳戶快速登入 */}
+              <button
+                type="button"
+                onClick={handleGoogleOfficialOAuthLogin}
+                disabled={isLoggingIn}
+                className="w-full py-3.5 sm:py-4 rounded-xl sm:rounded-2xl bg-[#3E3A36] hover:bg-[#2C2926] text-white font-black text-base sm:text-lg tracking-wide transition-all cursor-pointer shadow-[0_4px_12px_rgba(62,58,54,0.15)] active:scale-[0.99] flex items-center justify-center gap-3 disabled:opacity-75"
+              >
+                {isLoggingIn ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-amber-300" />
+                ) : (
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                )}
+                <span>{isLoggingIn ? '正在開啟 Google 驗證...' : '使用 Google 帳戶登入'}</span>
+              </button>
+
+              {/* 次按鈕：立即訪客體驗 */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (onEnterGuestMode) {
+                    onEnterGuestMode();
+                  } else {
+                    try {
+                      localStorage.setItem('banban_is_guest_mode', 'true');
+                    } catch (e) {}
+                    window.location.reload();
+                  }
+                }}
+                className="w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white hover:bg-[#FAF8F5] text-[#5C5549] border border-[#DDD5C7] font-bold text-sm sm:text-base tracking-wide transition-all cursor-pointer shadow-2xs active:scale-[0.99] flex items-center justify-center gap-2"
+              >
+                <span>訪客立即試用（免登入）</span>
+              </button>
+
+              <div className="text-center pt-2 space-y-1">
+                <p className="text-[11px] text-[#A69E91] font-medium leading-relaxed">
+                  資料經由 Google 安全連線加密傳輸，不儲存任何明文密碼
+                </p>
+                <div className="pt-1 flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDevPasswordError(null);
+                      setShowDevPasswordModal(true);
+                    }}
+                    className="text-[11px] text-[#B0A799] hover:text-[#5C5549] transition-colors inline-flex items-center gap-1.5 cursor-pointer py-1 px-2.5 rounded-lg hover:bg-[#F0ECE1]/70"
+                    title="系統整體設定與開發工程通道"
+                  >
+                    <Terminal className="w-3 h-3 text-[#A89F91]" />
+                    <span>系統整體設定通道 (Dev)</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* DEV 模式下的底部快速指引 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActivePortalTab('prod');
+                }}
+                className="w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white hover:bg-[#FAF8F5] text-[#5C5549] border border-[#DDD5C7] font-bold text-sm tracking-wide transition-all cursor-pointer shadow-2xs active:scale-[0.99] flex items-center justify-center gap-2"
+              >
+                <Rocket className="w-4 h-4 text-emerald-700" />
+                <span>返回上路正式系統登入</span>
+              </button>
+              <div className="text-center pt-1">
+                <p className="text-[11px] text-[#9C9486] font-medium">
+                  DEV 模式專供介面設計與全功能調校・帳號登入完全獨立隔離
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+      </div>
+
+      {/* 💡 使用說明彈窗 */}
+      <AnimatePresence>
+        {showHelpModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-5 max-w-xs sm:max-w-sm w-full border border-[#EAE4D8] shadow-xl text-left space-y-3"
+            >
+              <div className="flex items-center justify-between border-b border-[#F0EBE0] pb-2.5">
+                <div className="flex items-center gap-2 font-black text-[#2E2924] text-sm">
+                  <HelpCircle className="w-4 h-4 text-amber-700" />
+                  <span>伴伴記・使用說明</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowHelpModal(false)}
+                  className="p-1 text-[#8C8475] hover:text-black rounded-lg cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="text-xs text-[#5C564E] leading-relaxed space-y-2.5">
+                <div className="p-2.5 bg-[#FAF8F5] rounded-xl border border-[#EDE6DC]">
+                  <strong className="text-[#3E3A36] block mb-0.5">🌟 Google 帳戶登入：</strong>
+                  支援雲端即時雙向同步、情侶雙人連線記帳、個人代墊對帳與自訂備份。
+                </div>
+                <div className="p-2.5 bg-[#FAF8F5] rounded-xl border border-[#EDE6DC]">
+                  <strong className="text-[#3E3A36] block mb-0.5">🎒 訪客體驗模式：</strong>
+                  免登入即可立即體驗記帳、匯率換算、心願清單與旅遊記帳，資料保存在本機瀏覽器。
+                </div>
+                <div className="p-2.5 bg-[#FAF8F5] rounded-xl border border-[#EDE6DC]">
+                  <strong className="text-[#3E3A36] block mb-0.5">💑 伴侶邀請：</strong>
+                  登入後由主管理者生成專屬邀請碼，伴侶配對後即可兩人共用同一個公積金帳本。
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowHelpModal(false)}
+                  className="w-full py-2.5 bg-[#3E3A36] hover:bg-[#2C2926] text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                >
+                  我知道了
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 💡 加入會員說明彈窗 */}
+      <AnimatePresence>
+        {showSignUpNotice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-5 max-w-xs sm:max-w-sm w-full border border-[#EAE4D8] shadow-xl text-left space-y-3"
+            >
+              <div className="flex items-center justify-between border-b border-[#F0EBE0] pb-2.5">
+                <div className="flex items-center gap-2 font-black text-[#2E2924] text-sm">
+                  <Sparkles className="w-4 h-4 text-amber-700" />
+                  <span>加入伴伴記會員</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSignUpNotice(false)}
+                  className="p-1 text-[#8C8475] hover:text-black rounded-lg cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="text-xs text-[#5C564E] leading-relaxed space-y-2">
+                <p>
+                  加入會員<strong>完全免費且零門檻</strong>！直接點擊「使用 Google 帳戶登入」，系統即會自動開通專屬帳號與獨立雲端帳本，免除任何繁雜註冊填表手續。
+                </p>
+                <p className="text-[#8C8475] text-[11px]">
+                  開通後即可與另一半配對共享帳本，體驗無縫同步的甜蜜財務管理！
+                </p>
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSignUpNotice(false)}
+                  className="flex-1 py-2.5 bg-[#FAF8F5] hover:bg-[#EDE8DC] text-[#5C564E] rounded-xl text-xs font-bold border border-[#DDD8CC] transition-all cursor-pointer"
+                >
+                  稍後再說
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSignUpNotice(false);
+                    handleGoogleOfficialOAuthLogin();
+                  }}
+                  className="flex-1 py-2.5 bg-amber-800 hover:bg-amber-900 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs flex items-center justify-center gap-1.5"
+                >
+                  <span>立即以 Google 登入</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 🔐 隱密開發入口通行碼輸入彈窗（安全脫敏） */}
+      <AnimatePresence>
+        {showDevPasswordModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl p-5 max-w-xs sm:max-w-sm w-full border border-[#EAE4D8] shadow-xl text-left space-y-3"
+            >
+              <div className="flex items-center justify-between border-b border-[#F0EBE0] pb-2.5">
+                <div className="flex items-center gap-2 font-black text-[#2E2924] text-sm">
+                  <Terminal className="w-4 h-4 text-purple-700" />
+                  <span>系統開發與整體設定通道</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDevPasswordModal(false)}
+                  className="p-1 text-[#8C8475] hover:text-black rounded-lg cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="text-xs text-[#5C564E] leading-relaxed space-y-1">
+                <p>
+                  此為<strong>系統架構師與開發整體設定專屬區域</strong>。
+                </p>
+                <p className="text-[#8C8475] text-[11px]">
+                  登入後可進行全域功能除錯、數據調校，並隨時進行正式系統上線同步整備。
+                </p>
+              </div>
+
+              <form onSubmit={handleDevPasswordSubmit} className="space-y-3 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-[#4E473D] mb-1">
+                    請輸入開發通行碼：
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showDevPasswordText ? 'text' : 'password'}
+                      value={devPasswordInput}
+                      onChange={(e) => setDevPasswordInput(e.target.value)}
+                      placeholder="請輸入通道通行密碼"
+                      autoFocus
+                      className="w-full px-3 py-2.5 pr-10 bg-[#FAF8F5] border border-[#DDD5C7] rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-purple-600 tracking-wider"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowDevPasswordText(!showDevPasswordText)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9E9588] hover:text-[#3E3A36] cursor-pointer"
+                    >
+                      {showDevPasswordText ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {devPasswordError && (
+                  <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 p-2 rounded-lg font-medium">
+                    {devPasswordError}
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowDevPasswordModal(false)}
+                    className="flex-1 py-2.5 bg-[#FAF8F5] hover:bg-[#EDE8DC] text-[#5C564E] rounded-xl text-xs font-bold border border-[#DDD8CC] transition-all cursor-pointer"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-gradient-to-r from-purple-800 to-indigo-900 hover:from-purple-900 hover:to-indigo-950 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                  >
+                    <Key className="w-3.5 h-3.5 text-purple-200" />
+                    <span>驗證並進入</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

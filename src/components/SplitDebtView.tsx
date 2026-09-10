@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SplitRecordItem, SplitSummary, AuthUser, CoupleBindingInfo } from '../types';
-import { resolveUserPersonas } from '../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../utils/userPersona';
 
 interface SplitDebtViewProps {
   gasApiUrl: string;
@@ -83,12 +83,17 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
 
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'unsettled' | 'settled'>('unsettled');
-  const [filterPayer, setFilterPayer] = useState<'ALL' | '廖' | '周'>('ALL');
+  const [filterPayer, setFilterPayer] = useState<string>('ALL');
   const [searchKeyword, setSearchKeyword] = useState('');
+
+  // 判定是否為 User A 付款 / 負債
+  const isItemPayerUserA = (payerStr?: string) => {
+    return isRecordOfUserA(payerStr, userA, userB);
+  };
 
   // 新增表單狀態
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
-  const [payer, setPayer] = useState<'廖' | '周'>('廖');
+  const [payer, setPayer] = useState<string>(userA.shortName);
   const [itemName, setItemName] = useState('');
   const [totalAmount, setTotalAmount] = useState<string>('');
   const [splitMode, setSplitMode] = useState<'AA平分' | '全額代付' | '自訂金額'>('AA平分');
@@ -111,7 +116,7 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
       if (item.status === '未結清') {
         unsettledCount++;
         const debtorAmt = item.debtorAmount || (item.splitMode === 'AA平分' ? Math.round(item.totalAmount / 2) : item.totalAmount);
-        if (item.payer === '廖') {
+        if (isItemPayerUserA(item.payer)) {
           zhouOwesLiao += debtorAmt;
         } else {
           liaoOwesZhou += debtorAmt;
@@ -121,18 +126,18 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
       }
     });
 
-    let netDebtor: '廖' | '周' | 'none' = 'none';
+    let netDebtor: string = 'none';
     let netAmount = 0;
     let summaryText = '目前雙方已結清 💖';
 
     if (liaoOwesZhou > zhouOwesLiao) {
-      netDebtor = '廖';
+      netDebtor = userA.shortName || '廖';
       netAmount = liaoOwesZhou - zhouOwesLiao;
-      summaryText = `廖 應返還 周 NT$ ${(Number(netAmount) || 0).toLocaleString()}`;
+      summaryText = `${userA.displayName} 應返還 ${userB.displayName} NT$ ${(Number(netAmount) || 0).toLocaleString()}`;
     } else if (zhouOwesLiao > liaoOwesZhou) {
-      netDebtor = '周';
+      netDebtor = userB.shortName || '周';
       netAmount = zhouOwesLiao - liaoOwesZhou;
-      summaryText = `周 應返還 廖 NT$ ${(Number(netAmount) || 0).toLocaleString()}`;
+      summaryText = `${userB.displayName} 應返還 ${userA.displayName} NT$ ${(Number(netAmount) || 0).toLocaleString()}`;
     }
 
     const newSummary: SplitSummary = {
@@ -206,7 +211,12 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
       return;
     }
 
-    const otherPerson = payer === '廖' ? '周' : '廖';
+    const isPayerA = isItemPayerUserA(payer);
+    const resolvedPayer = isPayerA ? userA.shortName : userB.shortName;
+    const otherPerson = isPayerA ? userB.shortName : userA.shortName;
+    const payerDisp = isPayerA ? userA.displayName : userB.displayName;
+    const otherDisp = isPayerA ? userB.displayName : userA.displayName;
+
     let debtorAmt = Math.round(num / 2);
     if (splitMode === '全額代付') {
       debtorAmt = num;
@@ -228,11 +238,11 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
     const newItem: SplitRecordItem = {
       id: 'split-' + Date.now(),
       time: timeStr,
-      payer,
+      payer: resolvedPayer,
       splitMode,
       itemName: itemName.trim(),
       totalAmount: num,
-      splitResult: `${otherPerson} 應返還 ${payer} NT$ ${(Number(debtorAmt) || 0).toLocaleString()}`,
+      splitResult: `${otherDisp} 應返還 ${payerDisp} NT$ ${(Number(debtorAmt) || 0).toLocaleString()}`,
       debtor: otherPerson,
       debtorAmount: debtorAmt,
       status: '未結清',
@@ -344,7 +354,11 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
   const filteredItems = items.filter(item => {
     if (activeTab === 'unsettled' && item.status !== '未結清') return false;
     if (activeTab === 'settled' && item.status !== '已結清') return false;
-    if (filterPayer !== 'ALL' && item.payer !== filterPayer) return false;
+    if (filterPayer !== 'ALL') {
+      const matchPayerA = isItemPayerUserA(item.payer);
+      if (filterPayer === 'USER_A' && !matchPayerA) return false;
+      if (filterPayer === 'USER_B' && matchPayerA) return false;
+    }
     if (searchKeyword.trim()) {
       const q = searchKeyword.toLowerCase();
       const matchName = item.itemName.toLowerCase().includes(q);
@@ -424,7 +438,7 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
           className={`rounded-2xl p-5 border shadow-sm transition-all relative overflow-hidden ${
             summary.netDebtor === 'none'
               ? 'bg-gradient-to-br from-[#FFFDFC] to-[#F7F3EE] border-[#E8DFC8]'
-              : summary.netDebtor === '廖'
+              : isItemPayerUserA(summary.netDebtor)
               ? 'bg-gradient-to-br from-[#FFF6F3] to-[#FCEEEA] border-[#F2C9BF]'
               : 'bg-gradient-to-br from-[#F2F8F4] to-[#E5F1E9] border-[#C3DEC9]'
           }`}
@@ -450,7 +464,7 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
               ) : (
                 <div className="pt-1">
                   <div className="text-xs font-bold text-[#6E6359]">
-                    {summary.netDebtor === '廖'
+                    {isItemPayerUserA(summary.netDebtor)
                       ? `${userA.displayName} 應返還給 ${userB.displayName}`
                       : `${userB.displayName} 應返還給 ${userA.displayName}`}
                   </div>
@@ -530,9 +544,9 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setPayer('廖')}
+                      onClick={() => setPayer(userA.shortName)}
                       className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                        payer === '廖'
+                        isItemPayerUserA(payer)
                           ? 'bg-[#EBF5EF] border-[#2B825B] text-[#2B825B] shadow-xs'
                           : 'bg-[#F9F7F4] border-[#E8E1D7] text-[#8C7E74] hover:bg-white'
                       }`}
@@ -546,9 +560,9 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPayer('周')}
+                      onClick={() => setPayer(userB.shortName)}
                       className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
-                        payer === '周'
+                        !isItemPayerUserA(payer)
                           ? 'bg-[#FDF2F0] border-[#E8998D] text-[#D34E36] shadow-xs'
                           : 'bg-[#F9F7F4] border-[#E8E1D7] text-[#8C7E74] hover:bg-white'
                       }`}
@@ -649,7 +663,7 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                     className="p-3 rounded-xl bg-[#FFF9F5] border border-[#F2DEC9]"
                   >
                     <label className="block text-xs font-bold text-[#8A5A36] mb-1">
-                      {payer === '廖' ? (userB.isPendingBinding ? '待確認伴侶' : userB.displayName) : userA.displayName} 應返還金額 (NT$)
+                      {isItemPayerUserA(payer) ? (userB.isPendingBinding ? '待確認伴侶' : userB.displayName) : userA.displayName} 應返還金額 (NT$)
                     </label>
                     <input
                       type="number"
@@ -683,8 +697,8 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                     <div className="flex items-center gap-1.5">
                       <Sparkles className="w-4 h-4 text-[#2E6B47]" />
                       <span>
-                        記錄後：<strong>{payer === '廖' ? (userB.isPendingBinding ? '待確認伴侶' : userB.displayName) : userA.displayName}</strong> 需返還{' '}
-                        <strong>{payer === '廖' ? userA.displayName : (userB.isPendingBinding ? '待確認伴侶' : userB.displayName)}</strong>
+                        記錄後：<strong>{isItemPayerUserA(payer) ? (userB.isPendingBinding ? '待確認伴侶' : userB.displayName) : userA.displayName}</strong> 需返還{' '}
+                        <strong>{isItemPayerUserA(payer) ? userA.displayName : (userB.isPendingBinding ? '待確認伴侶' : userB.displayName)}</strong>
                       </span>
                     </div>
                     <span className="font-bold text-sm text-[#2E6B47]">
@@ -747,17 +761,21 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
 
           {/* 出錢人過濾 */}
           <div className="flex items-center gap-1 text-xs">
-            {(['ALL', '廖', '周'] as const).map(p => (
+            {[
+              { id: 'ALL', label: '全部' },
+              { id: 'USER_A', label: `${userA.displayName}先墊` },
+              { id: 'USER_B', label: `${userB.displayName}先墊` }
+            ].map(tab => (
               <button
-                key={p}
-                onClick={() => setFilterPayer(p)}
+                key={tab.id}
+                onClick={() => setFilterPayer(tab.id)}
                 className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                  filterPayer === p
+                  filterPayer === tab.id
                     ? 'bg-[#E8998D] text-white'
                     : 'bg-[#EFE9E2] text-[#6E6359] hover:bg-[#E2D8CE]'
                 }`}
               >
-                {p === 'ALL' ? '全部' : `${p}先墊`}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -794,12 +812,12 @@ export const SplitDebtView: React.FC<SplitDebtViewProps> = ({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                          item.payer === '廖'
+                          isItemPayerUserA(item.payer)
                             ? 'bg-[#EBF5EF] text-[#2B825B]'
                             : 'bg-[#FDF2F0] text-[#D34E36]'
                         }`}
                       >
-                        {item.payer === '廖' ? `${userA.displayName} 先墊` : `${userB.isPendingBinding ? '待確認伴侶' : userB.displayName} 先墊`}
+                        {isItemPayerUserA(item.payer) ? `${userA.displayName} 先墊` : `${userB.isPendingBinding ? '待確認伴侶' : userB.displayName} 先墊`}
                       </span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F2EDE7] text-[#8C7E74]">
                         {item.splitMode}

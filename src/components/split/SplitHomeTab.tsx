@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SplitRecordItem, SplitSummary, SmartCommandResult, AuthUser, CoupleBindingInfo } from '../../types';
-import { resolveUserPersonas, formatPayerDisplayName } from '../../utils/userPersona';
+import { resolveUserPersonas, formatPayerDisplayName, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
 import { InitialEmptyEntryFrame } from '../common/InitialEmptyEntryFrame';
 
 interface SplitHomeTabProps {
@@ -88,7 +88,7 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
         setQuickMsg(`✅ 已成功記帳：「${text}」`);
         setQuickInput('');
       } else {
-        setQuickMsg(`⚠️ 無法辨識指令，請試試：「廖 1200 晚餐」或「周 85 飲料」`);
+        setQuickMsg(`⚠️ 無法辨識指令，請試試：「${userA.shortName} 1200 晚餐」或「${userB.shortName} 85 飲料」`);
       }
     } catch (e: any) {
       setQuickMsg(`❌ 記帳失敗：${e?.message || '未知錯誤'}`);
@@ -151,7 +151,7 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
         className={`rounded-3xl p-5 sm:p-7 border shadow-md relative overflow-hidden transition-all ${
           safeSummary.netDebtor === 'none'
             ? 'bg-gradient-to-br from-[#FFFDF9] via-[#FAF6EE] to-[#F3ECE0] border-[#E5DEC9]'
-            : safeSummary.netDebtor === '廖'
+            : isRecordOfUserA(safeSummary.netDebtor, userA, userB)
             ? 'bg-gradient-to-br from-[#FFF5F3] via-[#FDF0EC] to-[#FAE4DC] border-rose-200 shadow-rose-100/50'
             : 'bg-gradient-to-br from-[#F3F9F6] via-[#ECF5F0] to-[#DFEFE6] border-emerald-200 shadow-emerald-100/50'
         }`}
@@ -190,11 +190,11 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
               <div className="pt-2 space-y-1">
                 <div className="text-xs sm:text-sm font-bold text-[#6E6659] flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded-lg bg-white/90 text-[#3E3A36] border border-black/5 font-extrabold flex items-center gap-1">
-                    {safeSummary.netDebtor === '廖' ? userA.displayName : userB.displayName}
+                    {isRecordOfUserA(safeSummary.netDebtor, userA, userB) ? userA.displayName : userB.displayName}
                   </span>
                   <span>應返還給</span>
                   <span className="px-2 py-0.5 rounded-lg bg-white/90 text-[#3E3A36] border border-black/5 font-extrabold flex items-center gap-1">
-                    {safeSummary.netDebtor === '廖' ? userB.displayName : userA.displayName}
+                    {isRecordOfUserA(safeSummary.netDebtor, userA, userB) ? userB.displayName : userA.displayName}
                   </span>
                 </div>
                 <div className="text-3xl sm:text-4xl font-black tracking-tight text-rose-600 flex items-baseline gap-1.5 pt-1">
@@ -331,8 +331,9 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
               const isUnsettled = item.status === '未結清';
               const totalAmt = Number(item.totalAmount) || 0;
               const debtorAmt = Number(item.debtorAmount) || (item.splitMode === 'AA平分' ? Math.round(totalAmt / 2) : totalAmt);
-              const payerLabel = item.payer === '廖' ? '廖' : '周';
-              const debtorLabel = item.debtor || (item.payer === '廖' ? '周' : '廖');
+              const isPayerA = isRecordOfUserA(item.payer, userA, userB);
+              const payerLabel = isPayerA ? userA.shortName : userB.shortName;
+              const debtorLabel = item.debtor || (isPayerA ? userB.shortName : userA.shortName);
               const dateDisplay = item.time ? String(item.time).split(' ')[0] : '—';
               
               return (
@@ -346,7 +347,7 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
-                      item.payer === '廖' ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
+                      isPayerA ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
                     }`}>
                       {payerLabel}
                     </div>
@@ -439,7 +440,7 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
                       handleQuickSubmit();
                     }
                   }}
-                  placeholder="例如：廖 1200 晚餐、周 85 飲料、存 10000 薪資"
+                  placeholder={`例如：${userA.shortName} 1200 晚餐、${userB.shortName} 85 飲料、存 10000 薪資`}
                   className="w-full px-3.5 py-2.5 text-xs bg-white border border-[#E2DDD3] focus:border-rose-500 focus:ring-2 focus:ring-rose-200 rounded-xl focus:outline-none font-sans shadow-2xs transition-all"
                 />
               </div>
@@ -465,10 +466,10 @@ export const SplitHomeTab: React.FC<SplitHomeTabProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px]">
           <button
             type="button"
-            onClick={() => handleQuickSubmit('廖 1200 晚餐')}
+            onClick={() => handleQuickSubmit(`${userA.shortName} 1200 晚餐`)}
             className="bg-white p-2.5 rounded-xl border border-rose-100 font-mono text-left hover:border-rose-300 transition-all cursor-pointer shadow-2xs group"
           >
-            <span className="font-bold text-rose-700">代墊指令範例：</span> <code>廖 1200 晚餐</code>
+            <span className="font-bold text-rose-700">代墊指令範例：</span> <code>{userA.shortName} 1200 晚餐</code>
             <p className="text-[10px] text-[#8C8475] mt-0.5">（自動辨識一人一半 AA 平分各 $600）</p>
           </button>
           <button

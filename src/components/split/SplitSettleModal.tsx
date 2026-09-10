@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SplitSummary, AuthUser, CoupleBindingInfo } from '../../types';
-import { resolveUserPersonas } from '../../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA } from '../../utils/userPersona';
 
 interface SplitSettleModalProps {
   isOpen: boolean;
@@ -83,7 +83,7 @@ export const SplitSettleModal: React.FC<SplitSettleModalProps> = ({
                 <div className="text-[11px] font-bold text-emerald-800">
                   {!summary || summary.netDebtor === 'none'
                     ? '目前無須返還款項'
-                    : `應由 ${summary.netDebtor === '廖' ? userA.displayName : userB.displayName} 返還給 ${summary.netDebtor === '廖' ? userB.displayName : userA.displayName}`}
+                    : `應由 ${isRecordOfUserA(summary.netDebtor, userA, userB) ? userA.displayName : userB.displayName} 返還給 ${isRecordOfUserA(summary.netDebtor, userA, userB) ? userB.displayName : userA.displayName}`}
                 </div>
                 <div className="text-2xl sm:text-3xl font-black text-emerald-700">
                   NT$ {(Number(summary?.netAmount) || 0).toLocaleString()} 元

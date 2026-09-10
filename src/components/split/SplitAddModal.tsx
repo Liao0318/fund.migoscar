@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SplitRecordItem, AuthUser, CoupleBindingInfo } from '../../types';
-import { resolveUserPersonas } from '../../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA } from '../../utils/userPersona';
 
 interface SplitAddModalProps {
   isOpen: boolean;
@@ -18,13 +18,13 @@ interface SplitAddModalProps {
   currentUser?: AuthUser | null;
   partnerBindingInfo?: CoupleBindingInfo | null;
   initialData?: {
-    payer?: '廖' | '周';
+    payer?: string;
     itemName?: string;
     totalAmount?: number | string;
     note?: string;
   };
   onAddSplit?: (data: {
-    payer: '廖' | '周';
+    payer: string;
     itemName: string;
     totalAmount: number;
     splitMode: 'AA平分' | '全額代付' | '自訂金額';
@@ -32,7 +32,7 @@ interface SplitAddModalProps {
     note?: string;
   }) => void;
   onSubmit?: (data: {
-    payer: '廖' | '周';
+    payer: string;
     itemName: string;
     totalAmount: number;
     splitMode: 'AA平分' | '全額代付' | '自訂金額';
@@ -56,7 +56,9 @@ export const SplitAddModal: React.FC<SplitAddModalProps> = ({
     return resolveUserPersonas(currentUser, partnerBindingInfo);
   }, [currentUser, partnerBindingInfo]);
 
-  const [payer, setPayer] = useState<'廖' | '周'>(initialData?.payer || (userB.isCurrentUser ? '周' : '廖'));
+  const [payer, setPayer] = useState<string>(
+    initialData?.payer || (userB.isCurrentUser ? userB.shortName : userA.shortName)
+  );
   const [itemName, setItemName] = useState(initialData?.itemName || '');
   const [totalAmount, setTotalAmount] = useState(initialData?.totalAmount ? String(initialData.totalAmount) : '');
   const [splitMode, setSplitMode] = useState<'AA平分' | '全額代付' | '自訂金額'>('AA平分');
@@ -118,8 +120,9 @@ export const SplitAddModal: React.FC<SplitAddModalProps> = ({
     setNote('');
   };
 
-  const otherPersona = payer === '廖' ? userB : userA;
-  const myPersona = payer === '廖' ? userA : userB;
+  const isUserAPayer = isRecordOfUserA(payer, userA, userB);
+  const otherPersona = isUserAPayer ? userB : userA;
+  const myPersona = isUserAPayer ? userA : userB;
   const otherPerson = otherPersona.displayName;
   const myPerson = myPersona.displayName;
   const numAmt = parseFloat(totalAmount) || 0;
@@ -170,9 +173,9 @@ export const SplitAddModal: React.FC<SplitAddModalProps> = ({
                   <div className="grid grid-cols-2 gap-2.5">
                     <button
                       type="button"
-                      onClick={() => setPayer('廖')}
+                      onClick={() => setPayer(userA.shortName)}
                       className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 ${
-                        payer === '廖'
+                        isUserAPayer
                           ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
                           : 'bg-white text-[#6E6659] border-[#DDD8CD] hover:bg-[#F5F2EB]'
                       }`}
@@ -187,7 +190,7 @@ export const SplitAddModal: React.FC<SplitAddModalProps> = ({
                       </div>
                       {userA.isCurrentUser && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
-                          payer === '廖' ? 'bg-sky-800 text-sky-100' : 'bg-sky-100 text-sky-700'
+                          isUserAPayer ? 'bg-sky-800 text-sky-100' : 'bg-sky-100 text-sky-700'
                         }`}>
                           您
                         </span>
@@ -196,9 +199,9 @@ export const SplitAddModal: React.FC<SplitAddModalProps> = ({
 
                     <button
                       type="button"
-                      onClick={() => setPayer('周')}
+                      onClick={() => setPayer(userB.shortName)}
                       className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-between gap-2 ${
-                        payer === '周'
+                        !isUserAPayer
                           ? 'bg-rose-600 text-white border-rose-700 shadow-xs'
                           : 'bg-white text-[#6E6659] border-[#DDD8CD] hover:bg-[#F5F2EB]'
                       }`}
@@ -213,7 +216,7 @@ export const SplitAddModal: React.FC<SplitAddModalProps> = ({
                       </div>
                       {userB.isCurrentUser && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 ${
-                          payer === '周' ? 'bg-rose-800 text-rose-100' : 'bg-rose-100 text-rose-700'
+                          !isUserAPayer ? 'bg-rose-800 text-rose-100' : 'bg-rose-100 text-rose-700'
                         }`}>
                           您
                         </span>

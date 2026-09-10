@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthUser, CoupleBindingInfo } from '../../types';
-import { resolveUserPersonas } from '../../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
 
 export interface SplitWishItem {
   id: string;
@@ -33,7 +33,7 @@ export interface SplitWishItem {
 }
 
 interface SplitNotebookTabProps {
-  onConvertToSplit: (item: { itemName: string; totalAmount: number; payer: '廖' | '周' }) => void;
+  onConvertToSplit: (item: { itemName: string; totalAmount: number; payer: string }) => void;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
   isDbConnected?: boolean;
   onOpenGasDeploy?: () => void;
@@ -113,7 +113,7 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
 
   // 轉代墊對話框
   const [convertingItem, setConvertingItem] = useState<SplitWishItem | null>(null);
-  const [convertPayer, setConvertPayer] = useState<'廖' | '周'>('廖');
+  const [convertPayer, setConvertPayer] = useState<string>(userA.shortName);
   const [convertActualAmount, setConvertActualAmount] = useState<string>('');
 
   const saveWishlist = (newList: SplitWishItem[]) => {
@@ -173,19 +173,17 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
   };
 
   const isUserARequester = (reqStr?: string) => {
-    const r = (reqStr || '').trim();
-    return r === userA.shortName || r === userA.name || r === userA.displayName || r === '廖';
+    return isRecordOfUserA(reqStr, userA, userB);
   };
 
   const isUserBRequester = (reqStr?: string) => {
-    const r = (reqStr || '').trim();
-    return r === userB.shortName || r === userB.name || r === userB.displayName || r === '周';
+    return isRecordOfUserB(reqStr, userA, userB);
   };
 
   const handleOpenConvert = (item: SplitWishItem) => {
     setConvertingItem(item);
     // 預設由對方代墊
-    const defaultPayer: '廖' | '周' = isUserBRequester(item.requester) ? '廖' : '周';
+    const defaultPayer: string = isUserBRequester(item.requester) ? userA.shortName : userB.shortName;
     setConvertPayer(defaultPayer);
     setConvertActualAmount(item.estimatedPrice ? String(item.estimatedPrice) : '');
   };
@@ -619,9 +617,9 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => setConvertPayer('廖')}
+                        onClick={() => setConvertPayer(userA.shortName)}
                         className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          convertPayer === '廖'
+                          convertPayer === userA.shortName
                             ? 'bg-sky-600 text-white border-sky-700'
                             : 'bg-white text-[#6E6659] border-[#DDD8CD]'
                         }`}
@@ -630,9 +628,9 @@ export const SplitNotebookTab: React.FC<SplitNotebookTabProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => setConvertPayer('周')}
+                        onClick={() => setConvertPayer(userB.shortName)}
                         className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          convertPayer === '周'
+                          convertPayer === userB.shortName
                             ? 'bg-rose-600 text-white border-rose-700'
                             : 'bg-white text-[#6E6659] border-[#DDD8CD]'
                         }`}

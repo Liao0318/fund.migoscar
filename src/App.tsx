@@ -62,7 +62,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { exportFundRecordsToCSV } from './utils/exportCsv';
 import { formatAmPmTime, isTodayNotification, isIncomingFromPartner, getShoppingItemDisplayTime } from './utils/formatters';
 import { sendNativeNotification } from './utils/nativeNotify';
-import { resolveUserPersonas } from './utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from './utils/userPersona';
 import { CODE_GS_TEMPLATE, INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from './data/gasTemplates';
 import { SplitDebtView } from './components/SplitDebtView';
 import { SplitHomeTab } from './components/split/SplitHomeTab';
@@ -90,6 +90,7 @@ import { InitialEmptyEntryFrame } from './components/common/InitialEmptyEntryFra
 import { DataBackupModal } from './components/modals/DataBackupModal';
 import { PwaInstallModal } from './components/modals/PwaInstallModal';
 import { UnifiedSettingsModal } from './components/modals/UnifiedSettingsModal';
+import { DeveloperSettingsModal } from './components/modals/DeveloperSettingsModal';
 import { FloatingChatButton } from './components/chat/FloatingChatButton';
 import { ChatAssistantDrawer } from './components/chat/ChatAssistantDrawer';
 import { 
@@ -126,10 +127,11 @@ import {
   saveUserCloudConfig, 
   getUserCloudConfig,
   saveUserNotifySettings,
-  getUserNotifySettings
+  getUserNotifySettings,
+  clearAllSessionLedgerCache
 } from './utils/userConfigService';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { syncGoogleUserProfile, db } from './utils/googleOAuthService';
+import { syncGoogleUserProfile, signOutGoogle, db } from './utils/googleOAuthService';
 
 
 // 定義購物記事資料型態
@@ -150,6 +152,50 @@ const INITIAL_SHOPPING_ITEMS: ShoppingItem[] = [
   { id: 'shop-2', category: '需要買', item: '衛生紙 1 串', store: '全聯福利中心', deadline: '本週內', status: '待購買', creator: '周沛緹', createdTime: '2026-08-09 下午 06:30', note: '買三層柔柔牌，若有特價大包裝優先。' },
   { id: 'shop-3', category: '想要買', item: '雞塊', store: '日日加', deadline: '8/15前', status: '待購買', creator: '廖尹丞', createdTime: '2026-08-10 上午 11:15', note: '宵夜想用氣炸鍋炸來吃，買 1 斤裝。' },
   { id: 'shop-4', category: '需要買', item: '鮮乳 1 瓶', store: '家樂福', deadline: '8/11前', status: '已買到', creator: '周沛緹', createdTime: '2026-08-08 上午 09:20', note: '瑞穗或初鹿，保存期限選最久者。' }
+];
+
+// 🛠️ 開發沙盒展示專用之代墊數據（徹底杜絕真實用戶帳號資料滲漏）
+const INITIAL_SPLIT_ITEMS: SplitRecordItem[] = [
+  {
+    id: 'split-dev-1',
+    time: '上午 10:30',
+    payer: '廖',
+    splitMode: 'AA平分',
+    itemName: '全聯生活補給與生鮮食材',
+    totalAmount: 1200,
+    splitResult: '周 應返還 廖 NT$ 600',
+    debtor: '周',
+    debtorAmount: 600,
+    status: '未結清',
+    note: '包含牛奶、雞蛋、蔬菜'
+  },
+  {
+    id: 'split-dev-2',
+    time: '下午 01:15',
+    payer: '周',
+    splitMode: 'AA平分',
+    itemName: '週末早午餐咖啡',
+    totalAmount: 680,
+    splitResult: '廖 應返還 周 NT$ 340',
+    debtor: '廖',
+    debtorAmount: 340,
+    status: '未結清',
+    note: '義大利麵與冰拿鐵'
+  },
+  {
+    id: 'split-dev-3',
+    time: '昨天 下午 07:00',
+    payer: '廖',
+    splitMode: '全額代付',
+    itemName: '電影票與爆米花雙人套餐',
+    totalAmount: 850,
+    splitResult: '周 應返還 廖 NT$ 850',
+    debtor: '周',
+    debtorAmount: 850,
+    status: '已結清',
+    settledTime: '昨天 21:00',
+    note: 'IMAX 廳電影票'
+  }
 ];
 
 const INITIAL_STORES = ['菜市場', '全聯福利中心', '日日加', '家樂福', '好市多', '寶雅', '7-ELEVEN', '蝦皮購物'];
@@ -192,7 +238,7 @@ interface RecordItem {
   month: string;
   date: string;
   item: string;
-  payer: '廖尹丞' | '周沛緹' | '共同帳戶' | string;
+  payer: string;
   amount: number; // 換算後的台幣總額 (作為系統對帳計價基準)
   type: '支出-日常代墊' | '收入-固定公積金';
   timestamp?: string;
@@ -241,33 +287,61 @@ export default function App() {
         return [];
       }
 
-      const saved = localStorage.getItem('muji_ledger_data');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((r: any) => {
-            let mStr = String(r.month || '').trim();
-            if (!/^\d{4}-\d{2}$/.test(mStr)) {
-              if (/^\d{4}-\d{2}-\d{2}$/.test(mStr)) {
-                mStr = mStr.substring(0, 7);
-              } else {
-                const d = new Date(mStr);
-                if (!isNaN(d.getTime())) {
-                  const year = d.getFullYear();
-                  const month = String(d.getMonth() + 1).padStart(2, '0');
-                  mStr = `${year}-${month}`;
-                }
-              }
-            }
-            return {
-              ...r,
-              month: mStr,
-              date: r.date || `${mStr}-01`
-            };
-          });
+      // 🛠️ DEV 沙盒環境：嚴格只讀取沙盒專屬測試數據，絕不混入真實 Google 帳號資料
+      if (isSandbox) {
+        const sandboxSaved = localStorage.getItem('banban_dev_sandbox_records');
+        if (sandboxSaved) {
+          try {
+            const parsed = JSON.parse(sandboxSaved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          } catch (e) {}
         }
+        return INITIAL_RECORDS;
       }
-      return isSandbox ? INITIAL_RECORDS : [];
+
+      // 🛡️ 檢查登入使用者的連線狀態，若為新使用者且尚未綁定資料庫，保證回傳空白初始資料
+      if (authUser) {
+        try {
+          const parsedUser = JSON.parse(authUser);
+          const cleanEmail = (parsedUser.email || '').trim().toLowerCase();
+          const hasUserGas = cleanEmail ? localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) : null;
+          const isPartner = parsedUser.userRole === 'partner';
+          // 若無資料庫連線，一律為全新乾淨空帳本
+          if (!hasUserGas && !isPartner) {
+            return [];
+          }
+
+          const userSaved = cleanEmail ? localStorage.getItem(`muji_ledger_data_${cleanEmail}`) : null;
+          const saved = userSaved || localStorage.getItem('muji_ledger_data');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              return parsed.map((r: any) => {
+                let mStr = String(r.month || '').trim();
+                if (!/^\d{4}-\d{2}$/.test(mStr)) {
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(mStr)) {
+                    mStr = mStr.substring(0, 7);
+                  } else {
+                    const d = new Date(mStr);
+                    if (!isNaN(d.getTime())) {
+                      const year = d.getFullYear();
+                      const month = String(d.getMonth() + 1).padStart(2, '0');
+                      mStr = `${year}-${month}`;
+                    }
+                  }
+                }
+                return {
+                  ...r,
+                  month: mStr,
+                  date: r.date || `${mStr}-01`
+                };
+              });
+            }
+          }
+        } catch (e) {}
+      }
+
+      return [];
     } catch (e) {
       return [];
     }
@@ -312,6 +386,16 @@ export default function App() {
       if (isGuest || (!authUser && !isSandbox)) {
         return [];
       }
+      if (isSandbox) {
+        const sandboxSaved = localStorage.getItem('banban_dev_sandbox_split_records');
+        if (sandboxSaved) {
+          try {
+            const parsed = JSON.parse(sandboxSaved);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          } catch (e) {}
+        }
+        return INITIAL_SPLIT_ITEMS;
+      }
       const saved = localStorage.getItem('banban_split_records');
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
@@ -336,6 +420,24 @@ export default function App() {
       if (isGuest || (!authUser && !isSandbox)) {
         return emptySummary;
       }
+      if (isSandbox) {
+        const sandboxSaved = localStorage.getItem('banban_dev_sandbox_split_summary');
+        if (sandboxSaved) {
+          try {
+            const parsed = JSON.parse(sandboxSaved);
+            if (parsed) return parsed;
+          } catch (e) {}
+        }
+        return {
+          liaoOwesZhou: 600,
+          zhouOwesLiao: 340,
+          netDebtor: '廖',
+          netAmount: 260,
+          summaryText: '系統架構師 (廖) 應返還 測試伴侶 (周) NT$ 260',
+          unsettledCount: 2,
+          settledCount: 1
+        };
+      }
       const saved = localStorage.getItem('banban_split_summary');
       return saved ? JSON.parse(saved) : emptySummary;
     } catch (e) {
@@ -346,63 +448,12 @@ export default function App() {
   const [isSplitLoading, setIsSplitLoading] = useState(false);
   const [isSplitAddOpen, setIsSplitAddOpen] = useState(false);
   const [splitAddInitialData, setSplitAddInitialData] = useState<{
-    payer?: '廖' | '周';
+    payer?: string;
     itemName?: string;
     totalAmount?: number | string;
     note?: string;
   } | undefined>(undefined);
   const [isSplitSettleModalOpen, setIsSplitSettleModalOpen] = useState(false);
-
-  const calculateLocalSplitSummary = (currentItems: SplitRecordItem[]) => {
-    let liaoOwesZhou = 0;
-    let zhouOwesLiao = 0;
-    let unsettledCount = 0;
-    let settledCount = 0;
-
-    currentItems.forEach((item) => {
-      if (item.status === '未結清') {
-        unsettledCount++;
-        const debtorAmt = item.debtorAmount || (item.splitMode === 'AA平分' ? Math.round(item.totalAmount / 2) : item.totalAmount);
-        if (item.payer === '廖') {
-          zhouOwesLiao += debtorAmt;
-        } else {
-          liaoOwesZhou += debtorAmt;
-        }
-      } else {
-        settledCount++;
-      }
-    });
-
-    let netDebtor: '廖' | '周' | 'none' = 'none';
-    let netAmount = 0;
-    let summaryText = '目前雙方已結清 💖';
-
-    if (liaoOwesZhou > zhouOwesLiao) {
-      netDebtor = '廖';
-      netAmount = liaoOwesZhou - zhouOwesLiao;
-      summaryText = `廖廖 應返還 周周 NT$ ${(Number(netAmount) || 0).toLocaleString()}`;
-    } else if (zhouOwesLiao > liaoOwesZhou) {
-      netDebtor = '周';
-      netAmount = zhouOwesLiao - liaoOwesZhou;
-      summaryText = `周周 應返還 廖廖 NT$ ${(Number(netAmount) || 0).toLocaleString()}`;
-    }
-
-    const newSummary: SplitSummary = {
-      liaoOwesZhou,
-      zhouOwesLiao,
-      netDebtor,
-      netAmount,
-      summaryText,
-      unsettledCount,
-      settledCount
-    };
-
-    setSplitSummary(newSummary);
-    try {
-      localStorage.setItem('banban_split_summary', JSON.stringify(newSummary));
-      localStorage.setItem('banban_split_records', JSON.stringify(currentItems));
-    } catch (e) {}
-  };
 
   // ------------------- 購物記事 (Notebook / Shopping List) 狀態 -------------------
   const [shoppingItems, setShoppingItems] = useState<ShoppingItem[]>(() => {
@@ -411,6 +462,21 @@ export default function App() {
     const isSandbox = localStorage.getItem('banban_is_sandbox_mode') === 'true';
     if (isGuest || (!authUser && !isSandbox)) {
       return [];
+    }
+    if (isSandbox) {
+      const sandboxSaved = localStorage.getItem('banban_dev_sandbox_shopping_items');
+      if (sandboxSaved) {
+        try {
+          const parsed = JSON.parse(sandboxSaved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((it: any) => ({
+              ...it,
+              createdTime: getShoppingItemDisplayTime(it) || it.createdTime || formatAmPmTime(new Date())
+            }));
+          }
+        } catch (e) {}
+      }
+      return INITIAL_SHOPPING_ITEMS;
     }
     const local = localStorage.getItem('muji_shopping_items');
     if (local) {
@@ -424,7 +490,7 @@ export default function App() {
         }
       } catch (e) {}
     }
-    return isSandbox ? INITIAL_SHOPPING_ITEMS : [];
+    return [];
   });
   const [shoppingStores, setShoppingStores] = useState<string[]>(INITIAL_STORES);
   const [shoppingFilter, setShoppingFilter] = useState<'all' | 'need' | 'want' | 'done'>('all');
@@ -446,7 +512,7 @@ export default function App() {
     customStore: '',
     deadline: '儘快',
     customDeadline: '',
-    creator: '廖尹丞' as '廖尹丞' | '周沛緹',
+    creator: '' as string,
     status: '待購買' as '待購買' | '已買到',
     createdTime: '',
     note: ''
@@ -514,8 +580,9 @@ export default function App() {
     return resolveUserPersonas(currentUser, partnerBindingInfo);
   }, [currentUser, partnerBindingInfo]);
 
-  const isCurrentUserZhou = currentUserPersona?.roleKey === 'userB' || currentUser?.role === '周' || currentUser?.name?.includes('周') || currentUser?.nickname?.includes('周');
-  const defaultPayerName = currentUserPersona?.name || (isCurrentUserZhou ? userB.name : userA.name);
+  const isCurrentUserPartner = currentUserPersona?.roleKey === 'userB' || currentUser?.userRole === 'partner' || currentUser?.role === '周' || (currentUser?.name && userB.name && currentUser.name === userB.name);
+  const isCurrentUserZhou = isCurrentUserPartner;
+  const defaultPayerName = currentUserPersona?.name || (isCurrentUserPartner ? userB.name : userA.name);
 
   const isUserAPayer = useCallback((p?: string) => {
     if (!p) return false;
@@ -528,6 +595,57 @@ export default function App() {
     const clean = p.trim();
     return clean === userB.name || clean === userB.displayName || clean === userB.shortName || clean.includes(userB.shortName) || clean === '周沛緹' || clean === '周';
   }, [userB]);
+
+  const calculateLocalSplitSummary = useCallback((currentItems: SplitRecordItem[]) => {
+    let liaoOwesZhou = 0;
+    let zhouOwesLiao = 0;
+    let unsettledCount = 0;
+    let settledCount = 0;
+
+    currentItems.forEach((item) => {
+      if (item.status === '未結清') {
+        unsettledCount++;
+        const debtorAmt = item.debtorAmount || (item.splitMode === 'AA平分' ? Math.round(item.totalAmount / 2) : item.totalAmount);
+        if (isUserAPayer(item.payer)) {
+          zhouOwesLiao += debtorAmt;
+        } else {
+          liaoOwesZhou += debtorAmt;
+        }
+      } else {
+        settledCount++;
+      }
+    });
+
+    let netDebtor: string = 'none';
+    let netAmount = 0;
+    let summaryText = '目前雙方已結清 💖';
+
+    if (liaoOwesZhou > zhouOwesLiao) {
+      netDebtor = userA.shortName || '廖';
+      netAmount = liaoOwesZhou - zhouOwesLiao;
+      summaryText = `${userA.displayName} 應返還 ${userB.displayName} NT$ ${(Number(netAmount) || 0).toLocaleString()}`;
+    } else if (zhouOwesLiao > liaoOwesZhou) {
+      netDebtor = userB.shortName || '周';
+      netAmount = zhouOwesLiao - liaoOwesZhou;
+      summaryText = `${userB.displayName} 應返還 ${userA.displayName} NT$ ${(Number(netAmount) || 0).toLocaleString()}`;
+    }
+
+    const newSummary: SplitSummary = {
+      liaoOwesZhou,
+      zhouOwesLiao,
+      netDebtor,
+      netAmount,
+      summaryText,
+      unsettledCount,
+      settledCount
+    };
+
+    setSplitSummary(newSummary);
+    try {
+      localStorage.setItem('banban_split_summary', JSON.stringify(newSummary));
+      localStorage.setItem('banban_split_records', JSON.stringify(currentItems));
+    } catch (e) {}
+  }, [userA, userB, isUserAPayer]);
 
   const [splitNotebookSubTab, setSplitNotebookSubTab] = useState<'travel' | 'wishlist'>('travel');
 
@@ -542,28 +660,43 @@ export default function App() {
   const handleGenerateNewInviteCode = () => {
     const newCode = generateRandomInviteCode();
     setCurrentInviteCode(newCode);
+    const cleanGas = (localStorage.getItem('muji_gas_web_url') || '').trim();
+    const cleanSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
     if (currentUser) {
       saveActiveInviteCode({
         inviteCode: newCode,
         adminEmail: currentUser.email,
         adminName: currentUser.name,
-        gasWebUrl: gasWebUrl,
-        deploySheetUrl: deploySheetUrl,
+        gasWebUrl: cleanGas,
+        deploySheetUrl: cleanSheet,
         createdAt: new Date().toISOString()
       });
+      if (currentUser.email) {
+        saveUserCloudConfig(currentUser.email, {
+          inviteCode: newCode,
+          gasWebUrl: cleanGas,
+          deploySheetUrl: cleanSheet
+        });
+      }
     }
     showToast(`已為伴侶隨機產生專屬邀請碼：${newCode}`, 'success');
   };
 
   const handleCopyInviteShare = () => {
+    const cleanGas = (localStorage.getItem('muji_gas_web_url') || '').trim();
+    const cleanSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
     const activeInvite = getActiveInviteCode() || {
       inviteCode: currentInviteCode,
       adminEmail: currentUser?.email || '',
       adminName: currentUser?.name || '主管理員',
-      gasWebUrl: gasWebUrl,
-      deploySheetUrl: deploySheetUrl,
+      gasWebUrl: cleanGas,
+      deploySheetUrl: cleanSheet,
       createdAt: new Date().toISOString()
     };
+    // 確保邀請碼即時同步於雲端
+    if (currentUser?.email && cleanGas) {
+      saveActiveInviteCode(activeInvite);
+    }
     const cardText = createShareableInviteCard(activeInvite);
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(cardText);
@@ -589,6 +722,30 @@ export default function App() {
     initialCloudSheetUrl?: string
   ) => {
     const cleanEmail = (user.email || '').trim().toLowerCase();
+    const previousEmail = (currentUser?.email || '').trim().toLowerCase();
+
+    // 🛡️ 徹底隔離：每次 Google 帳號登入或切換時，先清空所有記憶體中的記帳與資料庫狀態，避免舊帳號數據滲漏
+    setRecords([]);
+    setSplitItems([]);
+    setShoppingItems([]);
+    setGasWebUrl('');
+    setDeploySheetUrl('');
+    setPartnerBindingInfo(null);
+
+    // 清除舊有的未依帳號隔離之暫存，避免跨帳號交叉感染
+    try {
+      localStorage.removeItem('muji_gas_web_url');
+      localStorage.removeItem('muji_sheet_url');
+      localStorage.removeItem('muji_deploy_sheet_url');
+      localStorage.removeItem('muji_ledger_data');
+      localStorage.removeItem('banban_split_records');
+      localStorage.removeItem('banban_shopping_items');
+      localStorage.removeItem('banban_partner_binding');
+      window.dispatchEvent(new CustomEvent('travel-data-updated', {
+        detail: { trips: [], expenses: [], wishlist: [] }
+      }));
+    } catch (e) {}
+
     let boundNickname = user.nickname || '';
     if (!boundNickname && cleanEmail) {
       try {
@@ -598,7 +755,7 @@ export default function App() {
 
     const cleanUser: AuthUser = {
       ...user,
-      id: user.email || user.id,
+      id: cleanEmail || user.email || user.id,
       nickname: boundNickname || user.nickname
     };
     setCurrentUser(cleanUser);
@@ -606,24 +763,32 @@ export default function App() {
     setIsGuestMode(false);
     try {
       localStorage.setItem('banban_is_guest_mode', 'false');
+      localStorage.setItem('banban_is_sandbox_mode', 'false');
+      localStorage.setItem('banban_active_system_env', 'prod');
     } catch (e) {}
 
-    // 1. 若登入時自帶伴侶邀請碼或已傳入邀請資訊
+    // 1. 若登入時自帶伴侶邀請碼或已傳入邀請資訊 (例如點擊分享連結直接帶入)
     if (partnerInvite && partnerInvite.inviteCode) {
       const inviteAdminEmail = (partnerInvite.adminEmail || '').trim().toLowerCase();
       
       // 🛡️ 防自我配對保護：若登入者自身即為該邀請碼的發起管理者
       if (cleanEmail && inviteAdminEmail && cleanEmail === inviteAdminEmail) {
-        const activeGas = partnerInvite.gasWebUrl || localStorage.getItem('muji_gas_web_url') || gasWebUrl || '';
-        const activeSheet = partnerInvite.deploySheetUrl || localStorage.getItem('muji_deploy_sheet_url') || deploySheetUrl || '';
+        const activeGas = partnerInvite.gasWebUrl || '';
+        const activeSheet = partnerInvite.deploySheetUrl || '';
         
         if (activeGas) {
           setGasWebUrl(activeGas);
-          try { localStorage.setItem('muji_gas_web_url', activeGas); } catch (e) {}
+          try { 
+            localStorage.setItem('muji_gas_web_url', activeGas);
+            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+          } catch (e) {}
         }
         if (activeSheet) {
           setDeploySheetUrl(activeSheet);
-          try { localStorage.setItem('muji_deploy_sheet_url', activeSheet); } catch (e) {}
+          try { 
+            localStorage.setItem('muji_sheet_url', activeSheet);
+            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+          } catch (e) {}
         }
 
         const adminUser: AuthUser = {
@@ -657,16 +822,22 @@ export default function App() {
       }
 
       // 💖 真正伴侶登入配對流程
-      const activeGas = partnerInvite.gasWebUrl || localStorage.getItem('muji_gas_web_url') || gasWebUrl || '';
-      const activeSheet = partnerInvite.deploySheetUrl || localStorage.getItem('muji_deploy_sheet_url') || deploySheetUrl || '';
+      const activeGas = partnerInvite.gasWebUrl || '';
+      const activeSheet = partnerInvite.deploySheetUrl || '';
       
       if (activeGas) {
         setGasWebUrl(activeGas);
-        try { localStorage.setItem('muji_gas_web_url', activeGas); } catch (e) {}
+        try { 
+          localStorage.setItem('muji_gas_web_url', activeGas);
+          localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+        } catch (e) {}
       }
       if (activeSheet) {
         setDeploySheetUrl(activeSheet);
-        try { localStorage.setItem('muji_deploy_sheet_url', activeSheet); } catch (e) {}
+        try { 
+          localStorage.setItem('muji_sheet_url', activeSheet);
+          localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+        } catch (e) {}
       }
 
       const bindingData: CoupleBindingInfo = {
@@ -683,10 +854,11 @@ export default function App() {
       setPartnerBindingInfo(bindingData);
 
       const enhancedPartner: AuthUser = {
-        ...user,
+        ...cleanUser,
+        id: cleanEmail || cleanUser.id,
         nickname: boundNickname || user.nickname,
         userRole: 'partner',
-        role: user.role === '廖' ? '廖' : '周',
+        role: user.role || (user.name ? user.name.charAt(0) : '伴'),
         adminEmail: partnerInvite.adminEmail,
         adminName: partnerInvite.adminName,
         inviteCode: partnerInvite.inviteCode
@@ -717,24 +889,30 @@ export default function App() {
       return;
     }
 
-    // 2. 檢查雲端/本地是否已有伴侶配對紀錄
+    // 2. 檢查雲端是否已有伴侶配對紀錄 (另一半發起邀請並已綁定此 Google 帳號)
     try {
       const existingBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
       if (existingBinding && existingBinding.partnerEmail && existingBinding.partnerEmail.toLowerCase() === cleanEmail) {
         if (existingBinding.gasWebUrl) {
           setGasWebUrl(existingBinding.gasWebUrl);
-          try { localStorage.setItem('muji_gas_web_url', existingBinding.gasWebUrl); } catch (e) {}
+          try { 
+            localStorage.setItem('muji_gas_web_url', existingBinding.gasWebUrl);
+            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, existingBinding.gasWebUrl);
+          } catch (e) {}
         }
         if (existingBinding.deploySheetUrl) {
           setDeploySheetUrl(existingBinding.deploySheetUrl);
-          try { localStorage.setItem('muji_deploy_sheet_url', existingBinding.deploySheetUrl); } catch (e) {}
+          try { 
+            localStorage.setItem('muji_sheet_url', existingBinding.deploySheetUrl);
+            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, existingBinding.deploySheetUrl);
+          } catch (e) {}
         }
         setPartnerBindingInfo(existingBinding);
 
         const enhancedPartner: AuthUser = {
           ...cleanUser,
           userRole: 'partner',
-          role: cleanUser.role === '廖' ? '廖' : '周',
+          role: cleanUser.role || (cleanUser.name ? cleanUser.name.charAt(0) : '伴'),
           adminEmail: existingBinding.adminEmail,
           adminName: existingBinding.adminName,
           inviteCode: existingBinding.inviteCode
@@ -757,9 +935,10 @@ export default function App() {
       }
     } catch (e) {}
 
-    // 3. 檢查先前是否曾建立過 API 資料庫 (本地或 Firestore 雲端)
-    let activeGas = initialCloudGasUrl || gasWebUrl || localStorage.getItem('muji_gas_web_url') || '';
-    let activeSheet = initialCloudSheetUrl || deploySheetUrl || localStorage.getItem('muji_sheet_url') || '';
+    // 3. 檢查此帳號先前是否曾自行建立過 API 資料庫 (主管理員)
+    // 嚴格隔離：僅讀取依 cleanEmail 專屬設定，絕不讀取其他帳號的快取！
+    let activeGas = initialCloudGasUrl || (cleanEmail ? localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) : '') || '';
+    let activeSheet = initialCloudSheetUrl || (cleanEmail ? localStorage.getItem(`muji_sheet_url_${cleanEmail}`) : '') || '';
 
     try {
       const cloudConfig = await getUserCloudConfig(user.email);
@@ -772,64 +951,105 @@ export default function App() {
             try { localStorage.setItem(`banban_user_nickname_${cleanEmail}`, boundNickname); } catch (e) {}
           }
         }
-        if (cloudConfig.gasWebUrl && !activeGas) {
-          activeGas = cloudConfig.gasWebUrl;
-          setGasWebUrl(cloudConfig.gasWebUrl);
-          try { localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl); } catch (e) {}
-        }
-        if (cloudConfig.deploySheetUrl && !activeSheet) {
-          activeSheet = cloudConfig.deploySheetUrl;
-          setDeploySheetUrl(cloudConfig.deploySheetUrl);
-          try { localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl); } catch (e) {}
-        }
-        if (cloudConfig.inviteCode) {
-          setCurrentInviteCode(cloudConfig.inviteCode);
+
+        // 🛡️ 防跨帳號污染校驗：檢查雲端 gasWebUrl 是否確實為本帳號合法配置
+        if (cloudConfig.gasWebUrl && cloudConfig.gasWebUrl.startsWith('http')) {
+          let isContaminated = false;
+          // 若有附帶邀請碼，確認該邀請碼的發起人是否為自己
+          if (cloudConfig.inviteCode) {
+            try {
+              const inviteInfo = await fetchInviteCodeOnline(cloudConfig.inviteCode);
+              if (inviteInfo && inviteInfo.adminEmail && inviteInfo.adminEmail.toLowerCase() !== cleanEmail) {
+                // 該邀請碼管理者是別人，表示為先前跨帳號快取造成的歷史污染，予以修復清空
+                isContaminated = true;
+              }
+            } catch (e) {}
+          }
+
+          if (isContaminated) {
+            console.warn('檢測到帳號存在舊版跨帳號殘留設定，已自動重設並初始化為全新狀態:', cleanEmail);
+            await saveUserCloudConfig(user.email, {
+              gasWebUrl: '',
+              deploySheetUrl: '',
+              inviteCode: generateRandomInviteCode()
+            });
+            activeGas = '';
+            activeSheet = '';
+          } else {
+            activeGas = cloudConfig.gasWebUrl;
+            activeSheet = cloudConfig.deploySheetUrl || '';
+            setGasWebUrl(activeGas);
+            setDeploySheetUrl(activeSheet);
+            try {
+              localStorage.setItem('muji_gas_web_url', activeGas);
+              localStorage.setItem('muji_sheet_url', activeSheet);
+              localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+            } catch (e) {}
+            if (cloudConfig.inviteCode) {
+              setCurrentInviteCode(cloudConfig.inviteCode);
+            }
+          }
         }
       }
     } catch (err) {
       console.warn('Failed to retrieve user cloud config on login:', err);
     }
 
-    // 若先前已存在 API 資料庫且非重設狀態
+    // 若此帳號確實已建立過專屬 API 資料庫
     if (activeGas && activeGas.startsWith('http') && !partnerInvite) {
-      setGasWebUrl(activeGas);
-      try { localStorage.setItem('muji_gas_web_url', activeGas); } catch (e) {}
-      saveUserCloudConfig(user.email, {
-        email: user.email,
-        name: user.name,
-        nickname: boundNickname || user.nickname,
-        gasWebUrl: activeGas,
-        deploySheetUrl: activeSheet
-      });
-
-      saveActiveInviteCode({
-        inviteCode: currentInviteCode,
-        adminEmail: user.email,
-        adminName: user.name,
-        gasWebUrl: activeGas,
-        deploySheetUrl: activeSheet,
-        createdAt: new Date().toISOString()
-      });
-
       const displayWelcomeName = boundNickname || user.name;
       showToast(`👑 歡迎回來，${displayWelcomeName}！已載入 Google 帳號設定`, 'success');
+      
+      const adminUser: AuthUser = {
+        ...cleanUser,
+        userRole: 'admin',
+        role: 'admin'
+      };
+      setCurrentUser(adminUser);
+
       fetchDashboardData(false, false);
       fetchShoppingData(false);
       fetchSplitData(true);
       fetchTravelData(true);
+
+      setIsCheckingCloudConfig(false);
+
+      try {
+        localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
+        localStorage.setItem('banban_is_sandbox_mode', 'false');
+      } catch (e) {}
+      return;
     } else {
-      // 4. 初次或未綁定：自動跳出引導小精靈，確認是伴侶還是主管理者
+      // 4. 初次或全新獨立帳號：徹底初始化全新系統資料，數值全部為空，並彈出引導小精靈！
+      const newInviteCode = generateRandomInviteCode();
+      setCurrentInviteCode(newInviteCode);
+      setGasWebUrl('');
+      setDeploySheetUrl('');
+      setRecords([]);
+      setSplitItems([]);
+      setShoppingItems([]);
+      setPartnerBindingInfo(null);
+
+      const freshUser: AuthUser = {
+        ...cleanUser,
+        userRole: 'admin',
+        role: 'admin'
+      };
+      setCurrentUser(freshUser);
+
+      try {
+        localStorage.setItem('banban_auth_user', JSON.stringify(freshUser));
+        localStorage.setItem('banban_is_sandbox_mode', 'false');
+      } catch (e) {}
+
       const displayWelcomeName = boundNickname || user.name;
-      showToast(`✨ 歡迎 ${displayWelcomeName}！請在引導小精靈中確認身分與設定`, 'info');
-      setTimeout(() => {
-        openUnifiedDatabaseModal('wizard');
-      }, 400);
+      showToast(`✨ 歡迎 ${displayWelcomeName}！已為您初始化全新系統資料，請在引導中確認身分與設定`, 'info');
+      // 立即開啟引導小精靈，讓使用者選擇「主管理者（部署帳本）」或「伴侶模式（輸入邀請碼）」
+      openUnifiedDatabaseModal('wizard');
     }
 
-    try {
-      localStorage.setItem('banban_auth_user', JSON.stringify({ ...cleanUser, userRole: 'admin', role: 'admin' }));
-      localStorage.setItem('banban_is_sandbox_mode', 'false');
-    } catch (e) {}
+    setIsCheckingCloudConfig(false);
   };
 
   /**
@@ -861,8 +1081,19 @@ export default function App() {
       };
     }
 
-    const activeGas = resolved.gasWebUrl || '';
-    const activeSheet = resolved.deploySheetUrl || '';
+    let activeGas = resolved.gasWebUrl || '';
+    let activeSheet = resolved.deploySheetUrl || '';
+
+    // 🛡️ 雙重保險備援：若邀請物件中缺少 gasWebUrl，向管理者的 user_configs 自動檢索補齊
+    if (!activeGas && resolved.adminEmail) {
+      try {
+        const adminConfig = await getUserCloudConfig(resolved.adminEmail);
+        if (adminConfig && adminConfig.gasWebUrl) {
+          activeGas = adminConfig.gasWebUrl;
+          activeSheet = adminConfig.deploySheetUrl || activeSheet;
+        }
+      } catch (e) {}
+    }
 
     if (activeGas) {
       setGasWebUrl(activeGas);
@@ -871,6 +1102,7 @@ export default function App() {
     if (activeSheet) {
       setDeploySheetUrl(activeSheet);
       try { localStorage.setItem('muji_deploy_sheet_url', activeSheet); } catch (e) {}
+      try { localStorage.setItem('muji_sheet_url', activeSheet); } catch (e) {}
     }
 
     const bindingData: CoupleBindingInfo = {
@@ -891,7 +1123,7 @@ export default function App() {
       const updatedUser: AuthUser = {
         ...currentUser,
         userRole: 'partner',
-        role: currentUser.role === '廖' ? '廖' : '周',
+        role: currentUser.role || (currentUser.name ? currentUser.name.charAt(0) : '伴'),
         adminEmail: resolved.adminEmail,
         adminName: resolved.adminName,
         inviteCode: resolved.inviteCode
@@ -926,23 +1158,122 @@ export default function App() {
 
 
   const handleEnterDevSandbox = () => {
+    signOutGoogle().catch(() => {});
     const devUser: AuthUser = {
-      id: 'dev.sandbox@local.test',
-      name: '開發測試者',
-      email: 'dev.sandbox@local.test',
+      id: 'developer.admin@banbanji.internal',
+      name: '系統架構師 (開發模式)',
+      email: 'developer.admin@banbanji.internal',
       role: 'admin',
+      userRole: 'admin',
       isDevSandbox: true,
       loginTime: new Date().toISOString()
     };
     setCurrentUser(devUser);
     setIsSandboxMode(true);
     setIsGuestMode(false);
+    setGasWebUrl('');
+    setDeploySheetUrl('');
+    setPartnerBindingInfo(null);
+    setCurrentInviteCode('BB-DEV9');
+
     try {
       localStorage.setItem('banban_auth_user', JSON.stringify(devUser));
       localStorage.setItem('banban_is_sandbox_mode', 'true');
       localStorage.setItem('banban_is_guest_mode', 'false');
+      localStorage.setItem('banban_active_system_env', 'dev');
     } catch (e) {}
-    showToast('🧪 已切換為「開發人員測試沙盒模式」', 'info');
+
+    // 載入或初始化專屬沙盒數據（徹底隔離真實用戶資料）
+    const sandboxRecs = (() => {
+      try {
+        const s = localStorage.getItem('banban_dev_sandbox_records');
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p) && p.length > 0) return p;
+        }
+      } catch (e) {}
+      return INITIAL_RECORDS;
+    })();
+    setRecords(sandboxRecs);
+
+    const sandboxSplit = (() => {
+      try {
+        const s = localStorage.getItem('banban_dev_sandbox_split_records');
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p) && p.length > 0) return p;
+        }
+      } catch (e) {}
+      return INITIAL_SPLIT_ITEMS;
+    })();
+    setSplitItems(sandboxSplit);
+    calculateLocalSplitSummary(sandboxSplit);
+
+    const sandboxShopping = (() => {
+      try {
+        const s = localStorage.getItem('banban_dev_sandbox_shopping_items');
+        if (s) {
+          const p = JSON.parse(s);
+          if (Array.isArray(p) && p.length > 0) return p;
+        }
+      } catch (e) {}
+      return INITIAL_SHOPPING_ITEMS;
+    })();
+    setShoppingItems(sandboxShopping);
+
+    showToast('🛠️ 已進入 DEV 開發環境（系統功能與介面設計專用沙盒）！', 'info');
+  };
+
+  const handleResetDevData = () => {
+    setRecords([]);
+    setSplitItems([]);
+    setShoppingItems([]);
+    setSplitSummary({
+      liaoOwesZhou: 0,
+      zhouOwesLiao: 0,
+      netDebtor: 'none',
+      netAmount: 0,
+      summaryText: '目前雙方已結清 💖',
+      unsettledCount: 0,
+      settledCount: 0
+    });
+    try {
+      localStorage.removeItem('banban_dev_sandbox_records');
+      localStorage.removeItem('banban_dev_sandbox_split_records');
+      localStorage.removeItem('banban_dev_sandbox_split_summary');
+      localStorage.removeItem('banban_dev_sandbox_shopping_items');
+      localStorage.removeItem('banban_dev_sandbox_reconciled_months');
+      window.dispatchEvent(new CustomEvent('travel-data-updated', {
+        detail: { trips: [], expenses: [], wishlist: [] }
+      }));
+    } catch (e) {}
+    showToast('🧹 已清空本機開發測試數據', 'info');
+  };
+
+  const handleSeedSampleData = () => {
+    setRecords(INITIAL_RECORDS);
+    setSplitItems(INITIAL_SPLIT_ITEMS);
+    setShoppingItems(INITIAL_SHOPPING_ITEMS);
+    calculateLocalSplitSummary(INITIAL_SPLIT_ITEMS);
+    try {
+      localStorage.setItem('banban_dev_sandbox_records', JSON.stringify(INITIAL_RECORDS));
+      localStorage.setItem('banban_dev_sandbox_split_records', JSON.stringify(INITIAL_SPLIT_ITEMS));
+      localStorage.setItem('banban_dev_sandbox_shopping_items', JSON.stringify(INITIAL_SHOPPING_ITEMS));
+    } catch (e) {}
+    showToast('✨ 已注入全套展示測試數據', 'success');
+  };
+
+  const handleSyncToProduction = () => {
+    setIsProductionReady(true);
+    try {
+      localStorage.setItem('banban_production_ready', 'true');
+    } catch (e) {}
+    showToast('🚀 所有設計變更與全域配置已同步至正式系統標準！', 'success');
+  };
+
+  const handleExitDevMode = () => {
+    setIsDevSettingsModalOpen(false);
+    handleLogout();
   };
 
   const handleEnterGuestMode = () => {
@@ -974,11 +1305,13 @@ export default function App() {
   };
 
   const handleReturnToLoginPortal = () => {
+    signOutGoogle().catch(() => {});
     setCurrentUser(null);
     setPartnerBindingInfo(null);
     setIsSandboxMode(false);
     setIsGuestMode(false);
     setIsUnifiedSettingsModalOpen(false);
+    setIsUnifiedDatabaseOpen(false);
     setGasWebUrl('');
     setDeploySheetUrl('');
     setRecords([]);
@@ -994,13 +1327,7 @@ export default function App() {
     });
     setShoppingItems([]);
     try {
-      localStorage.removeItem('banban_auth_user');
-      localStorage.removeItem('muji_gas_web_url');
-      localStorage.removeItem('muji_sheet_url');
-      localStorage.removeItem('muji_deploy_sheet_url');
-      localStorage.removeItem('muji_ledger_data');
-      localStorage.setItem('banban_is_sandbox_mode', 'false');
-      localStorage.setItem('banban_is_guest_mode', 'false');
+      clearAllSessionLedgerCache();
       window.dispatchEvent(new CustomEvent('travel-data-updated', {
         detail: { trips: [], expenses: [], wishlist: [] }
       }));
@@ -1009,11 +1336,13 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    signOutGoogle().catch(() => {});
     setCurrentUser(null);
     setPartnerBindingInfo(null);
     setIsSandboxMode(false);
     setIsGuestMode(false);
     setIsUnifiedSettingsModalOpen(false);
+    setIsUnifiedDatabaseOpen(false);
     setGasWebUrl('');
     setDeploySheetUrl('');
     setRecords([]);
@@ -1029,18 +1358,82 @@ export default function App() {
     });
     setShoppingItems([]);
     try {
-      localStorage.removeItem('banban_auth_user');
-      localStorage.removeItem('muji_gas_web_url');
-      localStorage.removeItem('muji_sheet_url');
-      localStorage.removeItem('muji_deploy_sheet_url');
-      localStorage.removeItem('muji_ledger_data');
-      localStorage.setItem('banban_is_sandbox_mode', 'false');
-      localStorage.setItem('banban_is_guest_mode', 'false');
+      clearAllSessionLedgerCache();
       window.dispatchEvent(new CustomEvent('travel-data-updated', {
         detail: { trips: [], expenses: [], wishlist: [] }
       }));
     } catch (e) {}
     showToast('已安全登出 Google 帳號，返回登入主畫面', 'info');
+  };
+
+  /**
+   * 🔄 重設目前 Google 帳號的資料庫與 API 連線（初始化為全新乾淨帳本）
+   */
+  const handleResetAccountDatabase = async () => {
+    const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+    const isPartnerRole = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail);
+    
+    // 1. 清空所有狀態
+    setGasWebUrl('');
+    setDeploySheetUrl('');
+    setRecords([]);
+    setSplitItems([]);
+    setShoppingItems([]);
+    setPartnerBindingInfo(null);
+    const freshInviteCode = generateRandomInviteCode();
+    setCurrentInviteCode(freshInviteCode);
+
+    // 2. 清除本地儲存
+    try {
+      localStorage.removeItem('muji_gas_web_url');
+      localStorage.removeItem('muji_sheet_url');
+      localStorage.removeItem('muji_deploy_sheet_url');
+      localStorage.removeItem('muji_ledger_data');
+      localStorage.removeItem('banban_split_records');
+      localStorage.removeItem('banban_shopping_items');
+      localStorage.removeItem('banban_partner_binding');
+      if (cleanEmail) {
+        localStorage.removeItem(`muji_gas_web_url_${cleanEmail}`);
+        localStorage.removeItem(`muji_sheet_url_${cleanEmail}`);
+        localStorage.removeItem(`muji_ledger_data_${cleanEmail}`);
+      }
+      window.dispatchEvent(new CustomEvent('travel-data-updated', {
+        detail: { trips: [], expenses: [], wishlist: [] }
+      }));
+    } catch (e) {}
+
+    // 3. 清空雲端此使用者專屬的 API 設定
+    if (cleanEmail) {
+      try {
+        if (!isPartnerRole) {
+          // 主管理員重設自己的雲端 API
+          await saveUserCloudConfig(cleanEmail, {
+            gasWebUrl: '',
+            deploySheetUrl: '',
+            inviteCode: freshInviteCode
+          });
+        }
+        await removePartnerBinding(cleanEmail);
+      } catch (e) {}
+    }
+
+    if (currentUser) {
+      const resetUser: AuthUser = {
+        ...currentUser,
+        userRole: 'admin',
+        role: 'admin',
+        adminEmail: undefined,
+        adminName: undefined,
+        inviteCode: freshInviteCode
+      };
+      setCurrentUser(resetUser);
+      try {
+        localStorage.setItem('banban_auth_user', JSON.stringify(resetUser));
+      } catch (e) {}
+    }
+
+    showToast('✨ 已重設資料庫連線！帳本已初始化為全新狀態', 'info');
+    openUnifiedDatabaseModal('wizard');
   };
 
   const handleSwitchAccount = () => {
@@ -1109,9 +1502,18 @@ export default function App() {
 
   const handleSyncGoogleAvatar = async (): Promise<boolean> => {
     if (!currentUser) return false;
+    if (currentUser.isDevSandbox) {
+      showToast('⚠️ DEV 開發模式為獨立虛擬帳號，無法同步真實 Google 帳戶頭像', 'info');
+      return false;
+    }
+    if (!currentUser.email || currentUser.authMethod !== 'google_oauth') {
+      showToast('此帳號非 Google 授權登入，無法同步頭像', 'info');
+      return false;
+    }
+
     showToast('正在與 Google 帳號同步最新頭像...', 'info');
     try {
-      const profile = await syncGoogleUserProfile();
+      const profile = await syncGoogleUserProfile(currentUser.email);
       if (profile && profile.avatar) {
         const updatedUser: AuthUser = {
           ...currentUser,
@@ -1137,7 +1539,7 @@ export default function App() {
         showToast('🎉 已成功同步 Google 帳戶大頭貼照片！', 'success');
         return true;
       } else {
-        showToast('Google 帳號照片已是最新狀態', 'info');
+        showToast('目前未偵測到與您此 Google 帳號匹配的最新頭像', 'info');
         return true;
       }
     } catch (err: any) {
@@ -1186,6 +1588,17 @@ export default function App() {
   const [isUnifiedDatabaseOpen, setIsUnifiedDatabaseOpen] = useState(false);
   const [unifiedDatabaseTab, setUnifiedDatabaseTab] = useState<'wizard' | 'settings' | 'code' | 'partner'>('wizard');
   const [unifiedDatabaseRole, setUnifiedDatabaseRole] = useState<'admin' | 'partner' | undefined>(undefined);
+  const [isCheckingCloudConfig, setIsCheckingCloudConfig] = useState(true);
+
+  // 🛠️ 系統整體設定與開發控制中心 Modal 狀態
+  const [isDevSettingsModalOpen, setIsDevSettingsModalOpen] = useState(false);
+  const [isProductionReady, setIsProductionReady] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('banban_production_ready') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
 
   const openUnifiedDatabaseModal = (tab: 'wizard' | 'settings' | 'code' | 'partner' = 'wizard', role?: 'admin' | 'partner') => {
     setUnifiedDatabaseTab(tab);
@@ -1511,16 +1924,16 @@ export default function App() {
   };
 
   const handleAddSplitRecord = async (data: {
-    payer: '廖' | '周' | string;
+    payer: string;
     itemName: string;
     totalAmount: number;
     splitMode: 'AA平分' | '全額代付' | '自訂金額';
     customOweAmount?: number;
     note?: string;
   }) => {
-    const isPayerB = isUserBPayer(data.payer) || data.payer === '周' || data.payer === userB.name || data.payer === userB.displayName || data.payer === userB.shortName;
-    const resolvedPayer: '廖' | '周' = isPayerB ? '周' : '廖';
-    const otherPerson = resolvedPayer === '廖' ? '周' : '廖';
+    const isPayerB = isUserBPayer(data.payer) || data.payer === userB.name || data.payer === userB.displayName || data.payer === userB.shortName;
+    const resolvedPayer = isPayerB ? userB.shortName : userA.shortName;
+    const otherPerson = isPayerB ? userA.shortName : userB.shortName;
     let debtorAmt = Math.round(data.totalAmount / 2);
     if (data.splitMode === '全額代付') {
       debtorAmt = data.totalAmount;
@@ -1531,8 +1944,8 @@ export default function App() {
     const now = new Date();
     const timeStr = formatAmPmTime(now);
 
-    const payerDisplayName = resolvedPayer === '廖' ? userA.displayName : userB.displayName;
-    const debtorDisplayName = otherPerson === '廖' ? userA.displayName : userB.displayName;
+    const payerDisplayName = isPayerB ? userB.displayName : userA.displayName;
+    const debtorDisplayName = isPayerB ? userA.displayName : userB.displayName;
 
     const newItem: SplitRecordItem = {
       id: 'split-' + Date.now(),
@@ -1551,7 +1964,7 @@ export default function App() {
     const updated = [newItem, ...splitItems];
     setSplitItems(updated);
     calculateLocalSplitSummary(updated);
-    showToast(`已成功記錄代墊：${newItem.itemName}（${otherPerson === '廖' ? userA.displayName : userB.displayName} 需返還 $${debtorAmt}）`, 'success');
+    showToast(`已成功記錄代墊：${newItem.itemName}（${debtorDisplayName} 需返還 $${debtorAmt}）`, 'success');
 
     if (gasWebUrl) {
       try {
@@ -1666,46 +2079,73 @@ export default function App() {
   const [activeDeployCodeTab, setActiveDeployCodeTab] = useState<'codeGs' | 'indexHtml' | 'splitHtml'>('codeGs');
   const [copiedCodeType, setCopiedCodeType] = useState<'codeGs' | 'indexHtml' | 'splitHtml' | null>(null);
 
-  const saveDeployConfig = () => {
+  const saveDeployConfig = (overrideGas?: string, overrideSheet?: string) => {
     if (isGuestMode || !currentUser) {
       showToast('🔒 本機體驗模式不可登入或綁定試算表金鑰，請先登入 Google 帳號！', 'error');
       return;
     }
-    const cleanSheet = deploySheetUrl.trim();
-    const cleanGas = gasWebUrl.trim();
+    const isPartnerRole = currentUser.userRole === 'partner' || Boolean(currentUser.adminEmail);
+    if (isPartnerRole) {
+      showToast('🔒 伴侶帳號無法變更 API 連線設定，試算表由主管理員統一維護', 'error');
+      return;
+    }
+    const cleanSheet = (overrideSheet !== undefined ? overrideSheet : (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '')).trim();
+    const cleanGas = (overrideGas !== undefined ? overrideGas : (gasWebUrl || localStorage.getItem('muji_gas_web_url') || '')).trim();
+
+    if (overrideGas !== undefined) setGasWebUrl(cleanGas);
+    if (overrideSheet !== undefined) setDeploySheetUrl(cleanSheet);
 
     localStorage.setItem('muji_sheet_url', cleanSheet);
     localStorage.setItem('muji_gas_web_url', cleanGas);
+    const cleanUserEmail = (currentUser?.email || '').trim().toLowerCase();
+    if (cleanUserEmail) {
+      try {
+        localStorage.setItem(`muji_sheet_url_${cleanUserEmail}`, cleanSheet);
+        localStorage.setItem(`muji_gas_web_url_${cleanUserEmail}`, cleanGas);
+      } catch (e) {}
+    }
 
     // ☁️ 自動將 API 綁定至 Google 帳號雲端，日後換任何手機登入自動生效
     if (currentUser?.email && !isSandboxMode) {
+      // 確保主管理者角色鎖定
+      if (currentUser.userRole !== 'admin') {
+        const updatedAdmin: AuthUser = {
+          ...currentUser,
+          userRole: 'admin',
+          role: currentUser.role || 'admin'
+        };
+        setCurrentUser(updatedAdmin);
+        try {
+          localStorage.setItem('banban_auth_user', JSON.stringify(updatedAdmin));
+        } catch (e) {}
+      }
+
       saveUserCloudConfig(currentUser.email, {
         email: currentUser.email,
         name: currentUser.name,
         gasWebUrl: cleanGas,
-        deploySheetUrl: cleanSheet
+        deploySheetUrl: cleanSheet,
+        inviteCode: currentInviteCode
       });
 
-      if (currentUser.userRole === 'admin') {
-        saveActiveInviteCode({
-          inviteCode: currentInviteCode,
-          adminEmail: currentUser.email,
-          adminName: currentUser.name,
-          gasWebUrl: cleanGas,
-          deploySheetUrl: cleanSheet,
-          createdAt: new Date().toISOString()
-        });
+      saveActiveInviteCode({
+        inviteCode: currentInviteCode,
+        adminEmail: currentUser.email,
+        adminName: currentUser.name,
+        gasWebUrl: cleanGas,
+        deploySheetUrl: cleanSheet,
+        createdAt: new Date().toISOString()
+      });
 
-        // 若已有伴侶綁定紀錄，同步更新 Firestore 中的情侶資料庫設定
-        if (partnerBindingInfo) {
-          const updatedBinding: CoupleBindingInfo = {
-            ...partnerBindingInfo,
-            gasWebUrl: cleanGas,
-            deploySheetUrl: cleanSheet
-          };
-          savePartnerBindingInfo(updatedBinding);
-          setPartnerBindingInfo(updatedBinding);
-        }
+      // 若已有伴侶綁定紀錄，同步更新 Firestore 中的情侶資料庫設定
+      if (partnerBindingInfo) {
+        const updatedBinding: CoupleBindingInfo = {
+          ...partnerBindingInfo,
+          gasWebUrl: cleanGas,
+          deploySheetUrl: cleanSheet
+        };
+        savePartnerBindingInfo(updatedBinding);
+        setPartnerBindingInfo(updatedBinding);
       }
     }
 
@@ -1720,6 +2160,24 @@ export default function App() {
     fetchTravelData(true);
   };
 
+  // ☁️ 確保管理者的有效邀請碼在 Firestore 雲端隨時就緒
+  useEffect(() => {
+    if (currentUser?.email && !isSandboxMode && currentUser.userRole === 'admin') {
+      const activeGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || '').trim();
+      const activeSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
+      if (activeGas && activeGas.startsWith('http') && currentInviteCode) {
+        saveActiveInviteCode({
+          inviteCode: currentInviteCode,
+          adminEmail: currentUser.email,
+          adminName: currentUser.name,
+          gasWebUrl: activeGas,
+          deploySheetUrl: activeSheet,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+  }, [currentUser?.email, currentUser?.userRole, currentInviteCode, gasWebUrl, deploySheetUrl, isSandboxMode]);
+
   // ☁️ 開機自動同步使用者 Google 帳號所綁定的 API 設定與情侶雙向即時同步
   useEffect(() => {
     if (currentUser?.email && !isSandboxMode) {
@@ -1727,8 +2185,8 @@ export default function App() {
       const isPartnerRole = currentUser.userRole === 'partner' || Boolean(currentUser.adminEmail);
 
       const restoreCloudSync = async () => {
-        let activeGas = gasWebUrl || localStorage.getItem('muji_gas_web_url') || '';
-        let activeSheet = deploySheetUrl || localStorage.getItem('muji_sheet_url') || '';
+        let activeGas = gasWebUrl || (cleanEmail ? localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) : '') || '';
+        let activeSheet = deploySheetUrl || (cleanEmail ? localStorage.getItem(`muji_sheet_url_${cleanEmail}`) : '') || '';
         let updated = false;
 
         // 1. 無論是主管理員或伴侶，都嘗試同步伴侶綁定紀錄
@@ -1739,13 +2197,19 @@ export default function App() {
             if (isPartnerRole) {
               if (binding.gasWebUrl && binding.gasWebUrl !== gasWebUrl) {
                 setGasWebUrl(binding.gasWebUrl);
-                try { localStorage.setItem('muji_gas_web_url', binding.gasWebUrl); } catch (e) {}
+                try { 
+                  localStorage.setItem('muji_gas_web_url', binding.gasWebUrl);
+                  localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, binding.gasWebUrl);
+                } catch (e) {}
                 activeGas = binding.gasWebUrl;
                 updated = true;
               }
               if (binding.deploySheetUrl && binding.deploySheetUrl !== deploySheetUrl) {
                 setDeploySheetUrl(binding.deploySheetUrl);
-                try { localStorage.setItem('muji_sheet_url', binding.deploySheetUrl); } catch (e) {}
+                try { 
+                  localStorage.setItem('muji_sheet_url', binding.deploySheetUrl);
+                  localStorage.setItem(`muji_sheet_url_${cleanEmail}`, binding.deploySheetUrl);
+                } catch (e) {}
                 activeSheet = binding.deploySheetUrl;
                 updated = true;
               }
@@ -1753,21 +2217,39 @@ export default function App() {
           }
         } catch (e) {}
 
-        // 2. 從個人 UserCloudConfig 同步
+        // 2. 從個人 UserCloudConfig 同步 (帶有防污染驗證)
         try {
           const cloudConfig = await getUserCloudConfig(cleanEmail);
           if (cloudConfig) {
-            if (cloudConfig.gasWebUrl && !activeGas) {
-              setGasWebUrl(cloudConfig.gasWebUrl);
-              try { localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl); } catch (e) {}
-              activeGas = cloudConfig.gasWebUrl;
-              updated = true;
+            let isContaminated = false;
+            if (cloudConfig.inviteCode) {
+              try {
+                const inviteInfo = await fetchInviteCodeOnline(cloudConfig.inviteCode);
+                if (inviteInfo && inviteInfo.adminEmail && inviteInfo.adminEmail.toLowerCase() !== cleanEmail && !isPartnerRole) {
+                  isContaminated = true;
+                }
+              } catch (e) {}
             }
-            if (cloudConfig.deploySheetUrl && !activeSheet) {
-              setDeploySheetUrl(cloudConfig.deploySheetUrl);
-              try { localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl); } catch (e) {}
-              activeSheet = cloudConfig.deploySheetUrl;
-              updated = true;
+
+            if (!isContaminated) {
+              if (cloudConfig.gasWebUrl && !activeGas) {
+                setGasWebUrl(cloudConfig.gasWebUrl);
+                try { 
+                  localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl);
+                  localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cloudConfig.gasWebUrl);
+                } catch (e) {}
+                activeGas = cloudConfig.gasWebUrl;
+                updated = true;
+              }
+              if (cloudConfig.deploySheetUrl && !activeSheet) {
+                setDeploySheetUrl(cloudConfig.deploySheetUrl);
+                try { 
+                  localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl);
+                  localStorage.setItem(`muji_sheet_url_${cleanEmail}`, cloudConfig.deploySheetUrl);
+                } catch (e) {}
+                activeSheet = cloudConfig.deploySheetUrl;
+                updated = true;
+              }
             }
           }
         } catch (e) {}
@@ -1779,6 +2261,7 @@ export default function App() {
           fetchSplitData(true);
           fetchTravelData(true);
         }
+        setIsCheckingCloudConfig(false);
       };
 
       restoreCloudSync();
@@ -1814,11 +2297,31 @@ export default function App() {
           unsubscribe();
         }
       };
+    } else {
+      setIsCheckingCloudConfig(false);
     }
   }, [currentUser?.email, currentUser?.userRole, isSandboxMode]);
 
   const getCustomizedCodeGs = () => {
     let code = CODE_GS_TEMPLATE;
+
+    // 動態代入雙方角色設定
+    code = code.replace(
+      'var DEFAULT_USER_A_NAME = "廖尹丞";',
+      `var DEFAULT_USER_A_NAME = "${userA.name || userA.displayName || '廖尹丞'}";`
+    );
+    code = code.replace(
+      'var DEFAULT_USER_A_SHORT = "廖";',
+      `var DEFAULT_USER_A_SHORT = "${userA.shortName || '廖'}";`
+    );
+    code = code.replace(
+      'var DEFAULT_USER_B_NAME = "周沛緹";',
+      `var DEFAULT_USER_B_NAME = "${userB.name || userB.displayName || '周沛緹'}";`
+    );
+    code = code.replace(
+      'var DEFAULT_USER_B_SHORT = "周";',
+      `var DEFAULT_USER_B_SHORT = "${userB.shortName || '周'}";`
+    );
     
     let sheetId = deploySheetUrl.trim();
     if (sheetId.includes('docs.google.com/spreadsheets')) {
@@ -1961,16 +2464,16 @@ export default function App() {
     if (!isBackground) setIsRateLoading(false);
   };
 
-  // 系統初始化載入與每 10 秒自動輪詢（即時匯率自動更新 + 雙人即時協同同步）
+  // 系統初始化載入與智慧按需同步（保護 Google API 配額與手機效能）
   useEffect(() => {
-    // 首次載入
+    // 1. 首次載入時抓取必要數據
     fetchLiveExchangeRates(false, false);
     fetchDashboardData(false, false);
     fetchShoppingData(false);
     fetchSplitData(true);
     fetchTravelData(true);
 
-    // 監聽連線與斷線事件
+    // 2. 監聽網路恢復在線事件：自動補送離線操作並刷新最新資料
     const handleOnline = async () => {
       setIsOnline(true);
       fetchLiveExchangeRates(false, true);
@@ -1990,49 +2493,30 @@ export default function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // 10 秒自動定時輪詢：連線中且分頁在前景時自動抓取最新匯率與試算表數據，並嘗試補送佇列
-    const autoSyncTimer = setInterval(async () => {
-      const online = typeof navigator !== 'undefined' ? navigator.onLine : true;
-      if (!online) {
-        setIsOnline(false);
-        return;
-      }
-      setIsOnline(true);
-
-      // 當頁面在前景時背景靜默同步
-      if (!document.hidden) {
-        // 如果有離線未送出佇列，嘗試自動補送
-        if (getPendingQueue().length > 0) {
-          await processSyncQueue();
-        }
-        fetchLiveExchangeRates(false, true);
-        fetchDashboardData(false, true);
-        fetchShoppingData(true);
-        fetchSplitData(true);
-        fetchTravelData(true);
-      }
-    }, 10000);
-
-    // 當使用者切換回到分頁時，立即自動同步最新資料
+    // 3. 當使用者切換回到此分頁 (前景) 時，按需自動同步最新資料（避免背景盲目輪詢浪費配額）
+    let lastVisibilitySync = Date.now();
     const handleVisibilityChange = async () => {
       if (!document.hidden) {
-        const online = typeof navigator !== 'undefined' ? navigator.onLine : true;
-        if (online) {
-          if (getPendingQueue().length > 0) {
-            await processSyncQueue();
+        const now = Date.now();
+        // 節流：回到前景時若距上次同步超過 30 秒才執行背景拉取
+        if (now - lastVisibilitySync > 30000) {
+          lastVisibilitySync = now;
+          const online = typeof navigator !== 'undefined' ? navigator.onLine : true;
+          if (online) {
+            if (getPendingQueue().length > 0) {
+              await processSyncQueue();
+            }
+            fetchDashboardData(false, true);
+            fetchShoppingData(true);
+            fetchSplitData(true);
+            fetchTravelData(true);
           }
-          fetchLiveExchangeRates(false, true);
-          fetchDashboardData(false, true);
-          fetchShoppingData(true);
-          fetchSplitData(true);
-          fetchTravelData(true);
         }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      clearInterval(autoSyncTimer);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
@@ -2123,7 +2607,7 @@ export default function App() {
       customStore: '',
       deadline: item.deadline || '儘快',
       customDeadline: '',
-      creator: (item.creator as '廖尹丞' | '周沛緹') || '廖尹丞',
+      creator: item.creator || defaultPayerName,
       status: item.status || '待購買',
       createdTime: item.createdTime || getShoppingItemDisplayTime(item) || formatAmPmTime(new Date()),
       note: item.note || ''
@@ -2267,8 +2751,9 @@ export default function App() {
   // 🛍️ 一鍵將採購品項帶入轉為代墊記帳
   const handleConvertShoppingToRecord = (item: ShoppingItem) => {
     setSelectedShoppingDetail(null);
-    const targetPayer = item.creator?.includes('周') || item.creator === '周' ? '周沛緹' : (isCurrentUserZhou ? '周沛緹' : '廖尹丞');
-    const targetSplitPayer = item.creator?.includes('周') || item.creator === '周' ? '周' : (isCurrentUserZhou ? '周' : '廖');
+    const isCreatorB = isUserBPayer(item.creator) || (item.creator ? false : isCurrentUserPartner);
+    const targetPayer = isCreatorB ? userB.name : userA.name;
+    const targetSplitPayer = isCreatorB ? userB.shortName : userA.shortName;
 
     if (appMode === 'split') {
       setSplitAddInitialData({
@@ -2406,7 +2891,7 @@ export default function App() {
       setRecords(updated);
       saveRecordsToLocal(updated);
       if (gasWebUrl) {
-        callGasApi('deleteRecord', { id });
+        callGasApi('deleteRecordByRow', { id, rowId: id });
       }
       showToast(`已撤回/刪除公積金存入紀錄「${target?.item || ''}」`, 'success');
       return true;
@@ -2445,7 +2930,7 @@ export default function App() {
       return {
         success: false,
         type: 'error',
-        replyText: '請輸入或說出記帳指令（例如：廖 1200 晚餐、存 10000 薪資、需要買 鮮奶 全聯）'
+        replyText: `請輸入或說出記帳指令（例如：${userA.shortName} 1200 晚餐、存 10000 薪資、需要買 鮮奶 全聯）`
       };
     }
 
@@ -2577,7 +3062,7 @@ export default function App() {
         const todayStr = new Date().toISOString().split('T')[0];
         const monthStr = todayStr.substring(0, 7);
         const recordData: RecordItem = {
-          id: Date.now(),
+          id: 'rec_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
           month: monthStr,
           date: todayStr,
           item: desc,
@@ -2643,10 +3128,11 @@ export default function App() {
         amt = parseFloat(expMatch[3]) || 0;
       }
 
-      const payer: '廖' | '周' = isUserBName(payerKey) ? '周' : '廖';
+      const isPayerB = isUserBName(payerKey);
+      const payer: string = isPayerB ? userB.shortName : userA.shortName;
       const debtorAmt = Math.round(amt / 2);
-      const payerDisp = payer === '廖' ? userA.displayName : userB.displayName;
-      const otherDisp = payer === '廖' ? userB.displayName : userA.displayName;
+      const payerDisp = isPayerB ? userB.displayName : userA.displayName;
+      const otherDisp = isPayerB ? userA.displayName : userB.displayName;
 
       if (amt > 0) {
         const createdSplit = await handleAddSplitRecord({
@@ -2788,7 +3274,6 @@ export default function App() {
     // 1. 載入對帳流水帳紀錄
     const isGuest = localStorage.getItem('banban_is_guest_mode') === 'true';
     const authUser = localStorage.getItem('banban_auth_user');
-    const isDbConfigured = Boolean(localStorage.getItem('muji_gas_web_url') || (typeof window !== 'undefined' && (window as any).google?.script?.run));
     const isSandbox = localStorage.getItem('banban_is_sandbox_mode') === 'true';
 
     // 訪客模式或未登入（且非沙盒測試模式）：強制數值全部歸零
@@ -2799,7 +3284,34 @@ export default function App() {
       return;
     }
 
-    const saved = localStorage.getItem('muji_ledger_data');
+    // 🛠️ DEV 沙盒模式：嚴格只載入沙盒專屬測試資料，絕不讀取或覆寫真實 Google 使用者之 muji_ledger_data
+    if (isSandbox) {
+      const sandboxSaved = localStorage.getItem('banban_dev_sandbox_records');
+      if (sandboxSaved) {
+        try {
+          const parsed = JSON.parse(sandboxSaved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setRecords(parsed);
+            setSettlementMonth(parsed[0]?.month || '2026-06');
+            return;
+          }
+        } catch (e) {}
+      }
+      setRecords(INITIAL_RECORDS);
+      setSettlementMonth('2026-06');
+      return;
+    }
+
+    let cleanEmail = '';
+    if (authUser) {
+      try {
+        const parsed = JSON.parse(authUser);
+        cleanEmail = (parsed.email || '').trim().toLowerCase();
+      } catch (e) {}
+    }
+
+    const userSaved = cleanEmail ? localStorage.getItem(`muji_ledger_data_${cleanEmail}`) : null;
+    const saved = userSaved || localStorage.getItem('muji_ledger_data');
     let loadedRecords: RecordItem[] = [];
     if (saved) {
       try {
@@ -2838,30 +3350,20 @@ export default function App() {
           }
         }
       } catch (err) {
-        if (isSandbox) {
-          loadedRecords = INITIAL_RECORDS;
-          setRecords(INITIAL_RECORDS);
-          setSettlementMonth('2026-06');
-        } else {
-          setRecords([]);
-          setSettlementMonth('');
-        }
+        setRecords([]);
+        setSettlementMonth('');
       }
-    } else if (isSandbox) {
-      loadedRecords = INITIAL_RECORDS;
-      setRecords(INITIAL_RECORDS);
-      setSettlementMonth('2026-06');
-      localStorage.setItem('muji_ledger_data', JSON.stringify(INITIAL_RECORDS));
     } else {
       setRecords([]);
       setSettlementMonth('');
     }
 
     // 2. 載入已核銷月份
-    const savedReconciled = localStorage.getItem('muji_reconciled_months');
-    if (savedReconciled) {
+    const savedReconciled = cleanEmail ? localStorage.getItem(`muji_reconciled_months_${cleanEmail}`) : null;
+    const globalReconciled = savedReconciled || localStorage.getItem('muji_reconciled_months');
+    if (globalReconciled) {
       try {
-        setReconciledMonths(JSON.parse(savedReconciled));
+        setReconciledMonths(JSON.parse(globalReconciled));
       } catch (e) {
         setReconciledMonths([]);
       }
@@ -3060,9 +3562,9 @@ export default function App() {
     }
 
     const actorEmail = meta?.actorEmail || currentUser?.email || '';
-    const actorName = meta?.actorName || currentUser?.nickname || currentUser?.name || (currentUser?.role === '廖' ? '廖尹丞' : '周沛緹');
-    const actorRole = meta?.actorRole || currentUser?.role || (actorName.includes('廖') ? '廖' : actorName.includes('周') ? '周' : undefined);
-    const targetRole = meta?.targetRole || (actorRole === '廖' ? '周' : actorRole === '周' ? '廖' : undefined);
+    const actorName = meta?.actorName || currentUser?.nickname || currentUser?.name || currentUserPersona?.displayName || userA.displayName;
+    const actorRole = meta?.actorRole || currentUser?.role || currentUserPersona?.shortName || (currentUser?.userRole === 'partner' ? userB.shortName : userA.shortName);
+    const targetRole = meta?.targetRole || (actorRole === userA.shortName ? userB.shortName : userA.shortName);
     const targetEmail = meta?.targetEmail || currentUser?.partnerEmail || '';
 
     const now = new Date();
@@ -3170,13 +3672,37 @@ export default function App() {
   // 儲存已核銷月份到本機
   const saveReconciledToLocal = (newReconciled: string[]) => {
     setReconciledMonths(newReconciled);
-    localStorage.setItem('muji_reconciled_months', JSON.stringify(newReconciled));
+    const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+    if (isSandboxMode) {
+      try {
+        localStorage.setItem('banban_dev_sandbox_reconciled_months', JSON.stringify(newReconciled));
+      } catch (e) {}
+    } else {
+      try {
+        localStorage.setItem('muji_reconciled_months', JSON.stringify(newReconciled));
+        if (cleanEmail) {
+          localStorage.setItem(`muji_reconciled_months_${cleanEmail}`, JSON.stringify(newReconciled));
+        }
+      } catch (e) {}
+    }
   };
 
   // 儲存至本機
   const saveRecordsToLocal = (newRecords: RecordItem[]) => {
     setRecords(newRecords);
-    localStorage.setItem('muji_ledger_data', JSON.stringify(newRecords));
+    const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+    if (isSandboxMode) {
+      try {
+        localStorage.setItem('banban_dev_sandbox_records', JSON.stringify(newRecords));
+      } catch (e) {}
+    } else {
+      try {
+        localStorage.setItem('muji_ledger_data', JSON.stringify(newRecords));
+        if (cleanEmail) {
+          localStorage.setItem(`muji_ledger_data_${cleanEmail}`, JSON.stringify(newRecords));
+        }
+      } catch (e) {}
+    }
   };
 
   // 觸發 Toast 通知
@@ -3211,7 +3737,7 @@ export default function App() {
     const mockTimestamp = `${nowObj.getFullYear()}-${pad(nowObj.getMonth() + 1)}-${pad(nowObj.getDate())} ${pad(nowObj.getHours())}:${pad(nowObj.getMinutes())}:${pad(nowObj.getSeconds())}`;
 
     const recordData: RecordItem = {
-      id: editingRecord ? editingRecord.id : Date.now(),
+      id: editingRecord ? editingRecord.id : ('rec_' + Date.now() + '_' + Math.floor(Math.random() * 10000)),
       month: monthStr,
       date: selectedDateStr,
       item: formData.item.trim(),
@@ -3431,14 +3957,19 @@ export default function App() {
     // 剩餘的總公積金 (核銷過後的已從總公積金中扣掉)
     const remainingPool = overallStats.diff;
 
-    // 算赤字 (分析的母數改為剩餘的總公積金以判斷該月份超支狀況)
+    // 計算各月份收支平衡狀況（若該月為待核銷且支出超出公積金總底池，則標註赤字金額）
     Object.keys(stats).forEach(m => {
-      const diff = stats[m].expenses - remainingPool;
-      stats[m].deficit = diff > 0 ? diff : 0;
+      const isReconciled = isMonthReconciled(m, reconciledMonths);
+      if (isReconciled) {
+        stats[m].deficit = 0;
+      } else {
+        const diff = stats[m].expenses - remainingPool;
+        stats[m].deficit = diff > 0 ? diff : 0;
+      }
     });
 
     return stats;
-  }, [records, overallStats.diff]);
+  }, [records, overallStats.diff, reconciledMonths]);
 
   // 新增：首頁整合數據統計
   const homeStats = React.useMemo(() => {
@@ -3569,6 +4100,51 @@ export default function App() {
     );
   }
 
+  // 🛡️ 初次登入強制引導小精靈 Gatekeeper（角色判定與資料庫綁定攔截）
+  // 只要是已登入的真實使用者，且資料庫尚未綁定（且不在沙盒模式與訪客模式下），且雲端配置已檢索完畢，
+  // 必須強制停留在小精靈中完成管理者 API 綁定或伴侶邀請碼輸入，鎖定帳號模式後方可進入主系統。
+  if (currentUser && !isDbConnected && !isGuestMode && !isSandboxMode && !isCheckingCloudConfig) {
+    return (
+      <div className="min-h-screen bg-[#F8F7F3] flex flex-col justify-center items-center p-4">
+        {/* 背景光暈 */}
+        <div className="absolute top-0 left-0 w-full h-[500px] bg-gradient-to-b from-[#F2EFE7] to-transparent opacity-40 pointer-events-none -z-10" />
+
+        <UnifiedDatabaseModal
+          isOpen={true}
+          onClose={() => {
+            // 強制模式下無法由點擊關閉按鈕退出，但若已連線則自動放行
+          }}
+          isForcedOnboarding={true}
+          onCompleteOnboarding={() => {
+            fetchDashboardData(true, false);
+            fetchShoppingData(false);
+            fetchSplitData(true);
+            fetchTravelData(true);
+          }}
+          currentUser={currentUser}
+          gasWebUrl={gasWebUrl}
+          setGasWebUrl={setGasWebUrl}
+          deploySheetUrl={deploySheetUrl}
+          setDeploySheetUrl={setDeploySheetUrl}
+          saveDeployConfig={saveDeployConfig}
+          customizedCodeGs={getCustomizedCodeGs()}
+          currentInviteCode={currentInviteCode}
+          onGenerateNewInviteCode={handleGenerateNewInviteCode}
+          onCopyInviteShare={handleCopyInviteShare}
+          onBindPartnerInvite={handleBindPartnerInvite}
+          partnerBindingInfo={partnerBindingInfo}
+          onUnbindPartner={handleUnbindPartner}
+          onResetAccountDatabase={handleResetAccountDatabase}
+          isSandboxMode={isSandboxMode}
+          onToggleSandboxMode={handleToggleSandboxMode}
+          initialTab="wizard"
+          initialWizardRole={unifiedDatabaseRole}
+          onLogout={handleLogout}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen text-[#3E3A36] font-sans flex flex-col bg-[#F8F7F3] relative overflow-x-hidden antialiased selection:bg-[#E4DFD3] selection:text-[#3E3A36]">
       {/* 淡淡的無印木質感、日系暖色調背景光波 */}
@@ -3601,6 +4177,7 @@ export default function App() {
         currentUser={currentUser}
         isSandboxMode={isSandboxMode}
         gasWebUrl={gasWebUrl}
+        onOpenDevSettings={() => setIsDevSettingsModalOpen(true)}
       />
 
 
@@ -4119,7 +4696,7 @@ export default function App() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="搜尋項目名稱、金額、代墊者 (例如: 全聯、廖尹丞、300)..."
+                    placeholder={`搜尋項目名稱、金額、代墊者 (例如: 全聯、${userA.name}、300)...`}
                     className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-white/80 border border-[#DDD9CE] text-xs text-[#3E3A36] placeholder-[#A39E92] focus:outline-none focus:border-[#8C8475] focus:bg-white transition-all shadow-2xs"
                   />
                   {searchQuery && (
@@ -4234,8 +4811,8 @@ export default function App() {
 
                   const expSum = filtered.filter(r => r.type.includes('支出')).reduce((acc, r) => acc + r.amount, 0);
                   const incSum = filtered.filter(r => r.type.includes('收入')).reduce((acc, r) => acc + r.amount, 0);
-                  const liaoAdv = filtered.filter(r => r.type.includes('支出') && (r.payer.includes('廖') || r.payer === '廖')).reduce((acc, r) => acc + r.amount, 0);
-                  const zhouAdv = filtered.filter(r => r.type.includes('支出') && (r.payer.includes('周') || r.payer === '周')).reduce((acc, r) => acc + r.amount, 0);
+                  const liaoAdv = filtered.filter(r => r.type.includes('支出') && isUserAPayer(r.payer)).reduce((acc, r) => acc + r.amount, 0);
+                  const zhouAdv = filtered.filter(r => r.type.includes('支出') && isUserBPayer(r.payer)).reduce((acc, r) => acc + r.amount, 0);
                   const hasActiveFilters = selectedMonth !== 'all' || selectedPayer !== 'all' || selectedDate !== 'all' || searchQuery;
 
                   return (
@@ -4250,11 +4827,11 @@ export default function App() {
                           <span className="font-sans tabular-nums font-bold text-rose-900">NT$ {(Number(expSum) || 0).toLocaleString()}</span>
                         </div>
                         <div className="bg-sky-50/60 p-2.5 rounded-xl border border-sky-200/60 flex flex-col">
-                          <span className="text-[10px] text-sky-800 font-semibold">廖代墊小計</span>
+                          <span className="text-[10px] text-sky-800 font-semibold">{userA.displayName}代墊小計</span>
                           <span className="font-sans tabular-nums font-bold text-sky-900">NT$ {(Number(liaoAdv) || 0).toLocaleString()}</span>
                         </div>
                         <div className="bg-amber-50/60 p-2.5 rounded-xl border border-amber-200/60 flex flex-col">
-                          <span className="text-[10px] text-amber-800 font-semibold">周代墊小計</span>
+                          <span className="text-[10px] text-amber-800 font-semibold">{userB.displayName}代墊小計</span>
                           <span className="font-sans tabular-nums font-bold text-amber-900">NT$ {(Number(zhouAdv) || 0).toLocaleString()}</span>
                         </div>
                       </div>
@@ -4943,7 +5520,7 @@ export default function App() {
                           deadline: '儘快',
                           customDeadline: '',
                           status: '待購買',
-                          creator: '廖尹丞',
+                          creator: defaultPayerName,
                           createdTime: '',
                           note: ''
                         });
@@ -5280,12 +5857,12 @@ export default function App() {
                         className="cursor-pointer transition-all active:scale-95"
                         title="點擊開啟結算對帳"
                       >
-                        {splitSummary?.netDebtor === '周' ? (
+                        {isUserBPayer(splitSummary?.netDebtor) ? (
                           <span className="bg-rose-500/25 hover:bg-rose-500/40 text-rose-200 border border-rose-500/40 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex items-center gap-1">
                             <span>{userB.shortName}應還{userA.shortName}</span>
                             <span className="font-sans tabular-nums text-white">$ {(Number(splitSummary?.netAmount) || 0).toLocaleString()}</span>
                           </span>
-                        ) : splitSummary?.netDebtor === '廖' ? (
+                        ) : isUserAPayer(splitSummary?.netDebtor) ? (
                           <span className="bg-amber-500/25 hover:bg-amber-500/40 text-amber-200 border border-amber-500/40 px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap flex items-center gap-1">
                             <span>{userA.shortName}應還{userB.shortName}</span>
                             <span className="font-sans tabular-nums text-white">$ {(Number(splitSummary?.netAmount) || 0).toLocaleString()}</span>
@@ -5422,6 +5999,10 @@ export default function App() {
         pendingQueueCount={pendingSyncQueue.length}
         isOnline={isOnline}
         lastSyncedAt={lastSyncedAt}
+        notifySettings={appNotifySettings}
+        setAllNotifySettings={setAllAppNotifySettings}
+        toggleNotifySetting={toggleAppNotifySetting}
+        onTestNotification={handleTestInAppNotify}
       />
 
       {/* 進入網頁時的超支/省錢警告通知彈窗 */}
@@ -5458,7 +6039,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* 底部功能列 Floating Dock */}
+      {/* 底部功能列 Floating Dock (含更多設定入口) */}
       <FloatingDock
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -5472,6 +6053,8 @@ export default function App() {
         }}
         unsettledCount={splitSummary.unsettledCount}
         pendingShoppingCount={shoppingItems.filter(i => i.status === '待購買').length}
+        onOpenSettings={() => setIsUnifiedSettingsModalOpen(true)}
+        hasSettingsAlert={!gasWebUrl || pendingSyncQueue.length > 0}
       />
 
       {/* 💳 代墊分帳專屬 Modals */}
@@ -5609,6 +6192,8 @@ export default function App() {
           onRestoreData={handleRestoreData}
           onSyncAll={handleSyncAll}
           isSyncing={isSyncingGas}
+          isAdmin={!(currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail))}
+          isPartner={currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail)}
         />
 
         {/* 📱 PWA 手機桌面安裝與引導 Modal */}
@@ -5663,10 +6248,23 @@ export default function App() {
           onBindPartnerInvite={handleBindPartnerInvite}
           partnerBindingInfo={partnerBindingInfo}
           onUnbindPartner={handleUnbindPartner}
+          onResetAccountDatabase={handleResetAccountDatabase}
           isSandboxMode={isSandboxMode}
           onToggleSandboxMode={handleToggleSandboxMode}
           initialTab={unifiedDatabaseTab}
           initialWizardRole={unifiedDatabaseRole}
+        />
+
+        {/* 🛠️ 系統整體設定與開發控制中心 Modal */}
+        <DeveloperSettingsModal
+          isOpen={isDevSettingsModalOpen}
+          onClose={() => setIsDevSettingsModalOpen(false)}
+          currentUser={currentUser}
+          onResetDevData={handleResetDevData}
+          onSeedSampleData={handleSeedSampleData}
+          onExitDevMode={handleExitDevMode}
+          onSyncToProduction={handleSyncToProduction}
+          isProductionReady={isProductionReady}
         />
 
 

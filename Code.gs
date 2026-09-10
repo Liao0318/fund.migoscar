@@ -200,7 +200,7 @@ function setupDatabase() {
   };
 
   var sheetsDef = [
-    { name: "流水帳資料庫", headers: ["月份", "日期", "項目", "出錢人", "出錢金額", "類型", "時間戳記"] },
+    { name: "流水帳資料庫", headers: ["ID", "月份", "日期", "項目", "出錢人", "出錢金額", "類型", "時間戳記"] },
     { name: "月度核銷狀態", headers: ["月份", "已撥款核銷"] },
     { name: "代墊明細", headers: ["ID", "時間", "代墊人", "分帳模式", "項目描述", "總金額", "分帳結果", "狀態", "結清時間", "備註"] },
     { name: "購物清單", headers: ["ID", "分類", "品項名稱", "購買地點", "預計購買日期", "狀態", "建立者", "建立時間", "備註細項"] },
@@ -217,6 +217,31 @@ function setupDatabase() {
       headerStyle(sh, def.headers);
     }
   });
+
+  // 檢查既有流水帳資料庫是否需要升級 ID 欄位 (若首欄仍為「月份」則自動插入 ID 欄位)
+  try {
+    var flowSheet = ss.getSheetByName("流水帳資料庫");
+    if (flowSheet && flowSheet.getLastRow() >= 1) {
+      var firstHeader = String(flowSheet.getRange(1, 1).getValue() || "").trim();
+      if (firstHeader === "月份") {
+        flowSheet.insertColumnBefore(1);
+        flowSheet.getRange(1, 1).setValue("ID")
+          .setBackground("#F4F1EA")
+          .setFontColor("#3E3A36")
+          .setFontWeight("bold")
+          .setHorizontalAlignment("center");
+        
+        var totalRows = flowSheet.getLastRow();
+        if (totalRows > 1) {
+          var idColValues = [];
+          for (var r = 2; r <= totalRows; r++) {
+            idColValues.push(["rec_" + new Date().getTime() + "_" + Math.floor(Math.random() * 10000) + "_" + r]);
+          }
+          flowSheet.getRange(2, 1, totalRows - 1, 1).setValues(idColValues);
+        }
+      }
+    }
+  } catch (migErr) {}
 
   return "所有 8 張工作表初始化已就緒！";
 }
@@ -266,26 +291,45 @@ function getDashboardData() {
 
     if (lastRow <= 1) return response;
 
-    var values = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    var maxCols = Math.max(sheet.getLastColumn(), 8);
+    var values = sheet.getRange(2, 1, lastRow - 1, maxCols).getValues();
+    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
+    var hasIdCol = (firstHeader === "ID");
+
     var liaoTotal = 0;
     var zhouTotal = 0;
     var recordsList = [];
 
     for (var i = values.length - 1; i >= 0; i--) {
       var row = values[i];
-      var monthVal = row[0];
+      var idVal, monthVal, dateVal, item, payer, amount, type, timestampVal;
+
+      if (hasIdCol) {
+        idVal = String(row[0] || ("rec_" + (i + 2)));
+        monthVal = row[1];
+        dateVal = row[2];
+        item = String(row[3] || "");
+        payer = String(row[4] || "");
+        amount = parseFloat(row[5]) || 0;
+        type = String(row[6] || "");
+        timestampVal = row[7];
+      } else {
+        idVal = i + 2;
+        monthVal = row[0];
+        dateVal = row[1];
+        item = String(row[2] || "");
+        payer = String(row[3] || "");
+        amount = parseFloat(row[4]) || 0;
+        type = String(row[5] || "");
+        timestampVal = row[6];
+      }
+
       var month = monthVal instanceof Date ? Utilities.formatDate(monthVal, "GMT+8", "yyyy-MM") : String(monthVal || "").substring(0, 7);
-      var dateVal = row[1];
       var dateStr = dateVal instanceof Date ? Utilities.formatDate(dateVal, "GMT+8", "yyyy-MM-dd") : String(dateVal || (month ? month + "-01" : ""));
-      var item = String(row[2] || "");
-      var payer = String(row[3] || "");
-      var amount = parseFloat(row[4]) || 0;
-      var type = String(row[5] || "");
-      var timestampVal = row[6];
       var timestampStr = timestampVal ? (timestampVal instanceof Date ? formatAmPmTime(timestampVal) : String(timestampVal)) : dateStr + " 上午 12:00";
 
       recordsList.push({
-        id: i + 2,
+        id: idVal,
         month: month,
         date: dateStr,
         item: item,
@@ -336,6 +380,10 @@ function getReconciledMonthsFromSheet() {
 
 function addRecord(data) {
   var sheet = getDbSheet();
+  var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
+  var hasIdCol = (firstHeader === "ID");
+
+  var id = String(data.id || ("rec_" + new Date().getTime() + "_" + Math.floor(Math.random() * 10000)));
   var month = data.month || (data.date ? data.date.substring(0, 7) : Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM"));
   var date = data.date || Utilities.formatDate(new Date(), "GMT+8", "yyyy-MM-dd");
   var item = data.item || "未命名項目";
@@ -344,30 +392,108 @@ function addRecord(data) {
   var type = data.type || "支出";
   var timestamp = formatAmPmTime(new Date());
 
-  sheet.appendRow([month, date, item, payer, amount, type, timestamp]);
-  return { success: true, id: sheet.getLastRow() };
+  if (hasIdCol) {
+    sheet.appendRow([id, month, date, item, payer, amount, type, timestamp]);
+  } else {
+    sheet.appendRow([month, date, item, payer, amount, type, timestamp]);
+  }
+  return { success: true, id: id };
 }
 
 function updateRecordByRow(data) {
   var sheet = getDbSheet();
-  var row = parseInt(data.id || data.rowId, 10);
-  if (!row || row < 2) throw new Error("無效的行號 ID");
+  var targetId = String(data.id || data.rowId || "");
+  if (!targetId) throw new Error("無效的紀錄識別碼 ID");
 
-  if (data.month) sheet.getRange(row, 1).setValue(data.month);
-  if (data.date) sheet.getRange(row, 2).setValue(data.date);
-  if (data.item) sheet.getRange(row, 3).setValue(data.item);
-  if (data.payer) sheet.getRange(row, 4).setValue(data.payer);
-  if (data.amount !== undefined) sheet.getRange(row, 5).setValue(parseFloat(data.amount) || 0);
-  if (data.type) sheet.getRange(row, 6).setValue(data.type);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) throw new Error("資料庫目前沒有任何紀錄可供更新");
+
+  var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
+  var hasIdCol = (firstHeader === "ID");
+
+  var foundRow = -1;
+  var values = sheet.getRange(2, 1, lastRow - 1, hasIdCol ? 8 : 7).getValues();
+
+  for (var i = 0; i < values.length; i++) {
+    var physicalRow = i + 2;
+    if (hasIdCol) {
+      if (String(values[i][0]).trim() === targetId) {
+        foundRow = physicalRow;
+        break;
+      }
+    } else {
+      if (String(physicalRow) === targetId) {
+        foundRow = physicalRow;
+        break;
+      }
+    }
+  }
+
+  // 若依 UUID 沒找到且 targetId 為純數字，相容作為實體行號比對
+  if (foundRow === -1 && /^\d+$/.test(targetId)) {
+    var rowNum = parseInt(targetId, 10);
+    if (rowNum >= 2 && rowNum <= lastRow) {
+      foundRow = rowNum;
+    }
+  }
+
+  if (foundRow === -1) {
+    throw new Error("找不到對應識別碼的記帳紀錄: " + targetId);
+  }
+
+  var colOffset = hasIdCol ? 1 : 0;
+  if (data.month) sheet.getRange(foundRow, 1 + colOffset).setValue(data.month);
+  if (data.date) sheet.getRange(foundRow, 2 + colOffset).setValue(data.date);
+  if (data.item) sheet.getRange(foundRow, 3 + colOffset).setValue(data.item);
+  if (data.payer) sheet.getRange(foundRow, 4 + colOffset).setValue(data.payer);
+  if (data.amount !== undefined) sheet.getRange(foundRow, 5 + colOffset).setValue(parseFloat(data.amount) || 0);
+  if (data.type) sheet.getRange(foundRow, 6 + colOffset).setValue(data.type);
 
   return { success: true };
 }
 
 function deleteRecordByRow(data) {
   var sheet = getDbSheet();
-  var row = parseInt(data.id || data.rowId, 10);
-  if (!row || row < 2) throw new Error("無效的行號 ID");
-  sheet.deleteRow(row);
+  var targetId = String(typeof data === "object" ? (data.id || data.rowId || "") : data).trim();
+  if (!targetId) throw new Error("無效的紀錄識別碼 ID");
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) throw new Error("資料庫目前沒有任何紀錄可供刪除");
+
+  var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
+  var hasIdCol = (firstHeader === "ID");
+
+  var foundRow = -1;
+  var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+
+  for (var i = 0; i < values.length; i++) {
+    var physicalRow = i + 2;
+    if (hasIdCol) {
+      if (String(values[i][0]).trim() === targetId) {
+        foundRow = physicalRow;
+        break;
+      }
+    } else {
+      if (String(physicalRow) === targetId) {
+        foundRow = physicalRow;
+        break;
+      }
+    }
+  }
+
+  // 若依 UUID 沒找到且 targetId 為純數字，相容作為實體行號比對
+  if (foundRow === -1 && /^\d+$/.test(targetId)) {
+    var rowNum = parseInt(targetId, 10);
+    if (rowNum >= 2 && rowNum <= lastRow) {
+      foundRow = rowNum;
+    }
+  }
+
+  if (foundRow === -1) {
+    throw new Error("找不到欲刪除的紀錄 (ID: " + targetId + ")");
+  }
+
+  sheet.deleteRow(foundRow);
   return { success: true };
 }
 
