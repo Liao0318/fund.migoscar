@@ -53,8 +53,13 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
     nickname2Char: config.nickname2Char !== undefined ? config.nickname2Char : existing.nickname2Char,
     nicknameLengthPreference: config.nicknameLengthPreference !== undefined ? config.nicknameLengthPreference : existing.nicknameLengthPreference,
     avatar: config.avatar !== undefined ? config.avatar : (existing.avatar || ''),
-    gasWebUrl: config.gasWebUrl !== undefined ? config.gasWebUrl : (existing.gasWebUrl || ''),
-    deploySheetUrl: config.deploySheetUrl !== undefined ? config.deploySheetUrl : (existing.deploySheetUrl || ''),
+    // 🛡️ 防誤清機制：若傳入為空字串，但既有已有有效網址時，嚴格保留既有網址，避免意外被重置為空
+    gasWebUrl: (config.gasWebUrl && config.gasWebUrl.trim().startsWith('http')) 
+      ? config.gasWebUrl.trim() 
+      : (config.gasWebUrl === '' && (config as any).forceClear ? '' : (existing.gasWebUrl || '')),
+    deploySheetUrl: (config.deploySheetUrl && config.deploySheetUrl.trim().startsWith('http')) 
+      ? config.deploySheetUrl.trim() 
+      : (config.deploySheetUrl === '' && (config as any).forceClear ? '' : (existing.deploySheetUrl || '')),
     inviteCode: config.inviteCode !== undefined ? config.inviteCode : (existing.inviteCode || ''),
     notifySettings: config.notifySettings !== undefined ? config.notifySettings : existing.notifySettings,
     calcBaseCurrency: config.calcBaseCurrency !== undefined ? config.calcBaseCurrency : existing.calcBaseCurrency,
@@ -90,8 +95,19 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
       const userRef = doc(db, 'user_configs', cleanEmail);
       const snapshot = await getDoc(userRef);
       if (snapshot.exists()) {
-        const cloudData = snapshot.data() as UserCloudConfig;
+        let cloudData = snapshot.data() as UserCloudConfig;
         if (cloudData) {
+          // 🛡️ 自動修復：若雲端紀錄缺失 gasWebUrl，嘗試尋找本地既有設定補齊並同步
+          if (!cloudData.gasWebUrl) {
+            const localGas = (cleanEmail ? localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) : '') || localStorage.getItem('muji_gas_web_url') || '';
+            const localSheet = (cleanEmail ? localStorage.getItem(`muji_sheet_url_${cleanEmail}`) : '') || localStorage.getItem('muji_sheet_url') || '';
+            if (localGas && localGas.trim().startsWith('http')) {
+              cloudData.gasWebUrl = localGas.trim();
+              cloudData.deploySheetUrl = localSheet.trim();
+              // 異步同步至雲端補齊
+              setDoc(userRef, { gasWebUrl: cloudData.gasWebUrl, deploySheetUrl: cloudData.deploySheetUrl }, { merge: true }).catch(() => {});
+            }
+          }
           // 同步快取至本地
           try {
             localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(cloudData));

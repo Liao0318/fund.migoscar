@@ -359,6 +359,11 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     try {
       localStorage.setItem('muji_gas_web_url', cleanGas);
       localStorage.setItem('muji_sheet_url', cleanSheet);
+      const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+      if (cleanEmail) {
+        localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cleanGas);
+        localStorage.setItem(`muji_sheet_url_${cleanEmail}`, cleanSheet);
+      }
     } catch (e) {}
 
     saveDeployConfig(cleanGas, cleanSheet);

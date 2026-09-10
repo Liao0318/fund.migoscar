@@ -25,7 +25,7 @@ import {
   signInWithGooglePopup, 
   requestGoogleOAuthToken
 } from '../../utils/googleOAuthService';
-import { fetchPartnerBindingInfoOnline } from '../../utils/partnerInvite';
+import { fetchPartnerBindingInfoOnline, getActiveInviteCode } from '../../utils/partnerInvite';
 import { getUserCloudConfig } from '../../utils/userConfigService';
 
 interface GoogleAuthPortalProps {
@@ -83,10 +83,29 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
     let savedNickname = '';
     const cleanEmail = (rawUser.email || '').trim().toLowerCase();
 
-    // 1. 本地讀取綁定的專屬暱稱
+    // 1. 本地讀取綁定的專屬暱稱與既有資料庫設定（多層備援，確保同裝置登入零遺失）
     try {
       if (cleanEmail) {
         savedNickname = localStorage.getItem(`banban_user_nickname_${cleanEmail}`) || '';
+        const userGas = localStorage.getItem(`muji_gas_web_url_${cleanEmail}`);
+        const userSheet = localStorage.getItem(`muji_sheet_url_${cleanEmail}`);
+        if (userGas && userGas.trim().startsWith('http')) {
+          cloudGas = userGas.trim();
+        }
+        if (userSheet) {
+          cloudSheet = userSheet.trim();
+        }
+      }
+      // 若無用戶專屬金鑰，讀取本機現存之全域金鑰備援（同裝置已綁定之資料庫）
+      if (!cloudGas) {
+        const fallbackGas = localStorage.getItem('muji_gas_web_url');
+        const fallbackSheet = localStorage.getItem('muji_sheet_url');
+        if (fallbackGas && fallbackGas.trim().startsWith('http')) {
+          cloudGas = fallbackGas.trim();
+        }
+        if (fallbackSheet) {
+          cloudSheet = fallbackSheet.trim();
+        }
       }
     } catch (e) {}
 
@@ -94,8 +113,12 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
     try {
       const existingConfig = await getUserCloudConfig(rawUser.email);
       if (existingConfig) {
-        cloudGas = existingConfig.gasWebUrl || '';
-        cloudSheet = existingConfig.deploySheetUrl || '';
+        if (existingConfig.gasWebUrl && existingConfig.gasWebUrl.trim().startsWith('http')) {
+          cloudGas = existingConfig.gasWebUrl.trim();
+        }
+        if (existingConfig.deploySheetUrl) {
+          cloudSheet = existingConfig.deploySheetUrl.trim();
+        }
         if (existingConfig.nickname) {
           savedNickname = existingConfig.nickname;
           if (cleanEmail) {
@@ -106,12 +129,21 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
         }
       }
       
-      // 若為換機伴侶登入，且個人設定尚無 GAS，自動透過配對資訊補齊連線金鑰
+      // 若尚未取得，自動查詢情侶配對紀錄（伴侶或管理者換機同步）
       if (!cloudGas && cleanEmail) {
         const partnerBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
-        if (partnerBinding && partnerBinding.gasWebUrl) {
-          cloudGas = partnerBinding.gasWebUrl;
+        if (partnerBinding && partnerBinding.gasWebUrl && partnerBinding.gasWebUrl.trim().startsWith('http')) {
+          cloudGas = partnerBinding.gasWebUrl.trim();
           cloudSheet = partnerBinding.deploySheetUrl || '';
+        }
+      }
+
+      // 若尚未取得，反查本機或註冊表中的管理員邀請碼
+      if (!cloudGas && cleanEmail) {
+        const activeInvite = getActiveInviteCode();
+        if (activeInvite && activeInvite.adminEmail?.toLowerCase() === cleanEmail && activeInvite.gasWebUrl) {
+          cloudGas = activeInvite.gasWebUrl.trim();
+          cloudSheet = activeInvite.deploySheetUrl || '';
         }
       }
     } catch (e) {

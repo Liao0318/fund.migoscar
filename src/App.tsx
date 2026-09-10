@@ -724,6 +724,12 @@ export default function App() {
     const cleanEmail = (user.email || '').trim().toLowerCase();
     const previousEmail = (currentUser?.email || '').trim().toLowerCase();
 
+    // 🛡️ 登入前保護：先擷取此裝置目前現存的所有可能資料庫設定備援，避免被清除抹除
+    const cachedDeviceGas = (localStorage.getItem('muji_gas_web_url') || '').trim();
+    const cachedDeviceSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
+    const cachedPerUserGas = cleanEmail ? (localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) || '').trim() : '';
+    const cachedPerUserSheet = cleanEmail ? (localStorage.getItem(`muji_sheet_url_${cleanEmail}`) || '').trim() : '';
+
     // 🛡️ 徹底隔離：每次 Google 帳號登入或切換時，先清空所有記憶體中的記帳與資料庫狀態，避免舊帳號數據滲漏
     setRecords([]);
     setSplitItems([]);
@@ -732,11 +738,8 @@ export default function App() {
     setDeploySheetUrl('');
     setPartnerBindingInfo(null);
 
-    // 清除舊有的未依帳號隔離之暫存，避免跨帳號交叉感染
+    // 清除舊有的未依帳號隔離之業務資料暫存，避免跨帳號交叉感染
     try {
-      localStorage.removeItem('muji_gas_web_url');
-      localStorage.removeItem('muji_sheet_url');
-      localStorage.removeItem('muji_deploy_sheet_url');
       localStorage.removeItem('muji_ledger_data');
       localStorage.removeItem('banban_split_records');
       localStorage.removeItem('banban_shopping_items');
@@ -935,10 +938,15 @@ export default function App() {
       }
     } catch (e) {}
 
-    // 3. 檢查此帳號先前是否曾自行建立過 API 資料庫 (主管理員)
-    // 嚴格隔離：僅讀取依 cleanEmail 專屬設定，絕不讀取其他帳號的快取！
-    let activeGas = initialCloudGasUrl || (cleanEmail ? localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) : '') || '';
-    let activeSheet = initialCloudSheetUrl || (cleanEmail ? localStorage.getItem(`muji_sheet_url_${cleanEmail}`) : '') || '';
+    // 3. 檢查此帳號先前是否曾建立過 API 資料庫 (主管理員) 或同裝置曾綁定資料庫
+    let activeGas = initialCloudGasUrl || cachedPerUserGas || '';
+    let activeSheet = initialCloudSheetUrl || cachedPerUserSheet || '';
+
+    // 若本地專屬尚未取得，嘗試載入本機既有裝置設定（避免同電腦切換或登出後重登變新帳戶）
+    if (!activeGas && cachedDeviceGas && cachedDeviceGas.startsWith('http')) {
+      activeGas = cachedDeviceGas;
+      activeSheet = cachedDeviceSheet || '';
+    }
 
     try {
       const cloudConfig = await getUserCloudConfig(user.email);
@@ -955,29 +963,73 @@ export default function App() {
         // 🛡️ 雲端 gasWebUrl 載入校驗：確保使用者換機登入時直接載入自己綁定的資料庫
         if (cloudConfig.gasWebUrl && cloudConfig.gasWebUrl.startsWith('http')) {
           activeGas = cloudConfig.gasWebUrl;
-          activeSheet = cloudConfig.deploySheetUrl || '';
-          setGasWebUrl(activeGas);
-          setDeploySheetUrl(activeSheet);
-          try {
-            localStorage.setItem('muji_gas_web_url', activeGas);
-            localStorage.setItem('muji_sheet_url', activeSheet);
-            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
-            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
-          } catch (e) {}
-          if (cloudConfig.inviteCode) {
-            setCurrentInviteCode(cloudConfig.inviteCode);
-          }
+          activeSheet = cloudConfig.deploySheetUrl || activeSheet || '';
+        }
+        if (cloudConfig.inviteCode) {
+          setCurrentInviteCode(cloudConfig.inviteCode);
         }
       }
     } catch (err) {
       console.warn('Failed to retrieve user cloud config on login:', err);
     }
 
+    // 🛡️ 雙重保險備援 1：向 Firestore 情侶綁定紀錄反查此 Email 是否已配對或本身已綁定資料庫
+    if (!activeGas && cleanEmail) {
+      try {
+        const partnerBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
+        if (partnerBinding && partnerBinding.gasWebUrl && partnerBinding.gasWebUrl.startsWith('http')) {
+          activeGas = partnerBinding.gasWebUrl;
+          activeSheet = partnerBinding.deploySheetUrl || activeSheet || '';
+          setPartnerBindingInfo(partnerBinding);
+        }
+      } catch (e) {}
+    }
+
+    // 🛡️ 雙重保險備援 2：向邀請碼註冊表與雲端反查此 Email 是否曾建立過專屬邀請與資料庫
+    if (!activeGas && cleanEmail) {
+      try {
+        const activeInvite = getActiveInviteCode();
+        if (activeInvite && activeInvite.adminEmail?.toLowerCase() === cleanEmail && activeInvite.gasWebUrl && activeInvite.gasWebUrl.startsWith('http')) {
+          activeGas = activeInvite.gasWebUrl;
+          activeSheet = activeInvite.deploySheetUrl || activeSheet || '';
+          if (activeInvite.inviteCode) {
+            setCurrentInviteCode(activeInvite.inviteCode);
+          }
+        } else {
+          const onlineInvite = await fetchInviteCodeOnline(cleanEmail);
+          if (onlineInvite && onlineInvite.gasWebUrl && onlineInvite.gasWebUrl.startsWith('http')) {
+            activeGas = onlineInvite.gasWebUrl;
+            activeSheet = onlineInvite.deploySheetUrl || activeSheet || '';
+            if (onlineInvite.inviteCode) {
+              setCurrentInviteCode(onlineInvite.inviteCode);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
     // 若此帳號確實已建立過專屬 API 資料庫
     if (activeGas && activeGas.startsWith('http') && !partnerInvite) {
       const displayWelcomeName = boundNickname || user.name;
-      showToast(`👑 歡迎回來，${displayWelcomeName}！已載入 Google 帳號設定`, 'success');
-      
+      setGasWebUrl(activeGas);
+      setDeploySheetUrl(activeSheet);
+
+      // 同步鞏固寫入本地所有隔離與全域快取
+      try {
+        localStorage.setItem('muji_gas_web_url', activeGas);
+        localStorage.setItem('muji_sheet_url', activeSheet);
+        if (cleanEmail) {
+          localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+          localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+        }
+      } catch (e) {}
+
+      // 自動同步確保雲端個人資料庫設定永久完備
+      saveUserCloudConfig(user.email, {
+        gasWebUrl: activeGas,
+        deploySheetUrl: activeSheet
+      });
+
       const adminUser: AuthUser = {
         ...cleanUser,
         userRole: 'admin',
@@ -985,17 +1037,19 @@ export default function App() {
       };
       setCurrentUser(adminUser);
 
-      fetchDashboardData(false, false);
+      try {
+        localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
+        localStorage.setItem('banban_is_sandbox_mode', 'false');
+      } catch (e) {}
+
+      showToast(`👑 歡迎回來，${displayWelcomeName}！已載入 Google 帳號設定與專屬資料庫`, 'success');
+
+      fetchDashboardData(true, false);
       fetchShoppingData(false);
       fetchSplitData(true);
       fetchTravelData(true);
 
       setIsCheckingCloudConfig(false);
-
-      try {
-        localStorage.setItem('banban_auth_user', JSON.stringify(adminUser));
-        localStorage.setItem('banban_is_sandbox_mode', 'false');
-      } catch (e) {}
       return;
     } else {
       // 4. 初次或全新獨立帳號：徹底初始化全新系統資料，數值全部為空，並彈出引導小精靈！
