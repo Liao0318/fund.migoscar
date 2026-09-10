@@ -108,30 +108,21 @@ export const FloatingDock: React.FC<FloatingDockProps> = ({
         )}
       </button>
 
-      {/* Tab 4: 更多設定 (或是結算對帳，可依設計導向設定中心或切換) */}
+      {/* Tab 4: 公積金銷帳 / 代墊對帳結算 */}
       <button 
         type="button"
-        onClick={() => {
-          if (onOpenSettings) {
-            onOpenSettings();
-          } else {
-            setActiveTab('settlement');
-          }
-        }}
+        onClick={() => setActiveTab('settlement')}
         className={`flex flex-col items-center justify-center gap-0.5 sm:gap-1 transition-all duration-200 cursor-pointer w-full py-1 relative ${
           activeTab === 'settlement'
-            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-[#8C8475] scale-105 font-bold') 
+            ? (appMode === 'split' ? 'text-rose-600 scale-105 font-bold' : 'text-emerald-700 scale-105 font-bold') 
             : 'text-[#A39E92] hover:text-[#5C564E]'
         }`}
-        title="更多設定與系統管理"
+        title={appMode === 'split' ? '代墊借還對帳與清償' : '公積金月度銷帳與撥款'}
       >
-        <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
+        <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
         <span className="text-[10px] sm:text-[11px] font-medium leading-tight whitespace-nowrap px-0.5">
-          更多設定
+          {appMode === 'split' ? '結算' : '銷帳'}
         </span>
-        {hasSettingsAlert && (
-          <span className="absolute -top-0.5 right-2 w-2 h-2 rounded-full bg-amber-500 border border-white animate-pulse" />
-        )}
       </button>
     </div>
   );

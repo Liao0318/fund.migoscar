@@ -1,6 +1,6 @@
 import { PartnerInviteData, CoupleBindingInfo } from '../types';
 import { db, isFirestoreAvailable } from './googleOAuthService';
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 const REGISTRY_STORAGE_KEY = 'banban_invite_registry';
 const ACTIVE_INVITE_STORAGE_KEY = 'banban_active_invite';
@@ -333,42 +333,91 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
   // 3. 向 Firestore 查詢真實存在的邀請紀錄
   if (isFirestoreAvailable() && db && codeToQuery) {
     try {
-      const inviteRef = doc(db, 'partner_invites', codeToQuery);
-      const snap = await getDoc(inviteRef);
-      if (snap.exists()) {
-        const cloudInvite = snap.data() as PartnerInviteData;
-        if (cloudInvite && cloudInvite.inviteCode && cloudInvite.adminEmail) {
-          // 若雲端邀請紀錄齊全，直接快取並返回
-          if (cloudInvite.gasWebUrl && cloudInvite.gasWebUrl.startsWith('http')) {
+      // 3.1 直接以代碼為 key (BB-XXXX 或純代碼)
+      const candidateKeys = Array.from(new Set([
+        codeToQuery,
+        codeToQuery.replace(/[^A-Za-z0-9]/g, ''),
+        codeToQuery.startsWith('BB-') ? codeToQuery : `BB-${codeToQuery.replace(/^BB[-_]?/i, '')}`,
+        codeToQuery.replace(/^BB[-_]?/i, '')
+      ]));
+
+      for (const key of candidateKeys) {
+        if (!key) continue;
+        const inviteRef = doc(db, 'partner_invites', key);
+        const snap = await getDoc(inviteRef);
+        if (snap.exists()) {
+          const cloudInvite = snap.data() as PartnerInviteData;
+          if (cloudInvite && (cloudInvite.inviteCode || cloudInvite.adminEmail)) {
+            // 若雲端邀請紀錄齊全，直接快取並返回
+            if (cloudInvite.gasWebUrl && cloudInvite.gasWebUrl.startsWith('http')) {
+              saveActiveInviteCode(cloudInvite);
+              return cloudInvite;
+            }
+
+            // 🛡️ 雙重保險備援：若邀請紀錄缺失 gasWebUrl，自動向管理者的 user_configs 集合查詢補齊
+            if (cloudInvite.adminEmail) {
+              try {
+                const adminEmailClean = cloudInvite.adminEmail.trim().toLowerCase();
+                const adminConfigRef = doc(db, 'user_configs', adminEmailClean);
+                const adminSnap = await getDoc(adminConfigRef);
+                if (adminSnap.exists()) {
+                  const adminData = adminSnap.data() as any;
+                  if (adminData && adminData.gasWebUrl) {
+                    const enrichedInvite: PartnerInviteData = {
+                      ...cloudInvite,
+                      gasWebUrl: adminData.gasWebUrl,
+                      deploySheetUrl: adminData.deploySheetUrl || cloudInvite.deploySheetUrl || ''
+                    };
+                    saveActiveInviteCode(enrichedInvite);
+                    return enrichedInvite;
+                  }
+                }
+              } catch (err) {
+                console.warn('Fallback admin config fetch failed:', err);
+              }
+            }
+
             saveActiveInviteCode(cloudInvite);
             return cloudInvite;
           }
-
-          // 🛡️ 雙重保險備援：若邀請紀錄缺失 gasWebUrl，自動向管理者的 user_configs 集合查詢補齊
-          try {
-            const adminEmailClean = cloudInvite.adminEmail.trim().toLowerCase();
-            const adminConfigRef = doc(db, 'user_configs', adminEmailClean);
-            const adminSnap = await getDoc(adminConfigRef);
-            if (adminSnap.exists()) {
-              const adminData = adminSnap.data() as any;
-              if (adminData && adminData.gasWebUrl) {
-                const enrichedInvite: PartnerInviteData = {
-                  ...cloudInvite,
-                  gasWebUrl: adminData.gasWebUrl,
-                  deploySheetUrl: adminData.deploySheetUrl || cloudInvite.deploySheetUrl || ''
-                };
-                saveActiveInviteCode(enrichedInvite);
-                return enrichedInvite;
-              }
-            }
-          } catch (err) {
-            console.warn('Fallback admin config fetch failed:', err);
-          }
-
-          saveActiveInviteCode(cloudInvite);
-          return cloudInvite;
         }
       }
+
+      // 3.2 次要查詢：若以 inviteCode 欄位查詢
+      try {
+        const invitesCol = collection(db, 'partner_invites');
+        const q = query(invitesCol, where('inviteCode', 'in', candidateKeys), limit(1));
+        const querySnap = await getDocs(q);
+        if (!querySnap.empty) {
+          const cloudInvite = querySnap.docs[0].data() as PartnerInviteData;
+          if (cloudInvite && cloudInvite.adminEmail) {
+            saveActiveInviteCode(cloudInvite);
+            return cloudInvite;
+          }
+        }
+      } catch (e) {}
+
+      // 3.3 再次搜尋 user_configs 集合中有無相同 inviteCode
+      try {
+        const usersCol = collection(db, 'user_configs');
+        const qUsers = query(usersCol, where('inviteCode', 'in', candidateKeys), limit(1));
+        const usersSnap = await getDocs(qUsers);
+        if (!usersSnap.empty) {
+          const udata = usersSnap.docs[0].data() as any;
+          if (udata && udata.email) {
+            const inviteData: PartnerInviteData = {
+              inviteCode: udata.inviteCode || codeToQuery,
+              adminEmail: udata.email,
+              adminName: udata.name || '主管理員',
+              gasWebUrl: udata.gasWebUrl || '',
+              deploySheetUrl: udata.deploySheetUrl || '',
+              createdAt: udata.updatedAt || new Date().toISOString()
+            };
+            saveActiveInviteCode(inviteData);
+            return inviteData;
+          }
+        }
+      } catch (e) {}
     } catch (err) {
       console.warn('Firestore fetchInviteCodeOnline query failed:', err);
     }

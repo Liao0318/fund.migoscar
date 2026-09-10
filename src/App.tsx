@@ -5008,10 +5008,14 @@ export default function App() {
                 />
               ) : (
                 !isDbConnected ? (
-                  renderDbUnconnectedState(
-                    "尚未連線至資料庫",
-                    "尚未登錄 Google 試算表 Web App API 金鑰，無法進行月度公積金自動核銷與撥款對帳。請先設定連線金鑰以同步雲端數據。"
-                  )
+                  <InitialEmptyEntryFrame
+                    currentUser={currentUser}
+                    partnerBindingInfo={partnerBindingInfo}
+                    onOpenWizard={(role) => openUnifiedDatabaseModal('wizard', role)}
+                    onOpenDirectSettings={() => openUnifiedDatabaseModal('settings')}
+                    onEnableSandbox={() => handleToggleSandboxMode(true)}
+                    appMode="fund"
+                  />
                 ) : (
                   <motion.div 
                     key="tab-settlement"
@@ -5027,13 +5031,20 @@ export default function App() {
                     <label htmlFor="settlement-month-select" className="block text-[10px] font-bold text-[#8C8475] uppercase tracking-wider">正在核對月份</label>
                     <select
                       id="settlement-month-select"
-                      value={settlementMonth}
+                      value={settlementMonth || (records.length > 0 ? records[0].month : new Date().toISOString().slice(0, 7))}
                       onChange={(e) => setSettlementMonth(e.target.value)}
                       className="w-full sm:w-48 px-3 py-2.5 rounded-xl bg-white/70 border border-[#DDD9CE] text-xs font-semibold text-[#3E3A36] focus:outline-none focus:border-[#8C8475] cursor-pointer"
                     >
-                      {(Array.from(new Set(records.map(r => r.month))) as string[]).sort((a,b) => b.localeCompare(a)).map(m => (
-                        <option key={m} value={m}>{m} 月份</option>
-                      ))}
+                      {(() => {
+                        const allMonths = Array.from(new Set([
+                          ...records.map(r => r.month),
+                          settlementMonth,
+                          new Date().toISOString().slice(0, 7)
+                        ])).filter(Boolean) as string[];
+                        return allMonths.sort((a,b) => b.localeCompare(a)).map(m => (
+                          <option key={m} value={m}>{m} 月份</option>
+                        ));
+                      })()}
                     </select>
                   </div>
 
