@@ -182,13 +182,33 @@ async function startServer() {
   // 2. Partner Invites API
   app.get('/api/partner-invite', (req, res) => {
     try {
-      const code = typeof req.query.code === 'string' ? req.query.code.trim().toUpperCase() : '';
+      const rawCode = typeof req.query.code === 'string' ? req.query.code.trim().toUpperCase() : '';
       const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
       const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
 
-      if (code && invites[code]) {
-        return res.json({ success: true, invite: invites[code] });
+      if (rawCode) {
+        const cleanNoPrefix = rawCode.replace(/^BB-?/, '');
+        const withPrefix = `BB-${cleanNoPrefix}`;
+        const candidates = [rawCode, withPrefix, cleanNoPrefix];
+
+        for (const c of candidates) {
+          if (invites[c]) {
+            return res.json({ success: true, invite: invites[c] });
+          }
+        }
+
+        // Fuzzy match inside values
+        const found = Object.values(invites).find((inv: any) => {
+          const invCode = (inv.inviteCode || '').toUpperCase();
+          const invClean = invCode.replace(/^BB-?/, '');
+          return candidates.includes(invCode) || candidates.includes(invClean);
+        });
+
+        if (found) {
+          return res.json({ success: true, invite: found });
+        }
       }
+
       if (email) {
         const found = Object.values(invites).find((inv: any) => 
           (inv.adminEmail && inv.adminEmail.toLowerCase() === email) ||
@@ -207,18 +227,22 @@ async function startServer() {
   app.post('/api/partner-invite', (req, res) => {
     try {
       const invite = req.body;
-      const code = typeof invite?.inviteCode === 'string' ? invite.inviteCode.trim().toUpperCase() : '';
-      if (!code) {
+      const rawCode = typeof invite?.inviteCode === 'string' ? invite.inviteCode.trim().toUpperCase() : '';
+      if (!rawCode) {
         return res.status(400).json({ success: false, message: 'inviteCode required' });
       }
+      const code = rawCode.startsWith('BB-') ? rawCode : (rawCode.startsWith('BB') && rawCode.length > 2 ? `BB-${rawCode.slice(2)}` : `BB-${rawCode}`);
       const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
-      invites[code] = {
+      const enrichedInvite = {
         ...invite,
         inviteCode: code,
         updatedAt: new Date().toISOString(),
       };
+      invites[code] = enrichedInvite;
+      invites[rawCode] = enrichedInvite;
+      invites[code.replace(/^BB-/, '')] = enrichedInvite;
       writeJsonFile(PARTNER_INVITES_FILE, invites);
-      return res.json({ success: true, invite: invites[code] });
+      return res.json({ success: true, invite: enrichedInvite });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }

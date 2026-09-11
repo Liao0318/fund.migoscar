@@ -520,6 +520,24 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
   return null;
 }
 
+export const CUSTOM_PORTAL_BASE_URL = 'https://liao0318.github.io/fund.migoscar/';
+
+/**
+ * 取得當前應用程式的標準分享基底網址
+ */
+export function getAppShareBaseUrl(): string {
+  // 優先使用自訂短網址/入口網址
+  if (CUSTOM_PORTAL_BASE_URL) {
+    return CUSTOM_PORTAL_BASE_URL.endsWith('/') ? CUSTOM_PORTAL_BASE_URL : `${CUSTOM_PORTAL_BASE_URL}/`;
+  }
+  if (typeof window !== 'undefined' && window.location.origin) {
+    const origin = window.location.origin;
+    const pathname = window.location.pathname || '';
+    return `${origin}${pathname}`;
+  }
+  return 'https://liao0318.github.io/fund.migoscar/';
+}
+
 /**
  * 產生分享給伴侶的甜蜜邀請文案與專屬連結
  */
@@ -527,9 +545,9 @@ export function generatePartnerInviteShare(invite: PartnerInviteData, baseUrl?: 
   shareText: string;
   shareUrl: string;
 } {
-  const token = encodeInvitePayload(invite);
-  const origin = baseUrl || (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '');
-  const shareUrl = `${origin}?invite=${token}#partner-join`;
+  const base = baseUrl || getAppShareBaseUrl();
+  const cleanBase = base.endsWith('/') ? base : `${base}/`;
+  const shareUrl = `${cleanBase}#join=${invite.inviteCode}`;
 
   const shareText = `💌【伴伴記❤️】情侶共同帳本邀請函
 
@@ -540,7 +558,7 @@ export function generatePartnerInviteShare(invite: PartnerInviteData, baseUrl?: 
 ${shareUrl}
 
 ✨ 綁定說明：
-只要使用你的 Google 帳戶登入並輸入邀請碼，系統將自動同步生活公積金、代墊分帳與採購清單，無須繁瑣設定！`;
+點擊上方連結並使用你的 Google 帳戶登入，系統將自動完成配對並同步生活公積金、代墊分帳與採購清單！`;
 
   return {
     shareText,
@@ -553,4 +571,70 @@ ${shareUrl}
  */
 export function createShareableInviteCard(invite: PartnerInviteData, baseUrl?: string): string {
   return generatePartnerInviteShare(invite, baseUrl).shareText;
+}
+
+const PENDING_INVITE_STORAGE_KEY = 'banban_pending_invite';
+
+/**
+ * 從網址 (Query 或 Hash) 或 Session/Local 快取中偵測是否有尚未完成的伴侶邀請
+ */
+export function parseInviteFromCurrentUrl(): { raw: string; invite: PartnerInviteData | null } | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const fullHref = window.location.href;
+    const search = window.location.search;
+    const hash = window.location.hash;
+
+    let targetTokenOrCode = '';
+
+    // 1. 檢查 URL 參數與 Hash
+    const matchToken = fullHref.match(/(?:#|\?|&)(?:token|invite)=([A-Za-z0-9_-]+)/i);
+    if (matchToken && matchToken[1]) {
+      targetTokenOrCode = matchToken[1];
+    } else {
+      const matchJoin = fullHref.match(/(?:#|\?|&)(?:join|code)=([A-Za-z0-9_-]+)/i);
+      if (matchJoin && matchJoin[1]) {
+        targetTokenOrCode = matchJoin[1];
+      }
+    }
+
+    if (targetTokenOrCode) {
+      const resolved = resolveInviteCodeOrToken(targetTokenOrCode);
+      const res = { raw: targetTokenOrCode, invite: resolved };
+      try {
+        localStorage.setItem(PENDING_INVITE_STORAGE_KEY, JSON.stringify(res));
+      } catch (e) {}
+      return res;
+    }
+
+    // 2. 檢查之前暫存的 pending invite
+    const saved = localStorage.getItem(PENDING_INVITE_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && (parsed.raw || parsed.invite)) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Error parsing invite from URL:', e);
+  }
+
+  return null;
+}
+
+/**
+ * 取得當前暫存的待綁定邀請
+ */
+export function getPendingInvite(): { raw: string; invite: PartnerInviteData | null } | null {
+  return parseInviteFromCurrentUrl();
+}
+
+/**
+ * 清除已完成綁定的待綁定邀請
+ */
+export function clearPendingInvite(): void {
+  try {
+    localStorage.removeItem(PENDING_INVITE_STORAGE_KEY);
+  } catch (e) {}
 }

@@ -25,7 +25,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData } from '../../types';
-import { resolveInviteCodeOrToken, fetchInviteCodeOnline } from '../../utils/partnerInvite';
+import { resolveInviteCodeOrToken, fetchInviteCodeOnline, createShareableInviteCard } from '../../utils/partnerInvite';
 import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
 
 interface DatabaseOnboardingModalProps {
@@ -159,10 +159,14 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
   };
 
   const handleCopyShareCard = () => {
-    const origin = window.location.origin;
-    const pathname = window.location.pathname;
-    const fullJoinUrl = `${origin}${pathname}#join=${inviteCode}`;
-    const cardText = `【伴伴記 ❤️ 情侶共同記帳邀請】\n\n嗨！${currentUser?.name || '我'} 邀請你一起使用「伴伴記」共同記帳與管理支出！\n\n🔑 專屬伴侶邀請代碼：${inviteCode}\n📲 點擊專屬連結立即加入綁定：\n${fullJoinUrl}\n\n一起甜蜜記帳吧！💑✨`;
+    const cardText = createShareableInviteCard({
+      inviteCode: inviteCode,
+      adminEmail: currentUser?.email || '',
+      adminName: currentUser?.name || '主管理員',
+      gasWebUrl: gasWebUrl || '',
+      deploySheetUrl: deploySheetUrl || '',
+      createdAt: new Date().toISOString()
+    });
     navigator.clipboard.writeText(cardText);
     setCopiedShare(true);
     setTimeout(() => setCopiedShare(false), 2500);

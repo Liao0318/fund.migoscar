@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShieldCheck, 
@@ -17,7 +17,9 @@ import {
   EyeOff,
   Rocket,
   Sliders,
-  Palette
+  Palette,
+  Heart,
+  UserPlus
 } from 'lucide-react';
 import { BrandLogo } from '../common/BrandLogo';
 import { AuthUser, PartnerInviteData } from '../../types';
@@ -26,7 +28,13 @@ import {
   signInWithGooglePopup, 
   requestGoogleOAuthToken
 } from '../../utils/googleOAuthService';
-import { fetchPartnerBindingInfoOnline, getActiveInviteCode } from '../../utils/partnerInvite';
+import { 
+  fetchPartnerBindingInfoOnline, 
+  getActiveInviteCode,
+  parseInviteFromCurrentUrl,
+  fetchInviteCodeOnline,
+  clearPendingInvite
+} from '../../utils/partnerInvite';
 import { getUserCloudConfig, scanAndRecoverGasUrl } from '../../utils/userConfigService';
 import { hasBackendServer } from '../../utils/environment';
 
@@ -62,6 +70,26 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showSignUpNotice, setShowSignUpNotice] = useState(false);
   
+  // 💌 伴侶邀請代碼即時檢測與甜蜜橫幅
+  const [detectedInvite, setDetectedInvite] = useState<PartnerInviteData | null>(null);
+  const [detectedRawCode, setDetectedRawCode] = useState<string>('');
+
+  useEffect(() => {
+    const pending = parseInviteFromCurrentUrl();
+    if (pending) {
+      if (pending.raw) setDetectedRawCode(pending.raw);
+      if (pending.invite) {
+        setDetectedInvite(pending.invite);
+      } else if (pending.raw) {
+        fetchInviteCodeOnline(pending.raw).then((cloudInv) => {
+          if (cloudInv) {
+            setDetectedInvite(cloudInv);
+          }
+        }).catch(() => {});
+      }
+    }
+  }, []);
+
   // 開發通道通行碼（安全脫敏）
   const [showDevPasswordModal, setShowDevPasswordModal] = useState(false);
   const [devPasswordInput, setDevPasswordInput] = useState('');
@@ -167,13 +195,27 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
       console.warn('Failed to load user cloud config:', e);
     }
 
+    // 💖 優先解析待綁定之伴侶邀請
+    let finalPartnerInvite = detectedInvite;
+    if (!finalPartnerInvite && detectedRawCode) {
+      try {
+        finalPartnerInvite = await fetchInviteCodeOnline(detectedRawCode);
+      } catch (e) {}
+    }
+
+    // 若伴侶邀請存在且有資料庫設定，使用邀請中的資料庫設定
+    if (finalPartnerInvite && finalPartnerInvite.gasWebUrl) {
+      if (!cloudGas) cloudGas = finalPartnerInvite.gasWebUrl;
+      if (!cloudSheet && finalPartnerInvite.deploySheetUrl) cloudSheet = finalPartnerInvite.deploySheetUrl;
+    }
+
     const enhancedUser: AuthUser = {
       ...rawUser,
       nickname: savedNickname || rawUser.nickname,
       authMethod: 'google_oauth'
     };
 
-    onLogin(enhancedUser, null, cloudGas, cloudSheet);
+    onLogin(enhancedUser, finalPartnerInvite, cloudGas, cloudSheet);
   };
 
   /**
@@ -328,16 +370,64 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
         {/* 🪟 中央登入卡片區域 */}
         {activePortalTab === 'prod' ? (
           <div className="space-y-4 my-auto py-1">
+            {/* 💌 若檢測到伴侶邀請，顯示溫馨伴侶加入卡片 */}
+            {(detectedInvite || detectedRawCode) && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-gradient-to-r from-rose-50 via-pink-50/80 to-rose-50 border-2 border-rose-300/90 rounded-2xl p-3.5 sm:p-4 text-left shadow-xs space-y-2 relative overflow-hidden"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-xs">
+                      <Heart className="w-4 h-4 fill-white animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-black text-rose-950 flex items-center gap-1.5">
+                        <span>收到伴侶共同記帳邀請！</span>
+                        <span className="text-[10px] bg-rose-200/80 text-rose-800 font-extrabold px-1.5 py-0.2 rounded-full">
+                          即將自動配對
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-rose-800 font-medium">
+                        {detectedInvite?.adminName 
+                          ? `由「${detectedInvite.adminName}」發起` 
+                          : '登入後將自動加入伴侶帳本'}
+                        {detectedInvite?.inviteCode ? ` · 代碼 【${detectedInvite.inviteCode}】` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetectedInvite(null);
+                      setDetectedRawCode('');
+                      clearPendingInvite();
+                    }}
+                    className="text-[#998F80] hover:text-[#3E3A36] p-1 rounded-lg hover:bg-rose-100/50 cursor-pointer text-xs"
+                    title="清除此邀請"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="text-[11px] text-rose-900/90 bg-white/70 p-2 rounded-xl border border-rose-200/60 leading-relaxed font-medium">
+                  ✨ 點擊下方以 Google 帳號登入，系統將<strong>自動完成配對</strong>並載入共同公積金與分帳帳本！
+                </div>
+              </motion.div>
+            )}
+
             {/* 上路正式系統專屬提示 */}
-            <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-2.5 sm:p-3 text-[11px] sm:text-xs text-emerald-950 flex items-center justify-between text-left">
-              <span className="flex items-center gap-1.5 font-bold">
-                <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-                <span>上路正式系統：情侶真實記帳與雲端同步</span>
-              </span>
-              <span className="text-[10px] bg-emerald-100/90 text-emerald-900 px-1.5 py-0.5 rounded font-bold border border-emerald-300/80 shrink-0">
-                帳號獨立隔離
-              </span>
-            </div>
+            {!detectedInvite && !detectedRawCode && (
+              <div className="bg-emerald-50/80 border border-emerald-200/80 rounded-xl p-2.5 sm:p-3 text-[11px] sm:text-xs text-emerald-950 flex items-center justify-between text-left">
+                <span className="flex items-center gap-1.5 font-bold">
+                  <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>上路正式系統：情侶真實記帳與雲端同步</span>
+                </span>
+                <span className="text-[10px] bg-emerald-100/90 text-emerald-900 px-1.5 py-0.5 rounded font-bold border border-emerald-300/80 shrink-0">
+                  帳號獨立隔離
+                </span>
+              </div>
+            )}
 
             {/* 主 Google 登入入口卡片 */}
             <div 
