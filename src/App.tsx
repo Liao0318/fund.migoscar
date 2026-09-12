@@ -767,30 +767,42 @@ export default function App() {
       const cleanEmail = (user.email || '').trim().toLowerCase();
       const previousEmail = (currentUser?.email || '').trim().toLowerCase();
 
-      // 🛡️ 登入前保護：先擷取此裝置目前現存的所有可能資料庫設定備援，避免被清除抹除
+      // 🛡️ 登入前保護：先擷取此裝置目前現存的所有可能資料庫設定與數據備援，避免被清除抹除
       const cachedDeviceGas = (localStorage.getItem('muji_gas_web_url') || '').trim();
       const cachedDeviceSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
       const cachedPerUserGas = cleanEmail ? (localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) || '').trim() : '';
       const cachedPerUserSheet = cleanEmail ? (localStorage.getItem(`muji_sheet_url_${cleanEmail}`) || '').trim() : '';
 
-      // 🛡️ 徹底隔離：每次 Google 帳號登入或切換時，先清空所有記憶體中的記帳與資料庫狀態，避免舊帳號數據滲漏
-      setRecords([]);
-      setSplitItems([]);
-      setShoppingItems([]);
-      setGasWebUrl('');
-      setDeploySheetUrl('');
-      setPartnerBindingInfo(null);
+      // 備援當前記憶體與本地儲存的業務數據（若同帳號重新登入或首次連結 Google 帳號，可平滑繼承）
+      const localRecordsBackup = (records && records.length > 0) ? records : (() => {
+        try { const r = localStorage.getItem('muji_ledger_data'); return r ? JSON.parse(r) : []; } catch (e) { return []; }
+      })();
+      const localSplitBackup = (splitItems && splitItems.length > 0) ? splitItems : (() => {
+        try { const s = localStorage.getItem('banban_split_records'); return s ? JSON.parse(s) : []; } catch (e) { return []; }
+      })();
+      const localShoppingBackup = (shoppingItems && shoppingItems.length > 0) ? shoppingItems : (() => {
+        try { const sh = localStorage.getItem('banban_shopping_items'); return sh ? JSON.parse(sh) : []; } catch (e) { return []; }
+      })();
 
-      // 清除舊有的未依帳號隔離之業務資料暫存，避免跨帳號交叉感染
-      try {
-        localStorage.removeItem('muji_ledger_data');
-        localStorage.removeItem('banban_split_records');
-        localStorage.removeItem('banban_shopping_items');
-        localStorage.removeItem('banban_partner_binding');
-        window.dispatchEvent(new CustomEvent('travel-data-updated', {
-          detail: { trips: [], expenses: [], wishlist: [] }
-        }));
-      } catch (e) {}
+      // 🛡️ 僅在確為不同帳號切換時才清理跨帳號暫存
+      const isSwitchingDifferentAccount = Boolean(previousEmail && cleanEmail && previousEmail !== cleanEmail);
+      if (isSwitchingDifferentAccount) {
+        setRecords([]);
+        setSplitItems([]);
+        setShoppingItems([]);
+        setGasWebUrl('');
+        setDeploySheetUrl('');
+        setPartnerBindingInfo(null);
+        try {
+          localStorage.removeItem('muji_ledger_data');
+          localStorage.removeItem('banban_split_records');
+          localStorage.removeItem('banban_shopping_items');
+          localStorage.removeItem('banban_partner_binding');
+          window.dispatchEvent(new CustomEvent('travel-data-updated', {
+            detail: { trips: [], expenses: [], wishlist: [] }
+          }));
+        } catch (e) {}
+      }
 
       let boundNickname = user.nickname || '';
       if (!boundNickname && cleanEmail) {
@@ -1012,6 +1024,26 @@ export default function App() {
       let activeGas = initialCloudGasUrl || cachedPerUserGas || '';
       let activeSheet = initialCloudSheetUrl || cachedPerUserSheet || '';
 
+      // 2.9 🚀 全端跨裝置帳本數據無縫掛接 (換裝置、換手機登入直接掛接帳本資料庫)
+      let serverLedgerData: any = null;
+      if (hasBackendServer() && cleanEmail) {
+        try {
+          const lRes = await fetch(`/api/user-ledger-data?email=${encodeURIComponent(cleanEmail)}`);
+          if (lRes.ok) {
+            const lJson = await lRes.json();
+            if (lJson && lJson.success && lJson.data) {
+              serverLedgerData = lJson.data;
+              if (serverLedgerData.gasWebUrl && !activeGas) {
+                activeGas = serverLedgerData.gasWebUrl.trim();
+              }
+              if (serverLedgerData.deploySheetUrl && !activeSheet) {
+                activeSheet = serverLedgerData.deploySheetUrl.trim();
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
       try {
         const cloudConfig = await getUserCloudConfig(user.email);
         if (cloudConfig) {
@@ -1072,27 +1104,80 @@ export default function App() {
         } catch (e) {}
       }
 
-      // 若此帳號確實已建立過專屬 API 資料庫 (或從全系統資料庫拉取成功)
-      if (activeGas && activeGas.startsWith('http') && !partnerInvite) {
+      const hasCloudLedger = serverLedgerData && (
+        (Array.isArray(serverLedgerData.records) && serverLedgerData.records.length > 0) ||
+        (Array.isArray(serverLedgerData.splitItems) && serverLedgerData.splitItems.length > 0) ||
+        (Array.isArray(serverLedgerData.shoppingItems) && serverLedgerData.shoppingItems.length > 0) ||
+        (serverLedgerData.gasWebUrl && serverLedgerData.gasWebUrl.startsWith('http'))
+      );
+
+      const hasLocalBackupData = !isSwitchingDifferentAccount && (
+        (localRecordsBackup && localRecordsBackup.length > 0) ||
+        (localSplitBackup && localSplitBackup.length > 0) ||
+        (localShoppingBackup && localShoppingBackup.length > 0)
+      );
+
+      // 若有雲端帳本、或本機既有帳本、或已建立過專屬 API 資料庫 (主管理員)
+      if ((hasCloudLedger || hasLocalBackupData || (activeGas && activeGas.startsWith('http'))) && !partnerInvite) {
         const displayWelcomeName = boundNickname || user.name;
-        setGasWebUrl(activeGas);
-        setDeploySheetUrl(activeSheet);
 
-        // 同步鞏固寫入本地所有隔離與全域快取
-        try {
-          localStorage.setItem('muji_gas_web_url', activeGas);
-          localStorage.setItem('muji_sheet_url', activeSheet);
-          if (cleanEmail) {
-            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
-            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+        // 1. 掛接帳本紀錄（優先以伺服器資料庫，若伺服器尚無但本機有，平滑採用本機）
+        if (hasCloudLedger && serverLedgerData) {
+          if (Array.isArray(serverLedgerData.records) && serverLedgerData.records.length > 0) {
+            setRecords(serverLedgerData.records);
+            try { localStorage.setItem('muji_ledger_data', JSON.stringify(serverLedgerData.records)); } catch (e) {}
           }
-        } catch (e) {}
+          if (Array.isArray(serverLedgerData.splitItems) && serverLedgerData.splitItems.length > 0) {
+            setSplitItems(serverLedgerData.splitItems);
+            try { localStorage.setItem('banban_split_records', JSON.stringify(serverLedgerData.splitItems)); } catch (e) {}
+          }
+          if (Array.isArray(serverLedgerData.shoppingItems) && serverLedgerData.shoppingItems.length > 0) {
+            setShoppingItems(serverLedgerData.shoppingItems);
+            try { localStorage.setItem('banban_shopping_items', JSON.stringify(serverLedgerData.shoppingItems)); } catch (e) {}
+          }
+          if (Array.isArray(serverLedgerData.travelTrips) && serverLedgerData.travelTrips.length > 0) {
+            try {
+              localStorage.setItem('banban_travel_trips', JSON.stringify(serverLedgerData.travelTrips));
+              localStorage.setItem('banban_travel_expenses', JSON.stringify(serverLedgerData.travelExpenses || []));
+              localStorage.setItem('banban_travel_wishlist', JSON.stringify(serverLedgerData.travelWishlist || []));
+              window.dispatchEvent(new CustomEvent('travel-data-updated', {
+                detail: {
+                  trips: serverLedgerData.travelTrips,
+                  expenses: serverLedgerData.travelExpenses || [],
+                  wishlist: serverLedgerData.travelWishlist || []
+                }
+              }));
+            } catch (e) {}
+          }
+          if (serverLedgerData.splitSummary) {
+            setSplitSummary(serverLedgerData.splitSummary);
+            try { localStorage.setItem('banban_split_summary', JSON.stringify(serverLedgerData.splitSummary)); } catch (e) {}
+          }
+        } else if (hasLocalBackupData) {
+          if (localRecordsBackup.length > 0) setRecords(localRecordsBackup);
+          if (localSplitBackup.length > 0) setSplitItems(localSplitBackup);
+          if (localShoppingBackup.length > 0) setShoppingItems(localShoppingBackup);
+        }
 
-        // 自動同步確保雲端個人資料庫設定永久完備
-        saveUserCloudConfig(user.email, {
-          gasWebUrl: activeGas,
-          deploySheetUrl: activeSheet
-        });
+        // 2. 掛接 Google 試算表連線
+        if (activeGas && activeGas.startsWith('http')) {
+          setGasWebUrl(activeGas);
+          setDeploySheetUrl(activeSheet);
+          try {
+            localStorage.setItem('muji_gas_web_url', activeGas);
+            localStorage.setItem('muji_sheet_url', activeSheet);
+            localStorage.setItem('banban_permanent_gas_url', activeGas);
+            if (cleanEmail) {
+              localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+            }
+          } catch (e) {}
+
+          saveUserCloudConfig(user.email, {
+            gasWebUrl: activeGas,
+            deploySheetUrl: activeSheet
+          });
+        }
 
         const adminUser: AuthUser = {
           ...cleanUser,
@@ -1107,16 +1192,19 @@ export default function App() {
         } catch (e) {}
 
         setSyncProgressStep(3);
-        setSyncStatusText(`正在與 Google 試算表同步資料庫...`);
-        await Promise.allSettled([
-          fetchDashboardData(true, false),
-          fetchShoppingData(false),
-          fetchSplitData(true),
-          fetchTravelData(true)
-        ]);
+        setSyncStatusText(activeGas ? `正在與 Google 試算表同步資料庫...` : `正在掛接雲端帳本...`);
+
+        if (activeGas && activeGas.startsWith('http')) {
+          await Promise.allSettled([
+            fetchDashboardData(true, false, activeGas),
+            fetchShoppingData(false, activeGas),
+            fetchSplitData(true, activeGas),
+            fetchTravelData(true, activeGas)
+          ]);
+        }
 
         setSyncProgressStep(4);
-        setSyncStatusText(`✨ 歡迎回來，${displayWelcomeName}！帳本資料已全數同步`);
+        setSyncStatusText(`✨ 歡迎回來，${displayWelcomeName}！已直接掛接帳本資料`);
         await new Promise(res => setTimeout(res, 600));
         setIsInitialSyncing(false);
         setIsCheckingCloudConfig(false);
@@ -2814,12 +2902,64 @@ export default function App() {
       createdAt: new Date().toISOString()
     });
 
-    saveUserCloudConfig(cleanEmail, {
-      inviteCode: currentInviteCode,
-      gasWebUrl: cleanGas,
-      deploySheetUrl: cleanSheet
-    }).catch(() => {});
+    const userCfgPayload: any = {
+      inviteCode: currentInviteCode
+    };
+    if (cleanGas && cleanGas.startsWith('http')) {
+      userCfgPayload.gasWebUrl = cleanGas;
+    }
+    if (cleanSheet) {
+      userCfgPayload.deploySheetUrl = cleanSheet;
+    }
+    saveUserCloudConfig(cleanEmail, userCfgPayload).catch(() => {});
   }, [currentUser?.email, currentUser?.userRole, currentInviteCode, gasWebUrl, deploySheetUrl, isSandboxMode]);
+
+  // 🔄 跨裝置即時帳本數據自動備份至伺服器（換手機、換電腦可登入帳號直接掛接）
+  useEffect(() => {
+    if (isGuestMode || isSandboxMode || !currentUser?.email) return;
+    const cleanEmail = currentUser.email.trim().toLowerCase();
+    if (!cleanEmail) return;
+
+    // 只有在非初次載入或資料有內容時才推送，避免以空陣列覆蓋
+    if (records.length === 0 && splitItems.length === 0 && shoppingItems.length === 0) return;
+
+    const timer = setTimeout(() => {
+      if (hasBackendServer()) {
+        try {
+          let trips: any[] = [];
+          let expenses: any[] = [];
+          let wishlist: any[] = [];
+          try {
+            const t = localStorage.getItem('banban_travel_trips');
+            if (t) trips = JSON.parse(t);
+            const e = localStorage.getItem('banban_travel_expenses');
+            if (e) expenses = JSON.parse(e);
+            const w = localStorage.getItem('banban_travel_wishlist');
+            if (w) wishlist = JSON.parse(w);
+          } catch (e) {}
+
+          fetch('/api/user-ledger-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: cleanEmail,
+              records,
+              splitItems,
+              shoppingItems,
+              travelTrips: trips,
+              travelExpenses: expenses,
+              travelWishlist: wishlist,
+              splitSummary,
+              gasWebUrl: (gasWebUrl || '').trim(),
+              deploySheetUrl: (deploySheetUrl || '').trim()
+            })
+          }).catch(() => {});
+        } catch (e) {}
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [records, splitItems, shoppingItems, splitSummary, gasWebUrl, deploySheetUrl, currentUser?.email, isGuestMode, isSandboxMode]);
 
   const getCustomizedCodeGs = () => {
     let code = CODE_GS_TEMPLATE;

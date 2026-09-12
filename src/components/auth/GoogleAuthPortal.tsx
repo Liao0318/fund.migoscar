@@ -176,6 +176,22 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
         }
       }
 
+      // 1.9 從跨裝置帳本持久化 API 獲取配置與網址
+      if (!cloudGas && hasBackendServer() && cleanEmail) {
+        try {
+          const lRes = await fetch(`/api/user-ledger-data?email=${encodeURIComponent(cleanEmail)}`);
+          if (lRes.ok) {
+            const lData = await lRes.json();
+            if (lData?.success && lData?.data?.gasWebUrl) {
+              cloudGas = lData.data.gasWebUrl.trim();
+              if (lData.data.deploySheetUrl && !cloudSheet) {
+                cloudSheet = lData.data.deploySheetUrl.trim();
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
       // 若尚未取得，且在伺服器環境下，直接查詢全系統伺服器資料庫 (跨裝置統一配置)
       if (!cloudGas && hasBackendServer()) {
         try {

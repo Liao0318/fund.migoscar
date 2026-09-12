@@ -14,6 +14,7 @@ const USER_CONFIGS_FILE = path.join(DATA_DIR, 'user_configs.json');
 const PARTNER_INVITES_FILE = path.join(DATA_DIR, 'partner_invites.json');
 const COUPLE_BINDINGS_FILE = path.join(DATA_DIR, 'couple_bindings.json');
 const SYSTEM_DATABASE_FILE = path.join(DATA_DIR, 'system_database.json');
+const USER_LEDGER_DATA_FILE = path.join(DATA_DIR, 'user_ledger_data.json');
 
 function readJsonFile<T>(filePath: string, defaultValue: T): T {
   try {
@@ -638,6 +639,148 @@ async function startServer() {
       return res.json({ result: 'fallback', rates: { TWD: 1, USD: 0.031, JPY: 4.8, KRW: 42.5, EUR: 0.029, GBP: 0.025 } });
     } catch (e) {
       return res.json({ result: 'fallback', rates: { TWD: 1, USD: 0.031, JPY: 4.8, KRW: 42.5, EUR: 0.029, GBP: 0.025 } });
+    }
+  });
+
+  // 5. 全端跨裝置帳本數據無縫掛接 API (換裝置、換手機登入帳號直接掛接，杜絕資料歸零)
+  app.get('/api/user-ledger-data', (req, res) => {
+    try {
+      const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'Email required' });
+      }
+      const ledgers = readJsonFile<Record<string, any>>(USER_LEDGER_DATA_FILE, {});
+      const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
+
+      let data = ledgers[email] || null;
+
+      // 若自身尚無完整紀錄，且已綁定情侶，自動嘗試從伴侶/管理者的帳本讀取
+      if (!data || (!data.records?.length && !data.splitItems?.length)) {
+        const binding = bindings[email];
+        if (binding) {
+          const otherEmail = (binding.adminEmail?.toLowerCase() === email ? binding.partnerEmail : binding.adminEmail)?.toLowerCase();
+          if (otherEmail && ledgers[otherEmail]) {
+            data = ledgers[otherEmail];
+          }
+        }
+      }
+
+      // 補齊資料庫網址配置
+      const userCfg = userConfigs[email];
+      const gasWebUrl = data?.gasWebUrl || userCfg?.gasWebUrl || (sysDb && isValidGasUrl(sysDb.gasWebUrl) ? sysDb.gasWebUrl : '');
+      const deploySheetUrl = data?.deploySheetUrl || userCfg?.deploySheetUrl || (sysDb ? sysDb.deploySheetUrl : '') || '';
+
+      return res.json({
+        success: true,
+        data: data ? {
+          ...data,
+          gasWebUrl,
+          deploySheetUrl,
+        } : (gasWebUrl ? {
+          records: [],
+          splitItems: [],
+          shoppingItems: [],
+          travelTrips: [],
+          travelExpenses: [],
+          travelWishlist: [],
+          gasWebUrl,
+          deploySheetUrl,
+          updatedAt: new Date().toISOString()
+        } : null)
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/user-ledger-data', (req, res) => {
+    try {
+      const payload = req.body || {};
+      const email = typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : '';
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'Email required' });
+      }
+
+      const ledgers = readJsonFile<Record<string, any>>(USER_LEDGER_DATA_FILE, {});
+      const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const existing = ledgers[email] || {};
+
+      // 防空覆蓋機制：若既有資料庫已有紀錄，且本次傳入空陣列，保留既有非空紀錄（除非 forceClear 為 true）
+      const safeRecords = (Array.isArray(payload.records) && (payload.records.length > 0 || payload.forceClear))
+        ? payload.records
+        : (Array.isArray(existing.records) && existing.records.length > 0 ? existing.records : (Array.isArray(payload.records) ? payload.records : []));
+
+      const safeSplitItems = (Array.isArray(payload.splitItems) && (payload.splitItems.length > 0 || payload.forceClear))
+        ? payload.splitItems
+        : (Array.isArray(existing.splitItems) && existing.splitItems.length > 0 ? existing.splitItems : (Array.isArray(payload.splitItems) ? payload.splitItems : []));
+
+      const safeShoppingItems = (Array.isArray(payload.shoppingItems) && (payload.shoppingItems.length > 0 || payload.forceClear))
+        ? payload.shoppingItems
+        : (Array.isArray(existing.shoppingItems) && existing.shoppingItems.length > 0 ? existing.shoppingItems : (Array.isArray(payload.shoppingItems) ? payload.shoppingItems : []));
+
+      const safeTrips = Array.isArray(payload.travelTrips) ? payload.travelTrips : (existing.travelTrips || []);
+      const safeExpenses = Array.isArray(payload.travelExpenses) ? payload.travelExpenses : (existing.travelExpenses || []);
+      const safeWishlist = Array.isArray(payload.travelWishlist) ? payload.travelWishlist : (existing.travelWishlist || []);
+
+      const safeGas = isValidGasUrl(payload.gasWebUrl) ? payload.gasWebUrl.trim() : (existing.gasWebUrl || userConfigs[email]?.gasWebUrl || '');
+      const safeSheet = payload.deploySheetUrl || existing.deploySheetUrl || userConfigs[email]?.deploySheetUrl || '';
+
+      const updatedData = {
+        email,
+        records: safeRecords,
+        splitItems: safeSplitItems,
+        shoppingItems: safeShoppingItems,
+        travelTrips: safeTrips,
+        travelExpenses: safeExpenses,
+        travelWishlist: safeWishlist,
+        splitSummary: payload.splitSummary || existing.splitSummary || null,
+        gasWebUrl: safeGas,
+        deploySheetUrl: safeSheet,
+        updatedAt: new Date().toISOString()
+      };
+
+      ledgers[email] = updatedData;
+
+      // 若有情侶綁定，同步寫入伴侶鍵值，實現雙人跨裝置實時共用
+      const binding = bindings[email];
+      if (binding) {
+        const partnerEmail = (binding.adminEmail?.toLowerCase() === email ? binding.partnerEmail : binding.adminEmail)?.toLowerCase();
+        if (partnerEmail && partnerEmail !== email) {
+          ledgers[partnerEmail] = {
+            ...updatedData,
+            email: partnerEmail
+          };
+        }
+      }
+
+      writeJsonFile(USER_LEDGER_DATA_FILE, ledgers);
+
+      // 若有提供有效 GAS 網址，同步維護 user_configs 與 system_database
+      if (isValidGasUrl(safeGas)) {
+        userConfigs[email] = {
+          ...(userConfigs[email] || {}),
+          email,
+          gasWebUrl: safeGas,
+          deploySheetUrl: safeSheet,
+          updatedAt: new Date().toISOString()
+        };
+        writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+
+        const sysDb = {
+          gasWebUrl: safeGas,
+          deploySheetUrl: safeSheet,
+          configuredBy: email,
+          updatedAt: new Date().toISOString()
+        };
+        writeJsonFile(SYSTEM_DATABASE_FILE, sysDb);
+      }
+
+      return res.json({ success: true, data: updatedData });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
     }
   });
 

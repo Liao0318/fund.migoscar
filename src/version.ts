@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.6.0';
+export const APP_VERSION = 'v2.7.0';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.7.0',
+    date: '2026.09.12',
+    title: '跨裝置帳號無縫登入直接掛接與雲端帳本防歸零技術',
+    highlights: [
+      '徹底解決換裝置或手機登入帳號時「未同步、整個資料庫變 0」的問題，登入帳號即直接掛接帳本與資料庫',
+      '建立全端跨裝置帳本持久化端點，歷史記帳、代墊分帳、採購清單及 Google 試算表設定登入時毫秒級載入',
+      '加入登入前數據保護與智慧繼承機制，防止換帳號或登入時本地記帳被快取清空',
+      '即時跨裝置雙向備份同步，任何裝置記帳自動備份至伺服器，伴侶與多設備隨時維持 100% 一致'
+    ]
+  },
   {
     version: 'v2.6.0',
     date: '2026.09.12',
