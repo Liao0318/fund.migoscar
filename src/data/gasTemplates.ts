@@ -553,9 +553,17 @@ function getReconciledMonthsFromSheet() {
     var reconciled = [];
     for (var i = 0; i < data.length; i++) {
       var cellVal = data[i][0];
-      var monthStr = cellVal instanceof Date ? Utilities.formatDate(cellVal, "GMT+8", "yyyy-MM") : String(cellVal || "").trim();
+      var monthStr = "";
+      if (cellVal instanceof Date) {
+        monthStr = Utilities.formatDate(cellVal, "GMT+8", "yyyy-MM");
+      } else {
+        monthStr = String(cellVal || "").trim().replace(/\//g, "-");
+        if (/^\d{4}-\d{2}-\d{2}/.test(monthStr)) {
+          monthStr = monthStr.substring(0, 7);
+        }
+      }
       var isReconciled = data[i][1];
-      if (isReconciled === true || isReconciled === "TRUE" || isReconciled === "true") {
+      if (isReconciled === true || isReconciled === "TRUE" || isReconciled === "true" || isReconciled === 1) {
         if (monthStr && reconciled.indexOf(monthStr) === -1) reconciled.push(monthStr);
       }
     }
@@ -576,16 +584,24 @@ function setMonthReconciled(month, isReconciled) {
       sheet = ss.getSheetByName("月度核銷狀態");
     }
 
+    var cleanMonth = String(month).trim().replace(/\//g, "-");
+    if (/^\d{4}-\d{2}-\d{2}/.test(cleanMonth)) {
+      cleanMonth = cleanMonth.substring(0, 7);
+    }
+
     var lastRow = sheet.getLastRow();
-    var boolReconciled = (isReconciled === true || isReconciled === "true" || isReconciled === "TRUE");
+    var boolReconciled = (isReconciled === true || isReconciled === "true" || isReconciled === "TRUE" || isReconciled === 1);
     var foundRow = -1;
 
     if (lastRow > 1) {
       var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
       for (var i = 0; i < values.length; i++) {
         var val = values[i][0];
-        var mStr = val instanceof Date ? Utilities.formatDate(val, "GMT+8", "yyyy-MM") : String(val || "").trim();
-        if (mStr === String(month).trim()) {
+        var mStr = val instanceof Date ? Utilities.formatDate(val, "GMT+8", "yyyy-MM") : String(val || "").trim().replace(/\//g, "-");
+        if (/^\d{4}-\d{2}-\d{2}/.test(mStr)) {
+          mStr = mStr.substring(0, 7);
+        }
+        if (mStr === cleanMonth) {
           foundRow = i + 2;
           break;
         }
@@ -595,10 +611,10 @@ function setMonthReconciled(month, isReconciled) {
     if (foundRow !== -1) {
       sheet.getRange(foundRow, 2).setValue(boolReconciled);
     } else {
-      sheet.appendRow(["'" + month, boolReconciled]);
+      sheet.appendRow(["'" + cleanMonth, boolReconciled]);
       sheet.getRange(sheet.getLastRow(), 2).insertCheckboxes();
     }
-    return { success: true, message: "成功更新 " + month + " 核銷狀態！" };
+    return { success: true, message: "成功更新 " + cleanMonth + " 核銷狀態！", reconciledMonths: getReconciledMonthsFromSheet() };
   } catch (e) {
     return { success: false, message: "更新失敗：" + e.toString() };
   }

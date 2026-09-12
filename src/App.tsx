@@ -4018,6 +4018,49 @@ export default function App() {
     }
   };
 
+  // 變更並同步月份核銷/結清狀態至 Google 試算表與本機
+  const handleToggleMonthReconciled = async (targetMonth: string) => {
+    if (!targetMonth) return;
+    const isReconciled = isMonthReconciled(targetMonth, reconciledMonths);
+    const nextState = !isReconciled;
+    let updated: string[];
+
+    if (isReconciled) {
+      updated = reconciledMonths.filter(m => normalizeMonth(m) !== normalizeMonth(targetMonth));
+      showToast(`${targetMonth} 月份已更改為：待核銷狀態`, 'info');
+      addNotificationAndSave(
+        `⚠️ 有帳目需重啟核對：${targetMonth} 變更為「待核銷」`,
+        `已撤銷了 ${targetMonth} 月份的對帳結清狀態，請雙方主動重啟明細之覆核。`,
+        'settle'
+      );
+    } else {
+      updated = [...reconciledMonths.filter(m => normalizeMonth(m) !== normalizeMonth(targetMonth)), targetMonth];
+      showToast(`${targetMonth} 月份已成功核銷結清！`, 'success');
+      addNotificationAndSave(
+        `✅ ${targetMonth} 月份對帳成功核銷`,
+        `本月公積金撥款與日常代墊已全數核對完畢，狀態已更新為「已核銷結清」。`,
+        'settle'
+      );
+    }
+
+    saveReconciledToLocal(updated);
+
+    // 🚀 同步至 Google 試算表「月度核銷狀態」工作表
+    try {
+      const res = await callGasApi('setMonthReconciled', {
+        month: targetMonth,
+        isReconciled: nextState
+      });
+      if (res && res.success) {
+        if (Array.isArray(res.reconciledMonths)) {
+          saveReconciledToLocal(res.reconciledMonths);
+        }
+      }
+    } catch (e) {
+      console.warn('Sync month reconciliation to Google Sheets failed:', e);
+    }
+  };
+
   // 儲存至本機
   const saveRecordsToLocal = (newRecords: RecordItem[]) => {
     setRecords(newRecords);
@@ -5414,27 +5457,8 @@ export default function App() {
 
                     <button
                       onClick={() => {
-                        const isReconciled = isMonthReconciled(settlementMonth, reconciledMonths);
-                        let updated: string[];
-                        if (isReconciled) {
-                          updated = reconciledMonths.filter(m => normalizeMonth(m) !== normalizeMonth(settlementMonth));
-                          showToast(`${settlementMonth} 月份已更改為：待核銷狀態`, 'info');
-                          addNotificationAndSave(
-                            `⚠️ 有帳目需重啟核對：${settlementMonth} 變更為「待核銷」`,
-                            `已撤銷了 ${settlementMonth} 月份的對帳結清狀態，請雙方主動重啟明細之覆核。`,
-                            'settle'
-                          );
-                        } else {
-                          updated = [...reconciledMonths.filter(m => normalizeMonth(m) !== normalizeMonth(settlementMonth)), settlementMonth];
-                          showToast(`${settlementMonth} 月份已成功核銷結清！`, 'success');
-                          addNotificationAndSave(
-                            `✅ ${settlementMonth} 月份對帳成功核銷`,
-                            `本月公積金撥款與日常代墊已全數核對完畢，狀態已更新為「已核銷結清」。`,
-                            'settle'
-                          );
-                        }
-                        setReconciledMonths(updated);
-                        localStorage.setItem('muji_reconciled_months', JSON.stringify(updated));
+                        const targetMonth = settlementMonth || (records.length > 0 ? records[0].month : new Date().toISOString().slice(0, 7));
+                        handleToggleMonthReconciled(targetMonth);
                       }}
                       className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer ${
                         isMonthReconciled(settlementMonth, reconciledMonths)

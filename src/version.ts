@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.5.3';
+export const APP_VERSION = 'v2.5.4';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.5.4',
+    date: '2026.09.12',
+    title: '公積金月度核銷即時同步 Google 試算表',
+    highlights: [
+      '公積金「月度結算與核銷」操作（核銷結清／取消核銷）即時雙向連線同步至 Google 試算表「月度核銷狀態」工作表',
+      '強化 GAS 後端 API 核銷狀態處理邏輯，支援核銷核取方塊與年月格式自動容錯校正',
+      '本地快取與雲端後台即時聯動，換裝置或刷新頁面自動維持一致的核銷狀態',
+      '優化結算對帳按鈕互動回饋與 App 內建通知提醒'
+    ]
+  },
   {
     version: 'v2.5.3',
     date: '2026.09.12',
