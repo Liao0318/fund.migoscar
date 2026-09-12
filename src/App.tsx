@@ -1302,11 +1302,19 @@ export default function App() {
     if (!activeGas && resolved.adminEmail) {
       try {
         const adminConfig = await getUserCloudConfig(resolved.adminEmail);
-        if (adminConfig && adminConfig.gasWebUrl) {
+        if (adminConfig && adminConfig.gasWebUrl && adminConfig.gasWebUrl.startsWith('http')) {
           activeGas = adminConfig.gasWebUrl;
           activeSheet = adminConfig.deploySheetUrl || activeSheet;
         }
       } catch (e) {}
+    }
+
+    // 嚴格校驗：拒絕綁定空資料庫，確保伴侶端不會陷入 $0 的無效狀態
+    if (!activeGas || !activeGas.startsWith('http') || activeGas.includes('/test/')) {
+      return { 
+        success: false, 
+        message: '⚠️ 邀請碼驗證成功，但尚未抓取到主管理員的 Google 試算表資料庫。請確認主管理員已在手機開啟《伴伴記》並完成資料庫連線，或請主管理員直接點擊「分享」發送包含 Token 的專屬連結！' 
+      };
     }
 
     if (activeGas) {
@@ -2571,6 +2579,32 @@ export default function App() {
             }
           }
         } catch (e) {}
+
+        // 1.8 若為伴侶身分但本地缺失資料庫網址，自動透過邀請代碼向 Firestore 檢索補齊
+        if ((!activeGas || !activeGas.startsWith('http')) && (partnerBindingInfo?.inviteCode || currentUser?.inviteCode)) {
+          try {
+            const targetCode = partnerBindingInfo?.inviteCode || currentUser?.inviteCode || '';
+            const inv = await fetchInviteCodeOnline(targetCode);
+            if (inv && inv.gasWebUrl && inv.gasWebUrl.startsWith('http')) {
+              activeGas = inv.gasWebUrl;
+              setGasWebUrl(activeGas);
+              if (inv.deploySheetUrl && !activeSheet) {
+                activeSheet = inv.deploySheetUrl;
+                setDeploySheetUrl(activeSheet);
+              }
+              try {
+                localStorage.setItem('muji_gas_web_url', activeGas);
+                localStorage.setItem('banban_permanent_gas_url', activeGas);
+                if (cleanEmail) localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
+                if (inv.deploySheetUrl) {
+                  localStorage.setItem('muji_sheet_url', inv.deploySheetUrl);
+                  if (cleanEmail) localStorage.setItem(`muji_sheet_url_${cleanEmail}`, inv.deploySheetUrl);
+                }
+              } catch (e) {}
+              updated = true;
+            }
+          } catch (e) {}
+        }
 
         // 2. 從個人 UserCloudConfig 雲端設定同步（換機或無快取時自動載入）
         try {

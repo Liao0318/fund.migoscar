@@ -738,11 +738,11 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
 
                           <div className="p-3 bg-[#FAF8F3] rounded-xl border border-[#EBE7DC] flex items-center justify-between text-xs">
                             <span className="text-[#8C8475]">伴侶連線狀態：</span>
-                            {partnerBindingInfo?.partnerEmail ? (
+                            {(partnerBindingInfo?.partnerEmail || partnerBindingInfo?.partnerName || (partnerBindingInfo as any)?.isBound) ? (
                               <div className="flex items-center gap-2">
                                 <span className="text-emerald-700 font-bold flex items-center gap-1">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>已綁定 ({partnerBindingInfo.partnerName || '伴侶'})</span>
+                                  <span>已綁定 ({partnerBindingInfo?.partnerName || '周沛緹 (伴侶)'})</span>
                                 </span>
                                 {onUnbindPartner && (
                                   <button
@@ -820,22 +820,45 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                           伴侶端
                         </span>
                       </div>
-                      <div className="text-xs text-[#5C564E] space-y-1.5 bg-[#FAF8F3] p-3 rounded-xl">
+                      <div className="text-xs text-[#5C564E] space-y-1.5 bg-[#FAF8F3] p-3 rounded-xl border border-[#EDE7D9]">
                         <div>👑 主管理者：<strong>{currentUser?.adminName || partnerBindingInfo?.adminName || '主管理員'}</strong></div>
                         <div>🔑 邀請代碼：<span className="font-mono font-bold text-rose-700">{currentUser?.inviteCode || partnerBindingInfo?.inviteCode || currentInviteCode}</span></div>
+                        <div className="pt-1 border-t border-[#E8E3D5] flex items-center justify-between">
+                          <span className="text-[11px] text-[#7A7366]">試算表資料庫：</span>
+                          <span className={`text-[11px] font-bold ${gasWebUrl ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {gasWebUrl ? '🟢 已連線同步' : '🟡 雲端同步中...'}
+                          </span>
+                        </div>
                       </div>
-                      {onUnbindPartner && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onUnbindPartner();
-                            setSubView(null);
-                          }}
-                          className="w-full py-2 border border-rose-300 text-rose-700 rounded-xl text-xs font-bold hover:bg-rose-50 cursor-pointer"
-                        >
-                          解除綁定或更換帳本
-                        </button>
-                      )}
+                      <div className="flex gap-2">
+                        {onBindPartnerInvite && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const code = currentUser?.inviteCode || partnerBindingInfo?.inviteCode || currentInviteCode;
+                              if (code) {
+                                await onBindPartnerInvite(code);
+                              }
+                            }}
+                            className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>重新同步試算表</span>
+                          </button>
+                        )}
+                        {onUnbindPartner && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onUnbindPartner();
+                              setSubView(null);
+                            }}
+                            className="flex-1 py-2 border border-stone-300 text-stone-600 rounded-xl text-xs font-bold hover:bg-stone-50 cursor-pointer"
+                          >
+                            解除綁定
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
