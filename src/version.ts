@@ -3,8 +3,8 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.5.2';
-export const APP_BUILD_DATE = '2026.09.10';
+export const APP_VERSION = 'v2.5.3';
+export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
 
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.5.3',
+    date: '2026.09.12',
+    title: '中央動畫 HUD 彈窗與專屬邀請入口',
+    highlights: [
+      '所有操作通知（刪除、記帳、結清、同步）升級為螢幕正中央快速動畫打勾 HUD',
+      '伴侶邀請連結全面切換為專屬極簡短網址（https://liao0318.github.io/fund.migoscar/）',
+      '登入頁面智慧偵測伴侶邀請碼，支援一鍵配對與雙向即時雲端同步',
+      '強化 6 碼伴侶代碼容錯解析與管理者防自我覆寫保護機制'
+    ]
+  },
   {
     version: 'v2.5.2',
     date: '2026.09.10',

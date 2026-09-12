@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -75,6 +75,7 @@ import { SplitSettleModal } from './components/split/SplitSettleModal';
 import { Header } from './components/common/Header';
 import { FloatingDock } from './components/common/FloatingDock';
 import { CustomConfirmModal } from './components/common/CustomConfirmModal';
+import { CenterToast, ToastData } from './components/common/CenterToast';
 import { SmartAlertModal } from './components/modals/SmartAlertModal';
 import { GoogleAuthPortal } from './components/auth/GoogleAuthPortal';
 import { UserProfileModal } from './components/auth/UserProfileModal';
@@ -2881,7 +2882,8 @@ export default function App() {
 
   // 系統載入與模擬重置狀態
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [toast, setToast] = useState<ToastData | null>(null);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -4034,13 +4036,16 @@ export default function App() {
     }
   };
 
-  // 觸發 Toast 通知 (當全屏同步動畫進行中時主動靜默，不干擾右下角畫面)
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+  // 觸發置中動畫 HUD Toast 通知 (快速動畫打勾，自動於 1.6 秒後淡出)
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success', duration = 1600) => {
     if (isInitialSyncing) return;
-    setToast({ message, type });
-    setTimeout(() => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    setToast({ message, type, duration });
+    toastTimerRef.current = setTimeout(() => {
       setToast(null);
-    }, 3000);
+    }, duration);
   };
 
   // 表單送出處理
@@ -6406,24 +6411,8 @@ export default function App() {
 
       
 
-      {/* 底部 Float 警示視窗 (Toast) */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div 
-            initial={{ opacity: 0, y: 30 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-6 right-6 z-50 pointer-events-none"
-          >
-            <div className="bg-[#4D4942]/95 backdrop-blur-sm text-white text-xs px-5 py-4 rounded-xl shadow-lg border border-white/10 flex items-center gap-3">
-              <span className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30 text-emerald-300">
-                {toast.type === 'error' ? '!' : '✓'}
-              </span>
-              <span className="font-light tracking-wide">{toast.message}</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* 🎯 螢幕中央快速動畫 HUD 通知 (CenterToast) */}
+      <CenterToast toast={toast} />
 
       {/* 底部功能列 Floating Dock (含更多設定入口) */}
       <FloatingDock
