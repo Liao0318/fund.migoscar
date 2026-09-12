@@ -28,10 +28,11 @@ import {
   LogOut,
   RotateCcw,
   Download,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Clock
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData, CoupleBindingInfo } from '../../types';
-import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline, encodeInvitePayload, createShareableInviteCard, getAppShareBaseUrl } from '../../utils/partnerInvite';
+import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline, encodeInvitePayload, createShareableInviteCard, getAppShareBaseUrl, getActiveInviteCode, getInviteRemainingSeconds, formatRemainingTime } from '../../utils/partnerInvite';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
 import { scanAndRecoverGasUrl, getUserCloudConfig } from '../../utils/userConfigService';
@@ -123,6 +124,22 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
   const [copiedCodeType, setCopiedCodeType] = useState<string | null>(null);
   const [copiedInvite, setCopiedInvite] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+
+  const [inviteRemainingSecs, setInviteRemainingSecs] = useState<number>(() => {
+    const active = getActiveInviteCode();
+    return getInviteRemainingSeconds(active);
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const update = () => {
+      const active = getActiveInviteCode();
+      setInviteRemainingSecs(getInviteRemainingSeconds(active));
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen, currentInviteCode]);
 
   const [isAdminBindingLoading, setIsAdminBindingLoading] = useState(false);
   const [adminValidationError, setAdminValidationError] = useState<string | null>(null);
@@ -1113,13 +1130,25 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                                 <Heart className="w-4 h-4 text-rose-600 fill-rose-500" />
                                 <span>專屬伴侶配對代碼：</span>
                               </span>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-rose-500" />
+                                  {inviteRemainingSecs > 0 ? (
+                                    <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                                      時效剩餘 {formatRemainingTime(inviteRemainingSecs)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                      已逾期 (請重新生成)
+                                    </span>
+                                  )}
+                                </div>
                                 {onGenerateNewInviteCode && (
                                   <button
                                     type="button"
                                     onClick={onGenerateNewInviteCode}
                                     className="p-1.5 rounded-lg bg-[#FAF8F3] hover:bg-[#F2EFE7] border border-[#E0DCD3] text-[#5C564E] transition-all cursor-pointer"
-                                    title="重新產生隨機代碼"
+                                    title="重新產生 15 分鐘新邀請碼"
                                   >
                                     <RefreshCw className="w-3.5 h-3.5" />
                                   </button>
@@ -1485,14 +1514,26 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                       <div className="space-y-3">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EBE7DC]">
                           <div>
-                            <div className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
+                            <div className="text-xs font-bold text-[#3E3A36] flex flex-wrap items-center gap-1.5">
                               <span>您的伴侶配對邀請代碼：</span>
                               <span className="font-mono bg-white px-2 py-0.5 rounded-lg border border-[#DDD8CE] text-rose-700 font-extrabold text-sm">
                                 {currentInviteCode}
                               </span>
+                              <div className="inline-flex items-center gap-1 ml-1">
+                                <Clock className="w-3 h-3 text-rose-500" />
+                                {inviteRemainingSecs > 0 ? (
+                                  <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200">
+                                    剩餘 {formatRemainingTime(inviteRemainingSecs)}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200">
+                                    已逾期
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             <p className="text-[11px] text-[#8C8475] mt-1">
-                              伴侶登入後輸入此代碼，即可自動共享您的 Google 雲端試算表並雙向即時推播！
+                              伴侶登入後輸入此代碼，即可自動共享您的 Google 雲端試算表並雙向即時推播！（有效時效 15 分鐘）
                             </p>
                           </div>
 
@@ -1502,7 +1543,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                                 type="button"
                                 onClick={onGenerateNewInviteCode}
                                 className="p-2 rounded-xl bg-white hover:bg-[#F2EFE7] border border-[#DDD8CE] text-[#5C564E] transition-all cursor-pointer shadow-2xs"
-                                title="重新隨機派發新邀請碼"
+                                title="重新隨機派發 15 分鐘新邀請碼"
                               >
                                 <RefreshCw className="w-3.5 h-3.5" />
                               </button>

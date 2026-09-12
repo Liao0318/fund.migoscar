@@ -31,10 +31,12 @@ import {
   Laptop,
   Bell,
   SlidersHorizontal,
-  Sliders
+  Sliders,
+  Clock
 } from 'lucide-react';
 import { AuthUser, CoupleBindingInfo, NicknameLengthPreference, AppNotifySettings } from '../../types';
 import { APP_VERSION, APP_BUILD_DATE, APP_NAME } from '../../version';
+import { getActiveInviteCode, getInviteRemainingSeconds, formatRemainingTime } from '../../utils/partnerInvite';
 
 interface UnifiedSettingsModalProps {
   isOpen: boolean;
@@ -112,6 +114,22 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [inviteRemainingSecs, setInviteRemainingSecs] = useState<number>(() => {
+    const active = getActiveInviteCode();
+    return getInviteRemainingSeconds(active);
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const update = () => {
+      const active = getActiveInviteCode();
+      setInviteRemainingSecs(getInviteRemainingSeconds(active));
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen, currentInviteCode]);
+
   const [partnerSubTab, setPartnerSubTab] = useState<'share' | 'join'>(() => {
     return gasWebUrl ? 'share' : 'join';
   });
@@ -700,8 +718,22 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
 
                       {partnerSubTab === 'share' ? (
                         <div className="space-y-3">
-                          <div className="bg-[#FAF8F3] p-3.5 rounded-xl border border-[#EBE7DC] space-y-2">
-                            <div className="text-xs font-bold text-[#3E3A36]">專屬伴侶配對代碼</div>
+                          <div className="bg-[#FAF8F3] p-3.5 rounded-xl border border-[#EBE7DC] space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-[#3E3A36]">專屬伴侶配對代碼</span>
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-rose-500" />
+                                {inviteRemainingSecs > 0 ? (
+                                  <span className="text-[11px] font-mono font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                                    時效剩餘 {formatRemainingTime(inviteRemainingSecs)}
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                    已逾期 (請重新生成)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                             <div className="flex items-center justify-between">
                               <span className="font-mono text-lg font-extrabold text-rose-700 bg-white px-3 py-1 rounded-lg border border-[#DDD8CE]">
                                 {currentInviteCode}
@@ -712,7 +744,7 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                                     type="button"
                                     onClick={onGenerateNewInviteCode}
                                     className="p-2 rounded-xl bg-white border border-[#E6E0D2] hover:bg-[#F2EFE7] cursor-pointer"
-                                    title="重新生成邀請碼"
+                                    title="重新生成 15 分鐘邀請碼"
                                   >
                                     <RefreshCw className="w-3.5 h-3.5 text-[#5C564E]" />
                                   </button>

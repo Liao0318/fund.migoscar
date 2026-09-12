@@ -26,6 +26,71 @@ const REGISTRY_STORAGE_KEY = 'banban_invite_registry';
 const ACTIVE_INVITE_STORAGE_KEY = 'banban_active_invite';
 const PARTNER_BINDING_STORAGE_KEY = 'banban_partner_binding';
 
+export const DEFAULT_INVITE_VALID_MINUTES = 15;
+
+/**
+ * 檢查邀請碼是否已過期（預設 15 分鐘時效）
+ */
+export function isInviteExpired(invite?: PartnerInviteData | null): boolean {
+  if (!invite) return true;
+  if (invite.expiresAt) {
+    return Date.now() > new Date(invite.expiresAt).getTime();
+  }
+  if (invite.createdAt) {
+    const createdTime = new Date(invite.createdAt).getTime();
+    if (!isNaN(createdTime)) {
+      return Date.now() > (createdTime + DEFAULT_INVITE_VALID_MINUTES * 60 * 1000);
+    }
+  }
+  return false;
+}
+
+/**
+ * 取得邀請碼剩餘有效秒數
+ */
+export function getInviteRemainingSeconds(invite?: PartnerInviteData | null): number {
+  if (!invite) return 0;
+  const expiryTime = invite.expiresAt 
+    ? new Date(invite.expiresAt).getTime()
+    : (invite.createdAt ? new Date(invite.createdAt).getTime() + DEFAULT_INVITE_VALID_MINUTES * 60 * 1000 : 0);
+  if (!expiryTime || isNaN(expiryTime)) return 0;
+  return Math.max(0, Math.floor((expiryTime - Date.now()) / 1000));
+}
+
+/**
+ * 格式化剩餘時間為 MM:SS
+ */
+export function formatRemainingTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+/**
+ * 建立全新具備時效性 (15分鐘) 的邀請資料
+ */
+export function createFreshInvite(
+  adminEmail: string,
+  adminName: string,
+  gasWebUrl: string,
+  deploySheetUrl: string = '',
+  validMinutes: number = DEFAULT_INVITE_VALID_MINUTES
+): PartnerInviteData {
+  const inviteCode = generateRandomInviteCode();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + validMinutes * 60 * 1000).toISOString();
+  return {
+    inviteCode,
+    adminEmail,
+    adminName: adminName || '主管理員',
+    gasWebUrl,
+    deploySheetUrl,
+    validMinutes,
+    createdAt: now.toISOString(),
+    expiresAt
+  };
+}
+
 /**
  * 隨機生成 6 碼情侶專屬邀請碼 (格式：BB-XXXX)
  * 使用 Web Crypto API (高隨機性安全隨機數) 與排除混淆字元的字符池
@@ -670,7 +735,7 @@ export function getAppShareBaseUrl(): string {
 }
 
 /**
- * 產生分享給伴侶的甜蜜邀請文案與專屬連結
+ * 產生分享給伴侶的甜蜜邀請文案與專屬連結（具備 15 分鐘時效性說明）
  */
 export function generatePartnerInviteShare(invite: PartnerInviteData, baseUrl?: string): {
   shareText: string;
@@ -683,11 +748,21 @@ export function generatePartnerInviteShare(invite: PartnerInviteData, baseUrl?: 
     ? `${cleanBase}#join=${invite.inviteCode}&token=${token}`
     : `${cleanBase}#join=${invite.inviteCode}`;
 
+  let expireStr = '15 分鐘';
+  if (invite.expiresAt) {
+    try {
+      const expDate = new Date(invite.expiresAt);
+      const timeFormatted = expDate.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+      expireStr = `15 分鐘（請於 ${timeFormatted} 前完成綁定）`;
+    } catch (e) {}
+  }
+
   const shareText = `💌【伴伴記❤️】情侶共同帳本邀請函
 
 嗨！${invite.adminName || '你的另一半'} 邀請你加入《伴伴記》情侶專屬生活帳本！
 
 🔑 你的專屬伴侶邀請碼：【 ${invite.inviteCode} 】
+⏱️ 有效時限：${expireStr}
 📲 點擊專屬連結立即加入綁定：
 ${shareUrl}
 

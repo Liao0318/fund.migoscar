@@ -124,7 +124,11 @@ import {
   fetchInviteCodeOnline,
   removePartnerBinding,
   createShareableInviteCard,
-  resolveInviteCodeOrToken
+  resolveInviteCodeOrToken,
+  createFreshInvite,
+  isInviteExpired,
+  getInviteRemainingSeconds,
+  formatRemainingTime
 } from './utils/partnerInvite';
 import { 
   saveUserCloudConfig, 
@@ -579,9 +583,13 @@ export default function App() {
   const [syncingUserName, setSyncingUserName] = useState<string>('');
   const [syncingUserAvatar, setSyncingUserAvatar] = useState<string>('');
 
-  // 💌 伴侶邀請代碼與情侶雙向綁定狀態
+  // 💌 伴侶邀請代碼與情侶雙向綁定狀態（預設 15 分鐘時效性動態更新）
   const [currentInviteCode, setCurrentInviteCode] = useState<string>(() => {
-    return getActiveInviteCode()?.inviteCode || generateRandomInviteCode();
+    const active = getActiveInviteCode();
+    if (active && !isInviteExpired(active)) {
+      return active.inviteCode;
+    }
+    return generateRandomInviteCode();
   });
   const [partnerBindingInfo, setPartnerBindingInfo] = useState<CoupleBindingInfo | null>(() => {
     const isGuest = localStorage.getItem('banban_is_guest_mode') === 'true';
@@ -672,49 +680,61 @@ export default function App() {
   });
 
   const handleGenerateNewInviteCode = () => {
-    const newCode = generateRandomInviteCode();
-    setCurrentInviteCode(newCode);
-    const cleanGas = (localStorage.getItem('muji_gas_web_url') || '').trim();
-    const cleanSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
-    if (currentUser) {
-      saveActiveInviteCode({
-        inviteCode: newCode,
-        adminEmail: currentUser.email,
-        adminName: currentUser.name,
+    const cleanGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
+    const cleanSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
+    const fresh = createFreshInvite(
+      currentUser?.email || '',
+      currentUser?.name || '主管理員',
+      cleanGas,
+      cleanSheet,
+      15
+    );
+    setCurrentInviteCode(fresh.inviteCode);
+    saveActiveInviteCode(fresh);
+    if (currentUser?.email) {
+      saveUserCloudConfig(currentUser.email, {
+        inviteCode: fresh.inviteCode,
         gasWebUrl: cleanGas,
-        deploySheetUrl: cleanSheet,
-        createdAt: new Date().toISOString()
-      });
-      if (currentUser.email) {
-        saveUserCloudConfig(currentUser.email, {
-          inviteCode: newCode,
-          gasWebUrl: cleanGas,
-          deploySheetUrl: cleanSheet
-        });
-      }
+        deploySheetUrl: cleanSheet
+      }).catch(() => {});
     }
-    showToast(`已為伴侶隨機產生專屬邀請碼：${newCode}`, 'success');
+    showToast(`✨ 已產生全新 15 分鐘時效邀請碼：${fresh.inviteCode}`, 'success');
   };
 
   const handleCopyInviteShare = () => {
-    const cleanGas = (localStorage.getItem('muji_gas_web_url') || '').trim();
-    const cleanSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
-    const activeInvite = getActiveInviteCode() || {
-      inviteCode: currentInviteCode,
-      adminEmail: currentUser?.email || '',
-      adminName: currentUser?.name || '主管理員',
-      gasWebUrl: cleanGas,
-      deploySheetUrl: cleanSheet,
-      createdAt: new Date().toISOString()
-    };
-    // 確保邀請碼即時同步於雲端
+    const cleanGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
+    const cleanSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
+    let activeInvite = getActiveInviteCode();
+    
+    // 若邀請碼不存在或已過期，立即自動刷新為最新 15 分鐘有效邀請碼
+    if (!activeInvite || isInviteExpired(activeInvite)) {
+      activeInvite = createFreshInvite(
+        currentUser?.email || '',
+        currentUser?.name || '主管理員',
+        cleanGas,
+        cleanSheet,
+        15
+      );
+      setCurrentInviteCode(activeInvite.inviteCode);
+      saveActiveInviteCode(activeInvite);
+    } else {
+      activeInvite = {
+        ...activeInvite,
+        adminEmail: currentUser?.email || activeInvite.adminEmail,
+        adminName: currentUser?.name || activeInvite.adminName,
+        gasWebUrl: cleanGas || activeInvite.gasWebUrl,
+        deploySheetUrl: cleanSheet || activeInvite.deploySheetUrl
+      };
+      saveActiveInviteCode(activeInvite);
+    }
+
     if (currentUser?.email && cleanGas) {
       saveActiveInviteCode(activeInvite);
     }
     const cardText = createShareableInviteCard(activeInvite);
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(cardText);
-      showToast('💌 已複製伴侶邀請函與專屬加入連結！', 'success');
+      showToast('💌 已複製伴侶邀請函與專屬時效連結（有效時限 15 分鐘）！', 'success');
     }
   };
 
@@ -1217,6 +1237,13 @@ export default function App() {
       }
     }
 
+    if (resolved && isInviteExpired(resolved)) {
+      return {
+        success: false,
+        message: '⚠️ 此邀請碼已超過 15 分鐘有效時限，請向伴侶索取最新邀請碼！'
+      };
+    }
+
     if (!resolved) {
       return { success: false, message: '找不到符合的邀請碼，請確認 6 碼代碼或向伴侶索取最新邀請碼' };
     }
@@ -1268,6 +1295,13 @@ export default function App() {
       } catch (e) {}
 
       saveDeployConfig(activeGas, activeSheet);
+
+      if (activeGas) {
+        fetchDashboardData(true, false, activeGas);
+        fetchShoppingData(false, activeGas);
+        fetchSplitData(true, activeGas);
+        fetchTravelData(true, activeGas);
+      }
 
       return { 
         success: true, 
@@ -1362,10 +1396,10 @@ export default function App() {
 
     if (activeGas) {
       setTimeout(() => {
-        fetchDashboardData(true, false);
-        fetchShoppingData(false);
-        fetchSplitData(true);
-        fetchTravelData(true);
+        fetchDashboardData(true, false, activeGas);
+        fetchShoppingData(false, activeGas);
+        fetchSplitData(true, activeGas);
+        fetchTravelData(true, activeGas);
       }, 50);
     }
 
@@ -1880,7 +1914,7 @@ export default function App() {
   );
 
   // ------------------- Google Apps Script / Web App API 整合核心 -------------------
-  const callGasApi = async (action: string, payload?: any): Promise<any> => {
+  const callGasApi = async (action: string, payload?: any, overrideGasUrl?: string): Promise<any> => {
     // 若處於開發人員沙盒模式或訪客模式，不對外部 GAS 進行網路呼叫，直接回傳本地回退旗標
     if (isSandboxMode || isGuestMode || !currentUser) {
       return { success: false, isLocalFallback: true, isSandbox: isSandboxMode, isGuest: isGuestMode };
@@ -1901,10 +1935,19 @@ export default function App() {
     }
 
     // 2. AI Studio 預覽版或獨立 Web 網頁環境，透過 HTTP fetch 呼叫 GAS Web App
-    const targetUrl = localStorage.getItem('muji_gas_web_url') || gasWebUrl;
-    if (targetUrl && targetUrl.trim().startsWith('http')) {
+    const targetUrl = (
+      overrideGasUrl ||
+      localStorage.getItem('muji_gas_web_url') ||
+      gasWebUrl ||
+      localStorage.getItem('banban_permanent_gas_url') ||
+      (currentUser?.email ? localStorage.getItem(`muji_gas_web_url_${currentUser.email.toLowerCase()}`) : '') ||
+      partnerBindingInfo?.gasWebUrl ||
+      ''
+    ).trim();
+
+    if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/test/')) {
       try {
-        const res = await fetch(targetUrl.trim(), {
+        const res = await fetch(targetUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({ action, ...payload })
@@ -1995,12 +2038,12 @@ export default function App() {
     }
   };
 
-  const fetchDashboardData = async (showToastNotice = false, isBackground = false) => {
+  const fetchDashboardData = async (showToastNotice = false, isBackground = false, overrideGasUrl?: string) => {
     if (!isBackground) setIsSyncingGas(true);
     else setIsBackgroundSyncing(true);
 
     try {
-      const res = await callGasApi('getDashboardData');
+      const res = await callGasApi('getDashboardData', undefined, overrideGasUrl);
       if (res && res.success) {
         if (Array.isArray(res.records)) {
           setRecords(prev => {
@@ -2041,9 +2084,9 @@ export default function App() {
     }
   };
 
-  const fetchShoppingData = async (isBackground = false) => {
+  const fetchShoppingData = async (isBackground = false, overrideGasUrl?: string) => {
     try {
-      const res = await callGasApi('getShoppingData');
+      const res = await callGasApi('getShoppingData', undefined, overrideGasUrl);
       if (res && res.success) {
         if (Array.isArray(res.items)) {
           const normalized = res.items.map((it: any) => ({
@@ -2077,14 +2120,23 @@ export default function App() {
     }
   };
 
-  const fetchSplitData = async (silent = false) => {
-    if (!gasWebUrl) {
+  const fetchSplitData = async (silent = false, overrideGasUrl?: string) => {
+    const activeGas = (
+      overrideGasUrl ||
+      localStorage.getItem('muji_gas_web_url') ||
+      gasWebUrl ||
+      (currentUser?.email ? localStorage.getItem(`muji_gas_web_url_${currentUser.email.toLowerCase()}`) : '') ||
+      partnerBindingInfo?.gasWebUrl ||
+      ''
+    ).trim();
+
+    if (!activeGas) {
       calculateLocalSplitSummary(splitItems);
       return;
     }
     if (!silent) setIsSplitLoading(true);
     try {
-      const res = await callGasApi('getSplitData');
+      const res = await callGasApi('getSplitData', undefined, overrideGasUrl);
       if (res && res.success) {
         if (Array.isArray(res.items)) {
           setSplitItems(res.items);
@@ -2107,9 +2159,9 @@ export default function App() {
     }
   };
 
-  const fetchTravelData = async (silent = false) => {
+  const fetchTravelData = async (silent = false, overrideGasUrl?: string) => {
     try {
-      const res = await callGasApi('getTravelData');
+      const res = await callGasApi('getTravelData', undefined, overrideGasUrl);
       if (res && res.success) {
         let delTrips = new Set<string>();
         let delExpenses = new Set<string>();
@@ -2491,7 +2543,7 @@ export default function App() {
     syncSystemDatabase();
   }, [currentUser?.email]);
 
-  // ☁️ 確保管理者的有效邀請碼在 Firestore 與後端資料庫隨時就緒 (僅限主管理員帳號)
+  // ☁️ 確保管理者的有效邀請碼在 Firestore 與後端資料庫隨時就緒 (僅限主管理員帳號，預設 15 分鐘時效)
   useEffect(() => {
     const isPartnerRole = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || (partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
     if (isPartnerRole) return;
@@ -2499,13 +2551,20 @@ export default function App() {
     const activeGas = (gasWebUrl || (currentUser?.email ? localStorage.getItem(`muji_gas_web_url_${currentUser.email.toLowerCase()}`) : '') || '').trim();
     const activeSheet = (deploySheetUrl || (currentUser?.email ? localStorage.getItem(`muji_sheet_url_${currentUser.email.toLowerCase()}`) : '') || '').trim();
     if (activeGas && activeGas.startsWith('http') && currentInviteCode && currentUser?.email) {
+      const existing = getActiveInviteCode();
+      const expiresAt = (existing && !isInviteExpired(existing) && existing.expiresAt)
+        ? existing.expiresAt
+        : new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
       saveActiveInviteCode({
         inviteCode: currentInviteCode,
         adminEmail: currentUser.email,
         adminName: currentUser.name || '主管理員',
         gasWebUrl: activeGas,
         deploySheetUrl: activeSheet,
-        createdAt: new Date().toISOString()
+        createdAt: (existing && existing.createdAt) || new Date().toISOString(),
+        expiresAt,
+        validMinutes: 15
       });
     }
   }, [currentUser?.email, currentUser?.name, currentUser?.userRole, currentUser?.adminEmail, partnerBindingInfo?.partnerEmail, currentInviteCode, gasWebUrl, deploySheetUrl, isSandboxMode]);

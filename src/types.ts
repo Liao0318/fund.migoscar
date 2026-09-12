@@ -217,6 +217,8 @@ export interface PartnerInviteData {
   gasWebUrl?: string;
   deploySheetUrl?: string;
   createdAt: string;
+  expiresAt?: string; // ISO 8601 時效截止時間戳 (預設 15 分鐘)
+  validMinutes?: number; // 有效分鐘數 (例如 15)
 }
 
 export type NicknameLengthPreference = '1-char' | '2-char';

@@ -205,6 +205,36 @@ async function startServer() {
         }
       }
 
+      const checkExpired = (inv: any) => {
+        if (!inv) return true;
+        if (inv.expiresAt) {
+          return Date.now() > new Date(inv.expiresAt).getTime();
+        }
+        return false;
+      };
+
+      const enrichInviteGas = (inv: any) => {
+        if (!inv) return null;
+        let gas = isValidGasUrl(inv.gasWebUrl) ? inv.gasWebUrl : '';
+        let sheet = inv.deploySheetUrl || '';
+        if (!gas && inv.adminEmail) {
+          const cfg = userConfigs[inv.adminEmail.toLowerCase()];
+          if (cfg && isValidGasUrl(cfg.gasWebUrl)) {
+            gas = cfg.gasWebUrl;
+            sheet = cfg.deploySheetUrl || sheet;
+          }
+        }
+        if (!gas && isValidGasUrl(sysDb?.gasWebUrl)) {
+          gas = sysDb.gasWebUrl;
+          sheet = sysDb.deploySheetUrl || sheet;
+        }
+        return {
+          ...inv,
+          gasWebUrl: gas,
+          deploySheetUrl: sheet
+        };
+      };
+
       if (rawCode) {
         const cleanNoPrefix = rawCode.replace(/^BB-?/, '');
         const withPrefix = `BB-${cleanNoPrefix}`;
@@ -212,8 +242,20 @@ async function startServer() {
 
         // 1. 直接比對 partner_invites.json
         for (const c of candidates) {
-          if (invites[c] && isValidGasUrl(invites[c].gasWebUrl)) {
-            return res.json({ success: true, invite: invites[c] });
+          if (invites[c]) {
+            const inv = invites[c];
+            if (checkExpired(inv)) {
+              return res.json({ 
+                success: false, 
+                expired: true, 
+                message: `此邀請碼 ${rawCode} 已超過 15 分鐘有效時限，請向伴侶索取最新邀請碼！`, 
+                invite: null 
+              });
+            }
+            const enriched = enrichInviteGas(inv);
+            if (isValidGasUrl(enriched.gasWebUrl)) {
+              return res.json({ success: true, invite: enriched });
+            }
           }
         }
 
@@ -221,11 +263,22 @@ async function startServer() {
         const foundInInvites = Object.values(invites).find((inv: any) => {
           const invCode = (inv.inviteCode || '').toUpperCase();
           const invClean = invCode.replace(/^BB-?/, '');
-          return (candidates.includes(invCode) || candidates.includes(invClean)) && isValidGasUrl(inv.gasWebUrl);
+          return candidates.includes(invCode) || candidates.includes(invClean);
         });
 
         if (foundInInvites) {
-          return res.json({ success: true, invite: foundInInvites });
+          if (checkExpired(foundInInvites)) {
+            return res.json({ 
+              success: false, 
+              expired: true, 
+              message: `此邀請碼 ${rawCode} 已超過 15 分鐘有效時限，請向伴侶索取最新邀請碼！`, 
+              invite: null 
+            });
+          }
+          const enriched = enrichInviteGas(foundInInvites);
+          if (isValidGasUrl(enriched.gasWebUrl)) {
+            return res.json({ success: true, invite: enriched });
+          }
         }
 
         // 3. 比對 user_configs.json 中有無該 inviteCode
@@ -241,7 +294,9 @@ async function startServer() {
                 adminName: cfg.name || '主管理員',
                 gasWebUrl: candidateGas,
                 deploySheetUrl: cfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
-                createdAt: cfg.updatedAt || new Date().toISOString()
+                createdAt: cfg.updatedAt || new Date().toISOString(),
+                expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+                validMinutes: 15
               };
               invites[withPrefix] = synthesizedInvite;
               invites[cleanNoPrefix] = synthesizedInvite;
@@ -251,8 +306,8 @@ async function startServer() {
           }
         }
 
-        // 4. 若以上比對皆查無此邀請碼，回傳找不到邀請碼（不進行未經註冊的任意邀請碼虛構）
-        return res.json({ success: false, message: `查無邀請碼 ${rawCode}`, invite: null });
+        // 4. 若以上比對皆查無此邀請碼，回傳找不到邀請碼
+        return res.json({ success: false, message: `查無邀請碼 ${rawCode}，請確認代碼是否輸入正確或已重新產生`, invite: null });
       }
 
       if (email) {
@@ -260,10 +315,13 @@ async function startServer() {
         const found = Object.values(invites).find((inv: any) => 
           ((inv.adminEmail && inv.adminEmail.toLowerCase() === email) ||
           (inv.email && inv.email.toLowerCase() === email)) &&
-          isValidGasUrl(inv.gasWebUrl)
+          !checkExpired(inv)
         );
         if (found) {
-          return res.json({ success: true, invite: found });
+          const enriched = enrichInviteGas(found);
+          if (isValidGasUrl(enriched.gasWebUrl)) {
+            return res.json({ success: true, invite: enriched });
+          }
         }
 
         // 2. 比對 user_configs (僅當該帳號本身有 inviteCode 且有專屬 gasWebUrl 時)
@@ -276,7 +334,9 @@ async function startServer() {
             adminName: userCfg.name || '主管理員',
             gasWebUrl: userCfg.gasWebUrl,
             deploySheetUrl: userCfg.deploySheetUrl || '',
-            createdAt: userCfg.updatedAt || new Date().toISOString()
+            createdAt: userCfg.updatedAt || new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+            validMinutes: 15
           };
           invites[inviteCode] = synInvite;
           writeJsonFile(PARTNER_INVITES_FILE, invites);
@@ -299,9 +359,33 @@ async function startServer() {
       }
       const code = rawCode.startsWith('BB-') ? rawCode : (rawCode.startsWith('BB') && rawCode.length > 2 ? `BB-${rawCode.slice(2)}` : `BB-${rawCode}`);
       const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
+
+      let gasToSave = isValidGasUrl(invite.gasWebUrl) ? invite.gasWebUrl : '';
+      let sheetToSave = invite.deploySheetUrl || '';
+
+      const adminEmailClean = invite.adminEmail ? String(invite.adminEmail).trim().toLowerCase() : '';
+      if (!gasToSave && adminEmailClean && userConfigs[adminEmailClean] && isValidGasUrl(userConfigs[adminEmailClean].gasWebUrl)) {
+        gasToSave = userConfigs[adminEmailClean].gasWebUrl;
+        sheetToSave = userConfigs[adminEmailClean].deploySheetUrl || sheetToSave;
+      }
+      if (!gasToSave && isValidGasUrl(sysDb?.gasWebUrl)) {
+        gasToSave = sysDb.gasWebUrl;
+        sheetToSave = sysDb.deploySheetUrl || sheetToSave;
+      }
+
+      const validMinutes = typeof invite?.validMinutes === 'number' && invite.validMinutes > 0 ? invite.validMinutes : 15;
+      const expiresAt = invite.expiresAt || new Date(Date.now() + validMinutes * 60 * 1000).toISOString();
+
       const enrichedInvite = {
         ...invite,
         inviteCode: code,
+        gasWebUrl: gasToSave,
+        deploySheetUrl: sheetToSave,
+        validMinutes,
+        expiresAt,
+        createdAt: invite.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
       invites[code] = enrichedInvite;
@@ -309,13 +393,11 @@ async function startServer() {
       invites[code.replace(/^BB-/, '')] = enrichedInvite;
       writeJsonFile(PARTNER_INVITES_FILE, invites);
 
-      if (invite.adminEmail) {
-        const adminEmailClean = String(invite.adminEmail).trim().toLowerCase();
-        const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      if (adminEmailClean) {
         if (userConfigs[adminEmailClean]) {
           userConfigs[adminEmailClean].inviteCode = code;
-          if (isValidGasUrl(invite.gasWebUrl)) userConfigs[adminEmailClean].gasWebUrl = invite.gasWebUrl;
-          if (invite.deploySheetUrl) userConfigs[adminEmailClean].deploySheetUrl = invite.deploySheetUrl;
+          if (gasToSave) userConfigs[adminEmailClean].gasWebUrl = gasToSave;
+          if (sheetToSave) userConfigs[adminEmailClean].deploySheetUrl = sheetToSave;
           writeJsonFile(USER_CONFIGS_FILE, userConfigs);
         }
       }

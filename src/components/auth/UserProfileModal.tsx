@@ -21,10 +21,12 @@ import {
   Edit3,
   Camera,
   AlertCircle,
-  LogIn
+  LogIn,
+  Clock
 } from 'lucide-react';
 import { AuthUser, CoupleBindingInfo, NicknameLengthPreference } from '../../types';
 import { NicknameSettingsSection } from '../common/NicknameSettingsSection';
+import { getActiveInviteCode, getInviteRemainingSeconds, formatRemainingTime } from '../../utils/partnerInvite';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -78,6 +80,22 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
   const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
+
+  const [inviteRemainingSecs, setInviteRemainingSecs] = useState<number>(() => {
+    const active = getActiveInviteCode();
+    return getInviteRemainingSeconds(active);
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const update = () => {
+      const active = getActiveInviteCode();
+      setInviteRemainingSecs(getInviteRemainingSeconds(active));
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen, currentInviteCode]);
   
   // 暱稱編輯狀態 (限文字，少於三個字：1~2 個字)
   const [nicknameInput, setNicknameInput] = useState('');
@@ -422,24 +440,38 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     /* ✅ 已完成資料庫綁定：展示邀請代碼 */
                     <>
                       {/* 邀請碼展示卡片 */}
-                      <div className="bg-white rounded-xl p-3 border-2 border-amber-200/90 flex items-center justify-between gap-2 shadow-xs">
+                      <div className="bg-white rounded-xl p-3 border-2 border-amber-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
                         <div>
-                          <div className="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            <span>專屬伴侶邀請代碼 (資料庫已就緒)</span>
+                          <div className="text-[10px] text-emerald-700 font-bold flex flex-wrap items-center gap-1.5">
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>專屬伴侶邀請代碼</span>
+                            </span>
+                            <div className="inline-flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-rose-500" />
+                              {inviteRemainingSecs > 0 ? (
+                                <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                                  時效剩餘 {formatRemainingTime(inviteRemainingSecs)}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                  已逾期 (請重新生成)
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="font-mono text-xl sm:text-2xl font-black text-amber-900 tracking-wider">
+                          <div className="font-mono text-xl sm:text-2xl font-black text-amber-900 tracking-wider mt-0.5">
                             {currentInviteCode}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 shrink-0">
                           {onGenerateNewInviteCode && (
                             <button
                               type="button"
                               onClick={onGenerateNewInviteCode}
                               className="p-2 rounded-xl bg-[#FAF8F3] hover:bg-amber-100 text-amber-900 border border-amber-200 transition-all cursor-pointer shadow-2xs"
-                              title="重新隨機派發新邀請碼"
+                              title="重新隨機派發 15 分鐘新邀請碼"
                             >
                               <RefreshCw className="w-4 h-4" />
                             </button>
