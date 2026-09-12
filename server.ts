@@ -58,17 +58,57 @@ async function startServer() {
       const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
       let config = configs[email] || null;
 
-      // 若此帳號尚無有效獨立資料庫設定，自動嘗試從全系統或綁定推導
+      // 若此帳號尚無有效獨立資料庫設定，自動進行全端多層級反查推導
       if (!config || !isValidGasUrl(config.gasWebUrl)) {
         const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
-        if (sysDb && isValidGasUrl(sysDb.gasWebUrl)) {
+        const ledgers = readJsonFile<Record<string, any>>(USER_LEDGER_DATA_FILE, {});
+        const userLedger = ledgers[email];
+        const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
+        const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
+
+        let candidateGas = '';
+        let candidateSheet = '';
+
+        // 1. 優先從該帳號歷史備份帳本中檢索
+        if (userLedger && isValidGasUrl(userLedger.gasWebUrl)) {
+          candidateGas = userLedger.gasWebUrl.trim();
+          candidateSheet = userLedger.deploySheetUrl || '';
+        }
+
+        // 2. 檢索情侶綁定中該使用者或對方的資料庫
+        if (!candidateGas && bindings[email] && isValidGasUrl(bindings[email].gasWebUrl)) {
+          candidateGas = bindings[email].gasWebUrl.trim();
+          candidateSheet = bindings[email].deploySheetUrl || '';
+        }
+
+        // 3. 檢索該使用者建立過的任何有效邀請
+        if (!candidateGas) {
+          const matchedInvite = Object.values(invites).find((inv: any) => 
+            inv && (inv.adminEmail?.toLowerCase() === email || inv.partnerEmail?.toLowerCase() === email) && isValidGasUrl(inv.gasWebUrl)
+          );
+          if (matchedInvite) {
+            candidateGas = matchedInvite.gasWebUrl.trim();
+            candidateSheet = matchedInvite.deploySheetUrl || '';
+          }
+        }
+
+        // 4. 檢索全系統資料庫
+        if (!candidateGas && sysDb && isValidGasUrl(sysDb.gasWebUrl)) {
+          candidateGas = sysDb.gasWebUrl.trim();
+          candidateSheet = sysDb.deploySheetUrl || '';
+        }
+
+        if (candidateGas) {
           config = {
             ...(config || {}),
             email,
-            gasWebUrl: sysDb.gasWebUrl,
-            deploySheetUrl: sysDb.deploySheetUrl || '',
-            updatedAt: sysDb.updatedAt,
+            gasWebUrl: candidateGas,
+            deploySheetUrl: candidateSheet,
+            updatedAt: new Date().toISOString(),
           };
+          // 自動補全寫回，確保下次即刻命中
+          configs[email] = config;
+          writeJsonFile(USER_CONFIGS_FILE, configs);
         }
       }
 
@@ -180,6 +220,90 @@ async function startServer() {
         return res.json({ success: true, database: sysDb });
       }
       return res.status(400).json({ success: false, message: 'Invalid gasWebUrl' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 1.8 強制原子性帳號與資料庫綁定 API (確保跨裝置、換機 100% 同步生效)
+  app.post('/api/bind-user-database', (req, res) => {
+    try {
+      const { email, gasWebUrl, deploySheetUrl, name, inviteCode } = req.body || {};
+      const cleanEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'Email required' });
+      }
+      if (!isValidGasUrl(gasWebUrl)) {
+        return res.status(400).json({ success: false, message: 'Valid Google Apps Script URL required' });
+      }
+      const cleanGas = gasWebUrl.trim();
+      const cleanSheet = typeof deploySheetUrl === 'string' ? deploySheetUrl.trim() : '';
+
+      // 1. 寫入 user_configs
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const existingCfg = userConfigs[cleanEmail] || {};
+      const updatedCfg = {
+        ...existingCfg,
+        email: cleanEmail,
+        name: name || existingCfg.name || '主管理員',
+        gasWebUrl: cleanGas,
+        deploySheetUrl: cleanSheet,
+        inviteCode: inviteCode || existingCfg.inviteCode || '',
+        updatedAt: new Date().toISOString()
+      };
+      userConfigs[cleanEmail] = updatedCfg;
+      writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+
+      // 2. 寫入 system_database
+      const sysDb = {
+        gasWebUrl: cleanGas,
+        deploySheetUrl: cleanSheet,
+        configuredBy: cleanEmail,
+        updatedAt: new Date().toISOString()
+      };
+      writeJsonFile(SYSTEM_DATABASE_FILE, sysDb);
+
+      // 3. 同步更新 user_ledger_data 中紀錄的 gasWebUrl
+      const ledgers = readJsonFile<Record<string, any>>(USER_LEDGER_DATA_FILE, {});
+      if (ledgers[cleanEmail]) {
+        ledgers[cleanEmail].gasWebUrl = cleanGas;
+        ledgers[cleanEmail].deploySheetUrl = cleanSheet;
+        ledgers[cleanEmail].updatedAt = new Date().toISOString();
+        writeJsonFile(USER_LEDGER_DATA_FILE, ledgers);
+      }
+
+      // 4. 同步更新伴侶與邀請碼中的 gasWebUrl
+      const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
+      let inviteUpdated = false;
+      Object.keys(invites).forEach(code => {
+        if (invites[code]?.adminEmail?.toLowerCase() === cleanEmail) {
+          invites[code].gasWebUrl = cleanGas;
+          invites[code].deploySheetUrl = cleanSheet;
+          inviteUpdated = true;
+        }
+      });
+      if (inviteUpdated) {
+        writeJsonFile(PARTNER_INVITES_FILE, invites);
+      }
+
+      const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
+      if (bindings[cleanEmail]) {
+        bindings[cleanEmail].gasWebUrl = cleanGas;
+        bindings[cleanEmail].deploySheetUrl = cleanSheet;
+        const otherEmail = (bindings[cleanEmail].adminEmail?.toLowerCase() === cleanEmail ? bindings[cleanEmail].partnerEmail : bindings[cleanEmail].adminEmail)?.toLowerCase();
+        if (otherEmail && bindings[otherEmail]) {
+          bindings[otherEmail].gasWebUrl = cleanGas;
+          bindings[otherEmail].deploySheetUrl = cleanSheet;
+        }
+        writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
+      }
+
+      return res.json({
+        success: true,
+        message: 'Database successfully bound across all devices and accounts',
+        config: updatedCfg,
+        database: sysDb
+      });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }

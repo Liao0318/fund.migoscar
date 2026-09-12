@@ -1192,6 +1192,33 @@ export default function App() {
         } catch (e) {}
       }
 
+      // 🛡️ 雙重保險備援 3：直接向伺服器全域資料庫或關聯資料庫查詢
+      if (!activeGas && hasBackendServer()) {
+        try {
+          const sysRes = await fetch('/api/system-database');
+          if (sysRes.ok) {
+            const sysData = await sysRes.json();
+            if (sysData && sysData.success && sysData.database?.gasWebUrl) {
+              activeGas = sysData.database.gasWebUrl.trim();
+              if (sysData.database.deploySheetUrl && !activeSheet) {
+                activeSheet = sysData.database.deploySheetUrl.trim();
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      // 🛡️ 雙重保險備援 4：全域本地鍵值深度復原掃描
+      if (!activeGas && cleanEmail) {
+        const recovered = scanAndRecoverGasUrl(cleanEmail);
+        if (recovered.gasWebUrl) {
+          activeGas = recovered.gasWebUrl;
+          if (recovered.deploySheetUrl && !activeSheet) {
+            activeSheet = recovered.deploySheetUrl;
+          }
+        }
+      }
+
       const hasCloudLedger = serverLedgerData && (
         (Array.isArray(serverLedgerData.records) && serverLedgerData.records.length > 0) ||
         (Array.isArray(serverLedgerData.splitItems) && serverLedgerData.splitItems.length > 0) ||
@@ -2039,14 +2066,61 @@ export default function App() {
             {desc}
           </p>
         </div>
-        <div className="pt-2">
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={async () => {
+              showToast('🔍 正在從 Google 雲端與伺服器查詢您在電腦設定的資料庫...', 'info');
+              const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+              let foundGas = '';
+              let foundSheet = '';
+              if (cleanEmail) {
+                try {
+                  const cfg = await getUserCloudConfig(cleanEmail);
+                  if (cfg?.gasWebUrl) {
+                    foundGas = cfg.gasWebUrl;
+                    foundSheet = cfg.deploySheetUrl || '';
+                  }
+                } catch (e) {}
+              }
+              if (!foundGas && hasBackendServer()) {
+                try {
+                  const res = await fetch('/api/system-database');
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data?.success && data?.database?.gasWebUrl) {
+                      foundGas = data.database.gasWebUrl;
+                      foundSheet = data.database.deploySheetUrl || '';
+                    }
+                  }
+                } catch (e) {}
+              }
+              if (foundGas) {
+                setGasWebUrl(foundGas);
+                if (foundSheet) setDeploySheetUrl(foundSheet);
+                saveDeployConfig(foundGas, foundSheet);
+                showToast('🎉 同步成功！已載入電腦端設定的資料庫與帳本', 'success');
+                fetchDashboardData(true, false, foundGas);
+                fetchShoppingData(false, foundGas);
+                fetchSplitData(true, foundGas);
+                fetchTravelData(true, foundGas);
+              } else {
+                showToast('尚未在雲端找到資料庫，請點擊「設定連線」確認或手動輸入 Web App 網址', 'info');
+                handleOpenGasDeploy('settings');
+              }
+            }}
+            className="px-5 py-3 bg-[#4A7C59] hover:bg-[#3D6649] text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>從 Google 帳號一鍵同步</span>
+          </button>
           <button
             type="button"
             onClick={() => handleOpenGasDeploy('settings')}
-            className="px-6 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
+            className="px-5 py-3 bg-amber-800 hover:bg-amber-900 text-white rounded-2xl text-xs sm:text-sm font-bold transition-all shadow-sm active:scale-95 cursor-pointer inline-flex items-center gap-2"
           >
             <Key className="w-4 h-4" />
-            <span>設定連線金鑰與同步</span>
+            <span>手動設定連線金鑰</span>
           </button>
         </div>
       </div>
@@ -2649,8 +2723,24 @@ export default function App() {
           try {
             const userConfig = await getUserCloudConfig(cleanEmail);
             if (userConfig && userConfig.gasWebUrl && userConfig.gasWebUrl.startsWith('http')) {
-              setGasWebUrl(userConfig.gasWebUrl);
-              if (userConfig.deploySheetUrl) setDeploySheetUrl(userConfig.deploySheetUrl);
+              const uGas = userConfig.gasWebUrl.trim();
+              const uSheet = (userConfig.deploySheetUrl || '').trim();
+              setGasWebUrl(uGas);
+              if (uSheet) setDeploySheetUrl(uSheet);
+              try {
+                localStorage.setItem('muji_gas_web_url', uGas);
+                localStorage.setItem('banban_permanent_gas_url', uGas);
+                localStorage.setItem('banban_device_master_gas', uGas);
+                if (uSheet) {
+                  localStorage.setItem('muji_sheet_url', uSheet);
+                  localStorage.setItem('banban_permanent_sheet_url', uSheet);
+                }
+              } catch (e) {}
+              // 🚀 關鍵修復：立即自動拉取試算表最新帳本明細
+              fetchDashboardData(false, true, uGas);
+              fetchShoppingData(true, uGas);
+              fetchSplitData(true, uGas);
+              fetchTravelData(true, uGas);
               return;
             }
           } catch (e) {}
@@ -2662,8 +2752,8 @@ export default function App() {
             if (res.ok) {
               const data = await res.json();
               if (data && data.success && data.database && data.database.gasWebUrl) {
-                const sysGas = data.database.gasWebUrl;
-                const sysSheet = data.database.deploySheetUrl || '';
+                const sysGas = data.database.gasWebUrl.trim();
+                const sysSheet = (data.database.deploySheetUrl || '').trim();
                 setGasWebUrl(sysGas);
                 if (sysSheet) setDeploySheetUrl(sysSheet);
                 try {
@@ -2675,6 +2765,11 @@ export default function App() {
                     localStorage.setItem('banban_permanent_sheet_url', sysSheet);
                   }
                 } catch (e) {}
+                // 🚀 關鍵修復：立即自動拉取試算表最新帳本明細
+                fetchDashboardData(false, true, sysGas);
+                fetchShoppingData(true, sysGas);
+                fetchSplitData(true, sysGas);
+                fetchTravelData(true, sysGas);
               }
             }
           } catch (e) {}

@@ -266,7 +266,22 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
   // 2. 跨裝置 API 持久化儲存（僅在具備 Node.js 後端伺服器環境下調用，靜態主機如 GitHub Pages 避開 404）
   if (hasBackendServer()) {
     try {
-      fetch('/api/user-config', {
+      if (safeGas) {
+        // 優先呼叫原子性強綁定端點，確保伺服器資料庫與情侶設定全域落盤
+        await fetch('/api/bind-user-database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            name: payload.name,
+            gasWebUrl: safeGas,
+            deploySheetUrl: safeSheet,
+            inviteCode: payload.inviteCode
+          })
+        }).catch(() => {});
+      }
+
+      await fetch('/api/user-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -298,10 +313,10 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
     }).catch((err) => console.warn('Google Drive config save error:', err));
   }
 
-  // 3. 雲端 Firestore 同步儲存（非阻塞背景執行）
+  // 3. 雲端 Firestore 同步儲存（給予寬裕時間以確保跨國/平板握手完成）
   if (isFirestoreAvailable() && db) {
     const userRef = doc(db, 'user_configs', cleanEmail);
-    asyncWithTimeout(setDoc(userRef, payload, { merge: true }), 800, null).catch(() => {});
+    await asyncWithTimeout(setDoc(userRef, payload, { merge: true }), 3500, null).catch(() => {});
   }
 }
 
@@ -315,7 +330,7 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
   // 1. 優先從伺服器持久化 API 讀取（僅在有伺服器環境下調用，GitHub Pages 跳過此步驟以避免 404）
   if (hasBackendServer()) {
     try {
-      const res = await asyncWithTimeout(fetch(`/api/user-config?email=${encodeURIComponent(cleanEmail)}`), 1200, null as any);
+      const res = await asyncWithTimeout(fetch(`/api/user-config?email=${encodeURIComponent(cleanEmail)}`), 2500, null as any);
       if (res && res.ok) {
         const data = await res.json();
         if (data && data.success && data.config) {
@@ -328,9 +343,12 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
               localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, serverConfig.gasWebUrl);
               localStorage.setItem('banban_permanent_gas_url', serverConfig.gasWebUrl);
               localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, serverConfig.gasWebUrl);
+              localStorage.setItem('banban_device_master_gas', serverConfig.gasWebUrl);
+              localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
               if (serverConfig.deploySheetUrl) {
                 localStorage.setItem('muji_sheet_url', serverConfig.deploySheetUrl);
                 localStorage.setItem(`muji_sheet_url_${cleanEmail}`, serverConfig.deploySheetUrl);
+                localStorage.setItem('banban_permanent_sheet_url', serverConfig.deploySheetUrl);
               }
             } catch (e) {}
             return serverConfig;
@@ -340,11 +358,41 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
     } catch (e) {}
   }
 
+  // 1.5 檢查全系統資料庫（若伺服器已記錄）
+  if (hasBackendServer()) {
+    try {
+      const sysRes = await asyncWithTimeout(fetch('/api/system-database'), 1500, null as any);
+      if (sysRes && sysRes.ok) {
+        const sysData = await sysRes.json();
+        if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
+          const sysDb = sysData.database;
+          const synthesized: UserCloudConfig = {
+            email: cleanEmail,
+            name: '',
+            gasWebUrl: sysDb.gasWebUrl,
+            deploySheetUrl: sysDb.deploySheetUrl || '',
+            updatedAt: sysDb.updatedAt || new Date().toISOString()
+          };
+          try {
+            localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(synthesized));
+            localStorage.setItem('muji_gas_web_url', synthesized.gasWebUrl!);
+            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, synthesized.gasWebUrl!);
+            localStorage.setItem('banban_permanent_gas_url', synthesized.gasWebUrl!);
+            localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, synthesized.gasWebUrl!);
+            localStorage.setItem('banban_device_master_gas', synthesized.gasWebUrl!);
+            localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
+          } catch (e) {}
+          return synthesized;
+        }
+      }
+    } catch (e) {}
+  }
+
   // 1.8 真正跟隨 Google 帳號無縫同步：從使用者個人的 Google Drive 讀取設定檔
   const driveToken = getGoogleAccessToken();
   if (driveToken) {
     try {
-      const driveConfig = await asyncWithTimeout(loadConfigFromGoogleDrive(driveToken), 1500, null as any);
+      const driveConfig = await asyncWithTimeout(loadConfigFromGoogleDrive(driveToken), 3000, null as any);
       if (driveConfig && driveConfig.gasWebUrl && driveConfig.gasWebUrl.startsWith('http')) {
         const mergedDriveConfig: UserCloudConfig = {
           email: cleanEmail,
@@ -360,6 +408,8 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
           localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, driveConfig.gasWebUrl);
           localStorage.setItem('banban_permanent_gas_url', driveConfig.gasWebUrl);
           localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, driveConfig.gasWebUrl);
+          localStorage.setItem('banban_device_master_gas', driveConfig.gasWebUrl);
+          localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
           if (driveConfig.deploySheetUrl) {
             localStorage.setItem('muji_sheet_url', driveConfig.deploySheetUrl);
             localStorage.setItem(`muji_sheet_url_${cleanEmail}`, driveConfig.deploySheetUrl);
@@ -372,16 +422,26 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
     }
   }
 
-  // 2. 嘗試從 Firestore 雲端抓取最新資料 (限時 800ms)
+  // 2. 嘗試從 Firestore 雲端抓取最新資料 (放寬至 3500ms 確保平板及跨網連線成功)
   if (isFirestoreAvailable() && db) {
     try {
       const userRef = doc(db, 'user_configs', cleanEmail);
-      const snapshot = await asyncWithTimeout(getDoc(userRef), 800, null as any);
+      const snapshot = await asyncWithTimeout(getDoc(userRef), 3500, null as any);
       if (snapshot && snapshot.exists && snapshot.exists()) {
         const cloudData = snapshot.data() as UserCloudConfig;
         if (cloudData && cloudData.gasWebUrl && cloudData.gasWebUrl.startsWith('http')) {
           try {
             localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(cloudData));
+            localStorage.setItem('muji_gas_web_url', cloudData.gasWebUrl);
+            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cloudData.gasWebUrl);
+            localStorage.setItem('banban_permanent_gas_url', cloudData.gasWebUrl);
+            localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, cloudData.gasWebUrl);
+            localStorage.setItem('banban_device_master_gas', cloudData.gasWebUrl);
+            localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
+            if (cloudData.deploySheetUrl) {
+              localStorage.setItem('muji_sheet_url', cloudData.deploySheetUrl);
+              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, cloudData.deploySheetUrl);
+            }
           } catch (e) {}
           return cloudData;
         }

@@ -35,7 +35,7 @@ import { AuthUser, PartnerInviteData, CoupleBindingInfo } from '../../types';
 import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline, encodeInvitePayload, createShareableInviteCard, getAppShareBaseUrl, getActiveInviteCode, getInviteRemainingSeconds, formatRemainingTime } from '../../utils/partnerInvite';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
-import { scanAndRecoverGasUrl, getUserCloudConfig } from '../../utils/userConfigService';
+import { scanAndRecoverGasUrl, getUserCloudConfig, saveUserCloudConfig } from '../../utils/userConfigService';
 import { hasBackendServer } from '../../utils/environment';
 import { APP_VERSION } from '../../version';
 
@@ -385,7 +385,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
   /**
    * 管理員模式：驗證並綁定 Google Apps Script API
    */
-  const handleVerifyAndBindAdmin = () => {
+  const handleVerifyAndBindAdmin = async () => {
     setAdminValidationError(null);
     if (!currentUser) {
       setAdminValidationError('🔒 請先登入 Google 帳號！');
@@ -409,12 +409,13 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     setGasWebUrl(cleanGas);
     setDeploySheetUrl(cleanSheet);
 
+    const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+
     try {
       localStorage.setItem('muji_gas_web_url', cleanGas);
       localStorage.setItem('muji_sheet_url', cleanSheet);
       localStorage.setItem('banban_permanent_gas_url', cleanGas);
       localStorage.setItem('banban_device_master_gas', cleanGas);
-      const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
       if (cleanEmail) {
         localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cleanGas);
         localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, cleanGas);
@@ -427,32 +428,53 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     // 立即傳入乾淨的 API 網址與試算表網址，確保雲端邀請碼即刻綁定
     saveDeployConfig(cleanGas, cleanSheet);
 
-    // 立即主動推送至伺服器全域持久端點（僅在伺服器環境下調用）
+    // 🚀 強制原子性雙向同步至伺服器端（跨裝置、手機與平板立即可用）
     if (hasBackendServer()) {
       try {
+        await fetch('/api/bind-user-database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            name: currentUser?.name || '',
+            gasWebUrl: cleanGas,
+            deploySheetUrl: cleanSheet,
+            inviteCode: currentInviteCode
+          })
+        }).catch(() => {});
+
         fetch('/api/system-database', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             gasWebUrl: cleanGas,
             deploySheetUrl: cleanSheet,
-            email: currentUser?.email || ''
+            email: cleanEmail
           })
         }).catch(() => {});
       } catch (e) {}
     }
 
-    setTimeout(() => {
-      setIsAdminBindingLoading(false);
-      setAdminWizardStep(3); // 進入綁定成功與邀請伴侶步驟
-      setSaveSuccessMsg(true);
-      setTimeout(() => setSaveSuccessMsg(false), 3000);
-    }, 400);
+    // 真正同步至 Firestore 雲端（非同步等待）
+    if (cleanEmail) {
+      await saveUserCloudConfig(cleanEmail, {
+        gasWebUrl: cleanGas,
+        deploySheetUrl: cleanSheet,
+        inviteCode: currentInviteCode
+      }).catch(() => {});
+    }
+
+    setIsAdminBindingLoading(false);
+    setAdminWizardStep(3); // 進入綁定成功與邀請伴侶步驟
+    setSaveSuccessMsg(true);
+    setTimeout(() => setSaveSuccessMsg(false), 3000);
   };
 
-  const handleDirectSave = () => {
+  const handleDirectSave = async () => {
     const cleanGas = inputGasUrl.trim();
     const cleanSheet = inputSheetUrl.trim();
+    const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+
     setGasWebUrl(cleanGas);
     setDeploySheetUrl(cleanSheet);
 
@@ -461,7 +483,6 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
       localStorage.setItem('muji_sheet_url', cleanSheet);
       localStorage.setItem('banban_permanent_gas_url', cleanGas);
       localStorage.setItem('banban_device_master_gas', cleanGas);
-      const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
       if (cleanEmail) {
         localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cleanGas);
         localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, cleanGas);
@@ -476,16 +497,38 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     // 立即主動推送至伺服器全域持久端點（僅在伺服器環境下調用）
     if (hasBackendServer()) {
       try {
+        if (cleanGas.startsWith('http')) {
+          await fetch('/api/bind-user-database', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: cleanEmail,
+              name: currentUser?.name || '',
+              gasWebUrl: cleanGas,
+              deploySheetUrl: cleanSheet,
+              inviteCode: currentInviteCode
+            })
+          }).catch(() => {});
+        }
+
         fetch('/api/system-database', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             gasWebUrl: cleanGas,
             deploySheetUrl: cleanSheet,
-            email: currentUser?.email || ''
+            email: cleanEmail
           })
         }).catch(() => {});
       } catch (e) {}
+    }
+
+    if (cleanEmail && cleanGas.startsWith('http')) {
+      await saveUserCloudConfig(cleanEmail, {
+        gasWebUrl: cleanGas,
+        deploySheetUrl: cleanSheet,
+        inviteCode: currentInviteCode
+      }).catch(() => {});
     }
 
     setSaveSuccessMsg(true);
