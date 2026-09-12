@@ -1267,7 +1267,7 @@ export default function App() {
     let activeGas = resolved.gasWebUrl || '';
     let activeSheet = resolved.deploySheetUrl || '';
 
-    // 🛡️ 雙重保險備援：若邀請物件中缺少 gasWebUrl，向管理者的 user_configs 自動檢索補齊
+    // 🛡️ 雙重保險備援 1：若邀請物件中缺少 gasWebUrl，向管理者的 user_configs 自動檢索補齊
     if (!activeGas && resolved.adminEmail) {
       try {
         const adminConfig = await getUserCloudConfig(resolved.adminEmail);
@@ -1278,12 +1278,18 @@ export default function App() {
       } catch (e) {}
     }
 
-    // 嚴格校驗：拒絕綁定空資料庫，確保伴侶端不會陷入 $0 的無效狀態
-    if (!activeGas || !activeGas.startsWith('http') || activeGas.includes('/test/')) {
-      return { 
-        success: false, 
-        message: '⚠️ 邀請碼驗證成功，但尚未抓取到主管理員的 Google 試算表資料庫。請確認主管理員已在手機開啟《伴伴記》並完成資料庫連線，或請主管理員直接點擊「分享」發送包含 Token 的專屬連結！' 
-      };
+    // 🛡️ 雙重保險備援 2：向伺服器全域系統資料庫查詢
+    if (!activeGas && hasBackendServer()) {
+      try {
+        const sysRes = await fetch('/api/system-database');
+        if (sysRes.ok) {
+          const sysData = await sysRes.json();
+          if (sysData && sysData.success && sysData.database?.gasWebUrl) {
+            activeGas = sysData.database.gasWebUrl;
+            activeSheet = sysData.database.deploySheetUrl || activeSheet;
+          }
+        }
+      } catch (e) {}
     }
 
     if (activeGas) {
@@ -2788,6 +2794,32 @@ export default function App() {
       setIsCheckingCloudConfig(false);
     }
   }, [currentUser?.email, currentUser?.userRole, isSandboxMode]);
+
+  // 💌 自動註冊當前邀請碼至伺服器與雲端（確保伴侶在另一端隨時隨地可查可配對）
+  useEffect(() => {
+    if (!currentUser || currentUser.userRole === 'partner' || isSandboxMode) return;
+    const cleanEmail = (currentUser.email || '').trim().toLowerCase();
+    if (!cleanEmail || !currentInviteCode) return;
+
+    const cleanGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
+    const cleanSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
+
+    saveActiveInviteCode({
+      inviteCode: currentInviteCode,
+      adminEmail: cleanEmail,
+      adminName: currentUser.name || '主管理員',
+      gasWebUrl: cleanGas,
+      deploySheetUrl: cleanSheet,
+      validMinutes: 15,
+      createdAt: new Date().toISOString()
+    });
+
+    saveUserCloudConfig(cleanEmail, {
+      inviteCode: currentInviteCode,
+      gasWebUrl: cleanGas,
+      deploySheetUrl: cleanSheet
+    }).catch(() => {});
+  }, [currentUser?.email, currentUser?.userRole, currentInviteCode, gasWebUrl, deploySheetUrl, isSandboxMode]);
 
   const getCustomizedCodeGs = () => {
     let code = CODE_GS_TEMPLATE;

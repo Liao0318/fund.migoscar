@@ -626,7 +626,7 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
         const data = await res.json();
         if (data && data.success && data.invite) {
           const inv = data.invite as PartnerInviteData;
-          if (inv && inv.adminEmail && inv.gasWebUrl) {
+          if (inv && (inv.adminEmail || inv.inviteCode)) {
             saveActiveInviteCode(inv);
             return inv;
           }
@@ -682,7 +682,7 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
               } catch (err) {}
             }
 
-            if (cloudInvite.gasWebUrl && cloudInvite.gasWebUrl.startsWith('http')) {
+            if (cloudInvite.adminEmail || cloudInvite.inviteCode) {
               saveActiveInviteCode(cloudInvite);
               return cloudInvite;
             }
@@ -698,7 +698,7 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
         if (qSnap && !qSnap.empty) {
           const docItem = qSnap.docs[0];
           const cloudInvite = docItem.data() as PartnerInviteData;
-          if (cloudInvite && cloudInvite.gasWebUrl && cloudInvite.gasWebUrl.startsWith('http')) {
+          if (cloudInvite && (cloudInvite.adminEmail || cloudInvite.inviteCode)) {
             saveActiveInviteCode(cloudInvite);
             return cloudInvite;
           }

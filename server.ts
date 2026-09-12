@@ -253,9 +253,7 @@ async function startServer() {
               });
             }
             const enriched = enrichInviteGas(inv);
-            if (isValidGasUrl(enriched.gasWebUrl)) {
-              return res.json({ success: true, invite: enriched });
-            }
+            return res.json({ success: true, invite: enriched });
           }
         }
 
@@ -276,18 +274,16 @@ async function startServer() {
             });
           }
           const enriched = enrichInviteGas(foundInInvites);
-          if (isValidGasUrl(enriched.gasWebUrl)) {
-            return res.json({ success: true, invite: enriched });
-          }
+          return res.json({ success: true, invite: enriched });
         }
 
-        // 3. 比對 user_configs.json 中有無該 inviteCode (嚴格檢查 15 分鐘時限)
+        // 3. 比對 user_configs.json 中有無該 inviteCode (檢查 15 分鐘時限)
         for (const [cfgEmail, cfg] of Object.entries(userConfigs)) {
           const cfgCode = (cfg.inviteCode || '').toUpperCase();
           const cfgClean = cfgCode.replace(/^BB-?/, '');
           if (cfgCode && (candidates.includes(cfgCode) || candidates.includes(cfgClean))) {
             const updatedAtTime = cfg.updatedAt ? new Date(cfg.updatedAt).getTime() : 0;
-            const isExpired = !updatedAtTime || (Date.now() - updatedAtTime > 15 * 60 * 1000);
+            const isExpired = updatedAtTime > 0 && (Date.now() - updatedAtTime > 15 * 60 * 1000);
             if (isExpired) {
               return res.json({ 
                 success: false, 
@@ -297,22 +293,20 @@ async function startServer() {
               });
             }
             const candidateGas = isValidGasUrl(cfg.gasWebUrl) ? cfg.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : '');
-            if (candidateGas) {
-              const synthesizedInvite = {
-                inviteCode: cfgCode.startsWith('BB-') ? cfgCode : `BB-${cfgClean}`,
-                adminEmail: cfg.email || cfgEmail,
-                adminName: cfg.name || '主管理員',
-                gasWebUrl: candidateGas,
-                deploySheetUrl: cfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
-                createdAt: cfg.updatedAt || new Date().toISOString(),
-                expiresAt: new Date(updatedAtTime + 15 * 60 * 1000).toISOString(),
-                validMinutes: 15
-              };
-              invites[withPrefix] = synthesizedInvite;
-              invites[cleanNoPrefix] = synthesizedInvite;
-              writeJsonFile(PARTNER_INVITES_FILE, invites);
-              return res.json({ success: true, invite: synthesizedInvite });
-            }
+            const synthesizedInvite = {
+              inviteCode: cfgCode.startsWith('BB-') ? cfgCode : `BB-${cfgClean}`,
+              adminEmail: cfg.email || cfgEmail,
+              adminName: cfg.name || '主管理員',
+              gasWebUrl: candidateGas,
+              deploySheetUrl: cfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
+              createdAt: cfg.updatedAt || new Date().toISOString(),
+              expiresAt: new Date((updatedAtTime || Date.now()) + 15 * 60 * 1000).toISOString(),
+              validMinutes: 15
+            };
+            invites[withPrefix] = synthesizedInvite;
+            invites[cleanNoPrefix] = synthesizedInvite;
+            writeJsonFile(PARTNER_INVITES_FILE, invites);
+            return res.json({ success: true, invite: synthesizedInvite });
           }
         }
 
@@ -329,26 +323,29 @@ async function startServer() {
         );
         if (found) {
           const enriched = enrichInviteGas(found);
-          if (isValidGasUrl(enriched.gasWebUrl)) {
-            return res.json({ success: true, invite: enriched });
-          }
+          return res.json({ success: true, invite: enriched });
         }
 
-        // 2. 比對 user_configs (僅當該帳號本身有 inviteCode 且有專屬 gasWebUrl 時)
+        // 2. 比對 user_configs
         const userCfg = userConfigs[email];
-        if (userCfg && isValidGasUrl(userCfg.gasWebUrl) && userCfg.inviteCode) {
-          const inviteCode = userCfg.inviteCode;
+        if (userCfg) {
+          const inviteCode = userCfg.inviteCode || `BB-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+          userCfg.inviteCode = inviteCode;
+          userCfg.updatedAt = new Date().toISOString();
+          writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+
           const synInvite = {
             inviteCode,
             adminEmail: userCfg.email || email,
             adminName: userCfg.name || '主管理員',
-            gasWebUrl: userCfg.gasWebUrl,
-            deploySheetUrl: userCfg.deploySheetUrl || '',
-            createdAt: userCfg.updatedAt || new Date().toISOString(),
+            gasWebUrl: userCfg.gasWebUrl || (sysDb && sysDb.gasWebUrl) || '',
+            deploySheetUrl: userCfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
+            createdAt: new Date().toISOString(),
             expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
             validMinutes: 15
           };
           invites[inviteCode] = synInvite;
+          invites[inviteCode.replace(/^BB-/, '')] = synInvite;
           writeJsonFile(PARTNER_INVITES_FILE, invites);
           return res.json({ success: true, invite: synInvite });
         }

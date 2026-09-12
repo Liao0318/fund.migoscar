@@ -1,1 +1,66 @@
-{}
+{
+  "BB-63TK": {
+    "inviteCode": "BB-63TK",
+    "adminEmail": "developer.admin@banbanji.internal",
+    "adminName": "系統架構師 (開發模式)",
+    "gasWebUrl": "",
+    "deploySheetUrl": "https://docs.google.com/spreadsheets/d/test",
+    "createdAt": "2026-09-12T14:33:17.598Z",
+    "expiresAt": "2026-09-12T14:59:49.503Z",
+    "validMinutes": 15,
+    "updatedAt": "2026-09-12T14:59:29.151Z"
+  },
+  "63TK": {
+    "inviteCode": "BB-63TK",
+    "adminEmail": "developer.admin@banbanji.internal",
+    "adminName": "系統架構師 (開發模式)",
+    "gasWebUrl": "",
+    "deploySheetUrl": "https://docs.google.com/spreadsheets/d/test",
+    "createdAt": "2026-09-12T14:33:17.598Z",
+    "expiresAt": "2026-09-12T14:59:49.503Z",
+    "validMinutes": 15,
+    "updatedAt": "2026-09-12T14:59:29.151Z"
+  },
+  "BB-XJRV": {
+    "inviteCode": "BB-XJRV",
+    "adminEmail": "developer.admin@banbanji.internal",
+    "adminName": "系統架構師 (開發模式)",
+    "gasWebUrl": "",
+    "deploySheetUrl": "https://docs.google.com/spreadsheets/d/test",
+    "createdAt": "2026-09-12T14:33:17.598Z",
+    "expiresAt": "2026-09-12T15:42:23.046Z",
+    "validMinutes": 15,
+    "updatedAt": "2026-09-12T15:27:23.786Z"
+  },
+  "XJRV": {
+    "inviteCode": "BB-XJRV",
+    "adminEmail": "developer.admin@banbanji.internal",
+    "adminName": "系統架構師 (開發模式)",
+    "gasWebUrl": "",
+    "deploySheetUrl": "https://docs.google.com/spreadsheets/d/test",
+    "createdAt": "2026-09-12T14:33:17.598Z",
+    "expiresAt": "2026-09-12T15:42:23.046Z",
+    "validMinutes": 15,
+    "updatedAt": "2026-09-12T15:27:23.786Z"
+  },
+  "BB-EMVC": {
+    "inviteCode": "BB-EMVC",
+    "adminEmail": "oscargh3359@gmail.com",
+    "adminName": "主管理員",
+    "gasWebUrl": "",
+    "deploySheetUrl": "",
+    "createdAt": "2026-09-12T15:36:52.378Z",
+    "expiresAt": "2026-09-12T15:51:52.378Z",
+    "validMinutes": 15
+  },
+  "EMVC": {
+    "inviteCode": "BB-EMVC",
+    "adminEmail": "oscargh3359@gmail.com",
+    "adminName": "主管理員",
+    "gasWebUrl": "",
+    "deploySheetUrl": "",
+    "createdAt": "2026-09-12T15:36:52.378Z",
+    "expiresAt": "2026-09-12T15:51:52.378Z",
+    "validMinutes": 15
+  }
+}

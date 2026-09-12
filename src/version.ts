@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.5.9';
+export const APP_VERSION = 'v2.6.0';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.6.0',
+    date: '2026.09.12',
+    title: '伴侶邀請碼跨裝置即時檢索與資料庫全端直通修復',
+    highlights: [
+      '徹底修復伴侶手機輸入邀請碼顯示「找不到符合的邀請碼」的問題，移除查詢過程中的不合理阻擋與延遲',
+      '管理者端邀請碼即時自動註冊與全域同步，生成邀請碼後立即固化至後端伺服器與雲端資料庫，確保隨時可查可配對',
+      '強化邀請碼模糊查詢與多格式容錯（支援短碼、大小寫、全形半形、管理者帳號等多種輸入方式）',
+      '伴侶配對成功後自動繼承管理者之試算表配置與雙向連動，全方位確保跨裝置帳本數據精準同步'
+    ]
+  },
   {
     version: 'v2.5.9',
     date: '2026.09.12',
