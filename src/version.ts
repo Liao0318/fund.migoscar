@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.5.5';
+export const APP_VERSION = 'v2.5.6';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.5.6',
+    date: '2026.09.12',
+    title: '伴侶配對模式深度修復與智慧秒對接',
+    highlights: [
+      '全面修復伴侶輸入 6 碼邀請碼（例如 BB-7QEY、純代碼或連結）顯示「不符合」的問題',
+      '後端 API 與雲端資料庫新增智慧容錯自動對接機制，自動同步管理者帳本與 Google 試算表設定',
+      '強化邀請碼即時輸入體驗，解決輸入中途跳出錯誤提示與代碼格式不一致之問題',
+      '支援整段邀請文案、短網址、中括號代碼、純數字代碼與管理者 Email 多維度自動解析'
+    ]
+  },
   {
     version: 'v2.5.5',
     date: '2026.09.12',

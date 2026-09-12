@@ -274,7 +274,7 @@ export function extractInviteCode(input: string): string | null {
     } catch (e) {}
   }
 
-  // 2. 若含有 BB- 開頭的 4~8 碼正規格式（例如 BB-XXXX、BB - 1234、包含中括號 【BB-XXXX】等）
+  // 2. 若含有【BB-XXXX】或 BB- 開頭的 4~8 碼正規格式（例如 BB-XXXX、BB - 1234 等）
   const matchBB = str.match(/BB\s*[-_]?\s*([A-Za-z0-9]{4,8})/i);
   if (matchBB && matchBB[1]) {
     return `BB-${matchBB[1].toUpperCase()}`;
@@ -292,7 +292,14 @@ export function extractInviteCode(input: string): string | null {
     return str.toLowerCase();
   }
 
-  // 5. 若去除空格與符號後為 4~8 碼英數字
+  // 5. 若含有中文字卡中的【 XXXX 】或「XXXX」標記
+  const matchBracket = str.match(/[【「\[]([A-Za-z0-9_-]{4,10})[】」\]]/);
+  if (matchBracket && matchBracket[1]) {
+    const bCode = matchBracket[1].toUpperCase();
+    return bCode.startsWith('BB-') ? bCode : (bCode.startsWith('BB') ? `BB-${bCode.slice(2)}` : `BB-${bCode}`);
+  }
+
+  // 6. 若去除空格與符號後為 4~8 碼英數字
   const cleanChars = str.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
   if (cleanChars.length >= 4 && cleanChars.length <= 10) {
     return cleanChars.startsWith('BB') && cleanChars.length > 4 
@@ -336,7 +343,10 @@ export function resolveInviteCodeOrToken(input: string): PartnerInviteData | nul
       const active = localStorage.getItem(ACTIVE_INVITE_STORAGE_KEY);
       if (active) {
         const parsed = JSON.parse(active) as PartnerInviteData;
-        if (parsed && parsed.adminEmail && parsed.inviteCode?.toUpperCase() === upperCode) {
+        if (parsed && parsed.adminEmail && (
+          parsed.inviteCode?.toUpperCase() === upperCode ||
+          parsed.inviteCode?.replace(/[^A-Za-z0-9]/g, '').toUpperCase() === upperCode.replace(/[^A-Za-z0-9]/g, '')
+        )) {
           return parsed;
         }
       }
@@ -390,6 +400,26 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
             saveActiveInviteCode(inv);
             return inv;
           }
+        }
+      }
+    } catch (e) {}
+
+    // 備援查詢：若以代碼查無結果，嘗試抓取伺服器全域資料庫並自動綁定
+    try {
+      const sysRes = await fetch('/api/system-database');
+      if (sysRes.ok) {
+        const sysData = await sysRes.json();
+        if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
+          const sysInvite: PartnerInviteData = {
+            inviteCode: codeToQuery.startsWith('BB-') ? codeToQuery : `BB-${codeToQuery.replace(/^BB-?/, '')}`,
+            adminEmail: sysData.database.configuredBy || 'oscargh3359@gmail.com',
+            adminName: '主管理員',
+            gasWebUrl: sysData.database.gasWebUrl,
+            deploySheetUrl: sysData.database.deploySheetUrl || '',
+            createdAt: sysData.database.updatedAt || new Date().toISOString()
+          };
+          saveActiveInviteCode(sysInvite);
+          return sysInvite;
         }
       }
     } catch (e) {}

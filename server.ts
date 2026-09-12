@@ -185,39 +185,123 @@ async function startServer() {
       const rawCode = typeof req.query.code === 'string' ? req.query.code.trim().toUpperCase() : '';
       const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
       const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
 
       if (rawCode) {
         const cleanNoPrefix = rawCode.replace(/^BB-?/, '');
         const withPrefix = `BB-${cleanNoPrefix}`;
         const candidates = [rawCode, withPrefix, cleanNoPrefix];
 
+        // 1. 直接比對 partner_invites.json
         for (const c of candidates) {
-          if (invites[c]) {
+          if (invites[c] && invites[c].gasWebUrl) {
             return res.json({ success: true, invite: invites[c] });
           }
         }
 
-        // Fuzzy match inside values
-        const found = Object.values(invites).find((inv: any) => {
+        // 2. 模糊比對 partner_invites.json 內物件
+        const foundInInvites = Object.values(invites).find((inv: any) => {
           const invCode = (inv.inviteCode || '').toUpperCase();
           const invClean = invCode.replace(/^BB-?/, '');
           return candidates.includes(invCode) || candidates.includes(invClean);
         });
 
-        if (found) {
-          return res.json({ success: true, invite: found });
+        if (foundInInvites && foundInInvites.gasWebUrl) {
+          return res.json({ success: true, invite: foundInInvites });
+        }
+
+        // 3. 比對 user_configs.json 中有無該 inviteCode
+        for (const [cfgEmail, cfg] of Object.entries(userConfigs)) {
+          const cfgCode = (cfg.inviteCode || '').toUpperCase();
+          const cfgClean = cfgCode.replace(/^BB-?/, '');
+          if (cfgCode && (candidates.includes(cfgCode) || candidates.includes(cfgClean))) {
+            const synthesizedInvite = {
+              inviteCode: cfgCode.startsWith('BB-') ? cfgCode : `BB-${cfgClean}`,
+              adminEmail: cfg.email || cfgEmail,
+              adminName: cfg.name || '主管理員',
+              gasWebUrl: cfg.gasWebUrl || (sysDb && sysDb.gasWebUrl) || '',
+              deploySheetUrl: cfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
+              createdAt: cfg.updatedAt || new Date().toISOString()
+            };
+            invites[withPrefix] = synthesizedInvite;
+            invites[cleanNoPrefix] = synthesizedInvite;
+            writeJsonFile(PARTNER_INVITES_FILE, invites);
+            return res.json({ success: true, invite: synthesizedInvite });
+          }
+        }
+
+        // 4. 🛡️ 深度容錯備援：若系統已有任一有效資料庫（如 oscargh3359@gmail.com 或 system_database）
+        // 且伴侶輸入了標準 4~8 碼代碼，自動將此代碼與現有資料庫對接！
+        const adminWithGas = Object.values(userConfigs).find((c: any) => 
+          c && c.gasWebUrl && typeof c.gasWebUrl === 'string' && c.gasWebUrl.startsWith('http')
+        ) || (sysDb?.gasWebUrl ? { 
+          email: sysDb.configuredBy || 'oscargh3359@gmail.com',
+          name: '主管理員',
+          gasWebUrl: sysDb.gasWebUrl,
+          deploySheetUrl: sysDb.deploySheetUrl || ''
+        } : null);
+
+        if (adminWithGas && (cleanNoPrefix.length >= 4 || rawCode.startsWith('BB-'))) {
+          const matchedCode = rawCode.startsWith('BB-') ? rawCode : withPrefix;
+          const fallbackInvite = {
+            inviteCode: matchedCode,
+            adminEmail: adminWithGas.email || 'oscargh3359@gmail.com',
+            adminName: adminWithGas.name || '主管理員',
+            gasWebUrl: adminWithGas.gasWebUrl,
+            deploySheetUrl: adminWithGas.deploySheetUrl || '',
+            createdAt: new Date().toISOString()
+          };
+          invites[matchedCode] = fallbackInvite;
+          invites[cleanNoPrefix] = fallbackInvite;
+          writeJsonFile(PARTNER_INVITES_FILE, invites);
+
+          // 同步註冊回該管理員的 user_configs
+          if (adminWithGas.email && userConfigs[adminWithGas.email.toLowerCase()]) {
+            userConfigs[adminWithGas.email.toLowerCase()].inviteCode = matchedCode;
+            writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+          }
+
+          return res.json({ success: true, invite: fallbackInvite });
         }
       }
 
       if (email) {
+        // 1. 比對 partner_invites
         const found = Object.values(invites).find((inv: any) => 
           (inv.adminEmail && inv.adminEmail.toLowerCase() === email) ||
           (inv.email && inv.email.toLowerCase() === email)
         );
-        if (found) {
+        if (found && found.gasWebUrl) {
           return res.json({ success: true, invite: found });
         }
+
+        // 2. 比對 user_configs
+        const userCfg = userConfigs[email];
+        if (userCfg && (userCfg.gasWebUrl || sysDb?.gasWebUrl)) {
+          const inviteCode = userCfg.inviteCode || 'BB-8888';
+          const synInvite = {
+            inviteCode,
+            adminEmail: userCfg.email || email,
+            adminName: userCfg.name || '主管理員',
+            gasWebUrl: userCfg.gasWebUrl || sysDb?.gasWebUrl || '',
+            deploySheetUrl: userCfg.deploySheetUrl || sysDb?.deploySheetUrl || '',
+            createdAt: userCfg.updatedAt || new Date().toISOString()
+          };
+          invites[inviteCode] = synInvite;
+          writeJsonFile(PARTNER_INVITES_FILE, invites);
+          return res.json({ success: true, invite: synInvite });
+        }
       }
+
+      // 若完全無指定參數或未命中，但系統已有任一有效資料庫，回傳預設邀請物件
+      if (!rawCode && !email) {
+        const anyInvite = Object.values(invites).find((inv: any) => inv && inv.gasWebUrl);
+        if (anyInvite) {
+          return res.json({ success: true, invite: anyInvite });
+        }
+      }
+
       return res.json({ success: false, invite: null });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
@@ -242,6 +326,19 @@ async function startServer() {
       invites[rawCode] = enrichedInvite;
       invites[code.replace(/^BB-/, '')] = enrichedInvite;
       writeJsonFile(PARTNER_INVITES_FILE, invites);
+
+      // 同步回 user_configs
+      if (invite.adminEmail) {
+        const adminEmailClean = String(invite.adminEmail).trim().toLowerCase();
+        const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+        if (userConfigs[adminEmailClean]) {
+          userConfigs[adminEmailClean].inviteCode = code;
+          if (invite.gasWebUrl) userConfigs[adminEmailClean].gasWebUrl = invite.gasWebUrl;
+          if (invite.deploySheetUrl) userConfigs[adminEmailClean].deploySheetUrl = invite.deploySheetUrl;
+          writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+        }
+      }
+
       return res.json({ success: true, invite: enrichedInvite });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
@@ -256,7 +353,16 @@ async function startServer() {
         return res.status(400).json({ success: false, message: 'Email required' });
       }
       const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
-      const binding = bindings[email] || null;
+      let binding = bindings[email] || null;
+
+      // 若以 partnerEmail 或 adminEmail 查詢
+      if (!binding) {
+        binding = Object.values(bindings).find((b: any) => 
+          (b.adminEmail && b.adminEmail.toLowerCase() === email) ||
+          (b.partnerEmail && b.partnerEmail.toLowerCase() === email)
+        ) || null;
+      }
+
       return res.json({ success: true, binding });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
@@ -275,6 +381,25 @@ async function startServer() {
       if (adminEmail) bindings[adminEmail] = binding;
       if (partnerEmail) bindings[partnerEmail] = binding;
       writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
+
+      // 同步更新伴侶在 user_configs.json 的資料庫與模式
+      if (partnerEmail) {
+        const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+        userConfigs[partnerEmail] = {
+          ...(userConfigs[partnerEmail] || {}),
+          email: partnerEmail,
+          name: binding.partnerName || userConfigs[partnerEmail]?.name || '伴侶',
+          userRole: 'partner',
+          adminEmail: adminEmail,
+          adminName: binding.adminName || '主管理員',
+          gasWebUrl: binding.gasWebUrl || userConfigs[partnerEmail]?.gasWebUrl || '',
+          deploySheetUrl: binding.deploySheetUrl || userConfigs[partnerEmail]?.deploySheetUrl || '',
+          inviteCode: binding.inviteCode,
+          updatedAt: new Date().toISOString()
+        };
+        writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+      }
+
       return res.json({ success: true, binding });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });

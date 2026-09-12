@@ -213,30 +213,42 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
 
     const extracted = extractInviteCode(clean);
     const isCodePattern = Boolean(extracted) || 
-      /^BB-[A-Z0-9]{4,8}$/i.test(clean) || 
+      /^BB-[A-Z0-9]{3,8}$/i.test(clean) || 
       /^[A-Z0-9]{4,8}$/i.test(clean) || 
       clean.includes('http') || 
       clean.includes('#join=') || 
-      clean.includes('invite=');
+      clean.includes('invite=') ||
+      clean.includes('@');
 
     if (isCodePattern) {
       const codeToQuery = extracted || clean;
-      fetchInviteCodeOnline(codeToQuery).then(cloudResolved => {
-        if (!isMounted) return;
-        if (cloudResolved && cloudResolved.adminEmail) {
-          setResolvedInvite(cloudResolved);
-          setPartnerError(null);
-        } else {
+      const timer = setTimeout(() => {
+        fetchInviteCodeOnline(codeToQuery).then(cloudResolved => {
+          if (!isMounted) return;
+          if (cloudResolved && (cloudResolved.adminEmail || cloudResolved.gasWebUrl)) {
+            setResolvedInvite(cloudResolved);
+            setPartnerError(null);
+          } else {
+            setResolvedInvite(null);
+            // 只有在長度足夠且非正在輸入 BB- 開頭時提示
+            if (clean.length >= 4) {
+              setPartnerError(`查無此邀請碼【${extracted || (clean.length <= 12 ? clean.toUpperCase() : '代碼')}】，請確認代碼或向伴侶索取最新邀請碼`);
+            }
+          }
+        }).catch(() => {
+          if (!isMounted) return;
           setResolvedInvite(null);
-          setPartnerError(`查無此邀請碼【${extracted || (clean.length <= 12 ? clean.toUpperCase() : '代碼')}】，請確認代碼或向伴侶索取最新邀請碼`);
-        }
-      }).catch(() => {
-        if (!isMounted) return;
-        setResolvedInvite(null);
-      });
-    } else if (clean.length >= 6) {
+        });
+      }, 300);
+
+      return () => {
+        isMounted = false;
+        clearTimeout(timer);
+      };
+    } else {
+      // 正在輸入中，暫不打擾使用者
       setResolvedInvite(null);
-      setPartnerError('邀請碼格式通常為「BB-XXXX」或完整邀請連結');
+      setPartnerError(null);
     }
 
     return () => {

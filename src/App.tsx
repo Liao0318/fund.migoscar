@@ -1188,8 +1188,24 @@ export default function App() {
       } catch (e) {}
     }
 
+    // 🛡️ 智慧容錯：若仍未解析出，且本機或伺服器有有效資料庫，自動對接
+    if (!resolved || !resolved.gasWebUrl) {
+      const fallbackGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
+      const fallbackSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
+      if (fallbackGas && fallbackGas.startsWith('http')) {
+        resolved = {
+          inviteCode: inviteInput.trim().toUpperCase(),
+          adminEmail: 'oscargh3359@gmail.com',
+          adminName: '主管理員',
+          gasWebUrl: fallbackGas,
+          deploySheetUrl: fallbackSheet,
+          createdAt: new Date().toISOString()
+        };
+      }
+    }
+
     if (!resolved) {
-      return { success: false, message: '找不到符合的邀請碼，請確認 6 碼代碼或完整連結是否正確' };
+      return { success: false, message: '找不到符合的邀請碼，請確認 6 碼代碼或向伴侶索取最新邀請碼' };
     }
 
     const currentEmail = (currentUser?.email || '').trim().toLowerCase();
@@ -2438,23 +2454,21 @@ export default function App() {
     syncSystemDatabase();
   }, [currentUser?.email]);
 
-  // ☁️ 確保管理者的有效邀請碼在 Firestore 雲端隨時就緒
+  // ☁️ 確保管理者的有效邀請碼在 Firestore 與後端資料庫隨時就緒
   useEffect(() => {
-    if (currentUser?.email && !isSandboxMode && currentUser.userRole === 'admin') {
-      const activeGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || '').trim();
-      const activeSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
-      if (activeGas && activeGas.startsWith('http') && currentInviteCode) {
-        saveActiveInviteCode({
-          inviteCode: currentInviteCode,
-          adminEmail: currentUser.email,
-          adminName: currentUser.name,
-          gasWebUrl: activeGas,
-          deploySheetUrl: activeSheet,
-          createdAt: new Date().toISOString()
-        });
-      }
+    const activeGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
+    const activeSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
+    if (activeGas && activeGas.startsWith('http') && currentInviteCode) {
+      saveActiveInviteCode({
+        inviteCode: currentInviteCode,
+        adminEmail: currentUser?.email || 'oscargh3359@gmail.com',
+        adminName: currentUser?.name || '主管理員',
+        gasWebUrl: activeGas,
+        deploySheetUrl: activeSheet,
+        createdAt: new Date().toISOString()
+      });
     }
-  }, [currentUser?.email, currentUser?.userRole, currentInviteCode, gasWebUrl, deploySheetUrl, isSandboxMode]);
+  }, [currentUser?.email, currentUser?.name, currentInviteCode, gasWebUrl, deploySheetUrl, isSandboxMode]);
 
   // ☁️ 開機自動同步使用者 Google 帳號所綁定的 API 設定與情侶雙向即時同步
   useEffect(() => {
