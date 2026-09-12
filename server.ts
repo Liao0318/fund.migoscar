@@ -35,6 +35,12 @@ function writeJsonFile<T>(filePath: string, data: T): void {
   }
 }
 
+function isValidGasUrl(url: any): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const lower = url.trim().toLowerCase();
+  return lower.startsWith('http') && !lower.includes('/test/') && !lower.endsWith('/test') && !lower.includes('example.com');
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -51,10 +57,10 @@ async function startServer() {
       const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
       let config = configs[email] || null;
 
-      // 若此帳號尚無獨立資料庫設定，自動回退使用全系統現有已配置之資料庫（情侶共同帳本預設）
-      if (!config || !config.gasWebUrl) {
+      // 若此帳號尚無有效獨立資料庫設定，自動嘗試從全系統或綁定推導
+      if (!config || !isValidGasUrl(config.gasWebUrl)) {
         const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
-        if (sysDb && sysDb.gasWebUrl) {
+        if (sysDb && isValidGasUrl(sysDb.gasWebUrl)) {
           config = {
             ...(config || {}),
             email,
@@ -81,10 +87,10 @@ async function startServer() {
       const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
       const existing = configs[email] || {};
 
-      // 🛡️ 嚴格防止現有有效網址被空字串意外覆蓋清空
-      const safeGas = (payload.gasWebUrl && typeof payload.gasWebUrl === 'string' && payload.gasWebUrl.trim().startsWith('http'))
+      // 🛡️ 嚴格防止現有有效網址被空字串或測試網址覆蓋
+      const safeGas = isValidGasUrl(payload.gasWebUrl)
         ? payload.gasWebUrl.trim()
-        : (payload.forceClear ? '' : (existing.gasWebUrl || ''));
+        : (payload.forceClear ? '' : (isValidGasUrl(existing.gasWebUrl) ? existing.gasWebUrl : ''));
 
       const safeSheet = (payload.deploySheetUrl && typeof payload.deploySheetUrl === 'string' && payload.deploySheetUrl.trim().startsWith('http'))
         ? payload.deploySheetUrl.trim()
@@ -100,8 +106,8 @@ async function startServer() {
       };
       writeJsonFile(USER_CONFIGS_FILE, configs);
 
-      // 當有有效 GAS 網址時，同步至全系統資料庫 fallback 檔案
-      if (safeGas) {
+      // 當有有效 GAS 網址時，同步至全系統資料庫
+      if (isValidGasUrl(safeGas)) {
         const sysDb = {
           gasWebUrl: safeGas,
           deploySheetUrl: safeSheet,
@@ -117,16 +123,16 @@ async function startServer() {
     }
   });
 
-  // 1.5 System Database API (單一全域資料庫端點，只要任何一台電腦或手機設定過一次，全體共享即刻同步)
+  // 1.5 System Database API
   app.get('/api/system-database', (_req, res) => {
     try {
       const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
-      if (sysDb && sysDb.gasWebUrl) {
+      if (sysDb && isValidGasUrl(sysDb.gasWebUrl)) {
         return res.json({ success: true, database: sysDb });
       }
-      // 搜尋是否有任一使用者已儲存有效網址
+      // 搜尋是否有任一使用者已儲存真實有效網址
       const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
-      const anyWithGas = Object.values(configs).find((c: any) => c && c.gasWebUrl && typeof c.gasWebUrl === 'string' && c.gasWebUrl.startsWith('http'));
+      const anyWithGas = Object.values(configs).find((c: any) => c && isValidGasUrl(c.gasWebUrl));
       if (anyWithGas) {
         const derived = {
           gasWebUrl: anyWithGas.gasWebUrl,
@@ -146,7 +152,7 @@ async function startServer() {
   app.post('/api/system-database', (req, res) => {
     try {
       const { gasWebUrl, deploySheetUrl, email } = req.body || {};
-      if (gasWebUrl && typeof gasWebUrl === 'string' && gasWebUrl.trim().startsWith('http')) {
+      if (isValidGasUrl(gasWebUrl)) {
         const cleanGas = gasWebUrl.trim();
         const cleanSheet = typeof deploySheetUrl === 'string' ? deploySheetUrl.trim() : '';
         const sysDb = {
@@ -157,7 +163,6 @@ async function startServer() {
         };
         writeJsonFile(SYSTEM_DATABASE_FILE, sysDb);
 
-        // 同步寫入此使用者的個人設定中
         if (email && typeof email === 'string') {
           const cleanEmail = email.trim().toLowerCase();
           const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
@@ -207,7 +212,7 @@ async function startServer() {
 
         // 1. 直接比對 partner_invites.json
         for (const c of candidates) {
-          if (invites[c] && invites[c].gasWebUrl) {
+          if (invites[c] && isValidGasUrl(invites[c].gasWebUrl)) {
             return res.json({ success: true, invite: invites[c] });
           }
         }
@@ -216,10 +221,10 @@ async function startServer() {
         const foundInInvites = Object.values(invites).find((inv: any) => {
           const invCode = (inv.inviteCode || '').toUpperCase();
           const invClean = invCode.replace(/^BB-?/, '');
-          return candidates.includes(invCode) || candidates.includes(invClean);
+          return (candidates.includes(invCode) || candidates.includes(invClean)) && isValidGasUrl(inv.gasWebUrl);
         });
 
-        if (foundInInvites && foundInInvites.gasWebUrl) {
+        if (foundInInvites) {
           return res.json({ success: true, invite: foundInInvites });
         }
 
@@ -228,26 +233,28 @@ async function startServer() {
           const cfgCode = (cfg.inviteCode || '').toUpperCase();
           const cfgClean = cfgCode.replace(/^BB-?/, '');
           if (cfgCode && (candidates.includes(cfgCode) || candidates.includes(cfgClean))) {
-            const synthesizedInvite = {
-              inviteCode: cfgCode.startsWith('BB-') ? cfgCode : `BB-${cfgClean}`,
-              adminEmail: cfg.email || cfgEmail,
-              adminName: cfg.name || '主管理員',
-              gasWebUrl: cfg.gasWebUrl || (sysDb && sysDb.gasWebUrl) || '',
-              deploySheetUrl: cfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
-              createdAt: cfg.updatedAt || new Date().toISOString()
-            };
-            invites[withPrefix] = synthesizedInvite;
-            invites[cleanNoPrefix] = synthesizedInvite;
-            writeJsonFile(PARTNER_INVITES_FILE, invites);
-            return res.json({ success: true, invite: synthesizedInvite });
+            const candidateGas = isValidGasUrl(cfg.gasWebUrl) ? cfg.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : '');
+            if (candidateGas) {
+              const synthesizedInvite = {
+                inviteCode: cfgCode.startsWith('BB-') ? cfgCode : `BB-${cfgClean}`,
+                adminEmail: cfg.email || cfgEmail,
+                adminName: cfg.name || '主管理員',
+                gasWebUrl: candidateGas,
+                deploySheetUrl: cfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
+                createdAt: cfg.updatedAt || new Date().toISOString()
+              };
+              invites[withPrefix] = synthesizedInvite;
+              invites[cleanNoPrefix] = synthesizedInvite;
+              writeJsonFile(PARTNER_INVITES_FILE, invites);
+              return res.json({ success: true, invite: synthesizedInvite });
+            }
           }
         }
 
         // 4. 🛡️ 深度容錯備援：若系統已有任一有效資料庫（如 oscargh3359@gmail.com 或 system_database）
-        // 且伴侶輸入了標準 4~8 碼代碼，自動將此代碼與現有資料庫對接！
         const adminWithGas = Object.values(userConfigs).find((c: any) => 
-          c && c.gasWebUrl && typeof c.gasWebUrl === 'string' && c.gasWebUrl.startsWith('http')
-        ) || (sysDb?.gasWebUrl ? { 
+          c && isValidGasUrl(c.gasWebUrl)
+        ) || (isValidGasUrl(sysDb?.gasWebUrl) ? { 
           email: sysDb.configuredBy || 'oscargh3359@gmail.com',
           name: '主管理員',
           gasWebUrl: sysDb.gasWebUrl,
@@ -268,7 +275,6 @@ async function startServer() {
           invites[cleanNoPrefix] = fallbackInvite;
           writeJsonFile(PARTNER_INVITES_FILE, invites);
 
-          // 同步註冊回該管理員的 user_configs
           if (adminWithGas.email && userConfigs[adminWithGas.email.toLowerCase()]) {
             userConfigs[adminWithGas.email.toLowerCase()].inviteCode = matchedCode;
             writeJsonFile(USER_CONFIGS_FILE, userConfigs);
@@ -281,22 +287,24 @@ async function startServer() {
       if (email) {
         // 1. 比對 partner_invites
         const found = Object.values(invites).find((inv: any) => 
-          (inv.adminEmail && inv.adminEmail.toLowerCase() === email) ||
-          (inv.email && inv.email.toLowerCase() === email)
+          ((inv.adminEmail && inv.adminEmail.toLowerCase() === email) ||
+          (inv.email && inv.email.toLowerCase() === email)) &&
+          isValidGasUrl(inv.gasWebUrl)
         );
-        if (found && found.gasWebUrl) {
+        if (found) {
           return res.json({ success: true, invite: found });
         }
 
         // 2. 比對 user_configs
         const userCfg = userConfigs[email];
-        if (userCfg && (userCfg.gasWebUrl || sysDb?.gasWebUrl)) {
+        const gasToUse = userCfg && isValidGasUrl(userCfg.gasWebUrl) ? userCfg.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : '');
+        if (userCfg && gasToUse) {
           const inviteCode = userCfg.inviteCode || 'BB-8888';
           const synInvite = {
             inviteCode,
             adminEmail: userCfg.email || email,
             adminName: userCfg.name || '主管理員',
-            gasWebUrl: userCfg.gasWebUrl || sysDb?.gasWebUrl || '',
+            gasWebUrl: gasToUse,
             deploySheetUrl: userCfg.deploySheetUrl || sysDb?.deploySheetUrl || '',
             createdAt: userCfg.updatedAt || new Date().toISOString()
           };
@@ -306,9 +314,8 @@ async function startServer() {
         }
       }
 
-      // 若完全無指定參數或未命中，但系統已有任一有效資料庫，回傳預設邀請物件
       if (!rawCode && !email) {
-        const anyInvite = Object.values(invites).find((inv: any) => inv && inv.gasWebUrl);
+        const anyInvite = Object.values(invites).find((inv: any) => inv && isValidGasUrl(inv.gasWebUrl));
         if (anyInvite) {
           return res.json({ success: true, invite: anyInvite });
         }
@@ -339,13 +346,12 @@ async function startServer() {
       invites[code.replace(/^BB-/, '')] = enrichedInvite;
       writeJsonFile(PARTNER_INVITES_FILE, invites);
 
-      // 同步回 user_configs
       if (invite.adminEmail) {
         const adminEmailClean = String(invite.adminEmail).trim().toLowerCase();
         const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
         if (userConfigs[adminEmailClean]) {
           userConfigs[adminEmailClean].inviteCode = code;
-          if (invite.gasWebUrl) userConfigs[adminEmailClean].gasWebUrl = invite.gasWebUrl;
+          if (isValidGasUrl(invite.gasWebUrl)) userConfigs[adminEmailClean].gasWebUrl = invite.gasWebUrl;
           if (invite.deploySheetUrl) userConfigs[adminEmailClean].deploySheetUrl = invite.deploySheetUrl;
           writeJsonFile(USER_CONFIGS_FILE, userConfigs);
         }
@@ -366,14 +372,12 @@ async function startServer() {
       const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
 
       if (!email) {
-        // 若未提供 email，回傳最新的伴侶綁定紀錄
         const anyBinding = Object.values(bindings)[0] || null;
         return res.json({ success: true, binding: anyBinding });
       }
 
       let binding = bindings[email] || null;
 
-      // 若以 partnerEmail 或 adminEmail 查詢
       if (!binding) {
         binding = Object.values(bindings).find((b: any) => 
           (b.adminEmail && b.adminEmail.toLowerCase() === email) ||
@@ -381,7 +385,6 @@ async function startServer() {
         ) || null;
       }
 
-      // 若 bindings 中未命中，嘗試自 user_configs 推導
       if (!binding) {
         const userCfg = userConfigs[email];
         if (userCfg && userCfg.userRole === 'partner' && userCfg.adminEmail) {
@@ -391,7 +394,7 @@ async function startServer() {
             partnerEmail: email,
             partnerName: userCfg.name || '伴侶',
             inviteCode: userCfg.inviteCode || '',
-            gasWebUrl: userCfg.gasWebUrl || sysDb?.gasWebUrl || '',
+            gasWebUrl: isValidGasUrl(userCfg.gasWebUrl) ? userCfg.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : ''),
             deploySheetUrl: userCfg.deploySheetUrl || sysDb?.deploySheetUrl || '',
             boundAt: userCfg.updatedAt || new Date().toISOString()
           };
@@ -399,7 +402,6 @@ async function startServer() {
           if (userCfg.adminEmail) bindings[userCfg.adminEmail.toLowerCase()] = binding;
           writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
         } else {
-          // 檢查是否有人認證此 email 為其伴侶
           const adminPartnerMatch = Object.values(userConfigs).find((c: any) => 
             c && c.partnerEmail && c.partnerEmail.toLowerCase() === email
           );
@@ -410,7 +412,7 @@ async function startServer() {
               partnerEmail: email,
               partnerName: adminPartnerMatch.partnerName || '伴侶',
               inviteCode: adminPartnerMatch.inviteCode || '',
-              gasWebUrl: adminPartnerMatch.gasWebUrl || sysDb?.gasWebUrl || '',
+              gasWebUrl: isValidGasUrl(adminPartnerMatch.gasWebUrl) ? adminPartnerMatch.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : ''),
               deploySheetUrl: adminPartnerMatch.deploySheetUrl || sysDb?.deploySheetUrl || '',
               boundAt: adminPartnerMatch.updatedAt || new Date().toISOString()
             };
@@ -419,11 +421,6 @@ async function startServer() {
             writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
           }
         }
-      }
-
-      // 若仍未找到特定綁定，但系統存在有效綁定紀錄
-      if (!binding && Object.keys(bindings).length > 0) {
-        binding = Object.values(bindings)[0] || null;
       }
 
       return res.json({ success: true, binding });
@@ -468,7 +465,7 @@ async function startServer() {
           userRole: 'partner',
           adminEmail: adminEmail,
           adminName: binding.adminName || '主管理員',
-          gasWebUrl: binding.gasWebUrl || userConfigs[partnerEmail]?.gasWebUrl || '',
+          gasWebUrl: isValidGasUrl(binding.gasWebUrl) ? binding.gasWebUrl : (userConfigs[partnerEmail]?.gasWebUrl || ''),
           deploySheetUrl: binding.deploySheetUrl || userConfigs[partnerEmail]?.deploySheetUrl || '',
           inviteCode: binding.inviteCode,
           updatedAt: new Date().toISOString()
@@ -476,8 +473,7 @@ async function startServer() {
       }
       writeJsonFile(USER_CONFIGS_FILE, userConfigs);
 
-      // 若綁定中帶有有效 gasWebUrl，同步至系統預設資料庫
-      if (binding.gasWebUrl && typeof binding.gasWebUrl === 'string' && binding.gasWebUrl.startsWith('http')) {
+      if (isValidGasUrl(binding.gasWebUrl)) {
         writeJsonFile(SYSTEM_DATABASE_FILE, {
           gasWebUrl: binding.gasWebUrl,
           deploySheetUrl: binding.deploySheetUrl || '',

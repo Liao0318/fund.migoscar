@@ -191,11 +191,7 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
 
     try {
       if (onBindPartnerInvite) {
-        const fallbackRes = { success: true, message: '' };
-        const res = await Promise.race([
-          onBindPartnerInvite(clean),
-          new Promise<{ success: boolean; message?: string }>((resolve) => setTimeout(() => resolve(fallbackRes), 3500))
-        ]);
+        const res = await onBindPartnerInvite(clean);
         setIsPartnerBindingLoading(false);
         if (res.success) {
           setPartnerBindSuccess(true);
@@ -203,7 +199,7 @@ export const DatabaseOnboardingModal: React.FC<DatabaseOnboardingModalProps> = (
             onClose();
           }, 1000);
         } else {
-          setPartnerError(res.message || '邀請碼綁定失敗，請確認代碼是否正確');
+          setPartnerError(res.message || '邀請碼綁定失敗，請確認代碼是否正確或請主管理者提供最新邀請碼');
         }
       } else {
         setIsPartnerBindingLoading(false);

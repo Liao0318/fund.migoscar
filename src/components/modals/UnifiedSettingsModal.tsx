@@ -788,16 +788,12 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                               if (!onBindPartnerInvite || !manualJoinCode.trim()) return;
                               setIsSubmittingJoin(true);
                               try {
-                                const fallbackRes = { success: true, message: '' };
-                                const res = await Promise.race([
-                                  onBindPartnerInvite(manualJoinCode.trim()),
-                                  new Promise<{ success: boolean; message?: string }>((resolve) => setTimeout(() => resolve(fallbackRes), 3500))
-                                ]);
+                                const res = await onBindPartnerInvite(manualJoinCode.trim());
                                 if (res.success) {
                                   setManualJoinCode('');
                                   setSubView(null);
                                 } else {
-                                  setJoinErrorMessage(res.message || '驗證失敗');
+                                  setJoinErrorMessage(res.message || '驗證失敗，請確認邀請代碼');
                                 }
                               } catch (e: any) {
                                 setJoinErrorMessage(e?.message || '發生錯誤');
