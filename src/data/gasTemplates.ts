@@ -460,7 +460,7 @@ function updateRecordByRow(data) {
     }
 
     // 相容純數字行號比對
-    if (foundRow === -1 && /^\d+$/.test(targetId)) {
+    if (foundRow === -1 && /^\\d+$/.test(targetId)) {
       var rowNum = parseInt(targetId, 10);
       if (rowNum >= 2 && rowNum <= lastRow) {
         foundRow = rowNum;
@@ -522,7 +522,7 @@ function deleteRecordByRow(payload) {
     }
 
     // 相容純數字行號比對
-    if (foundRow === -1 && /^\d+$/.test(targetId)) {
+    if (foundRow === -1 && /^\\d+$/.test(targetId)) {
       var rowNum = parseInt(targetId, 10);
       if (rowNum >= 2 && rowNum <= lastRow) {
         foundRow = rowNum;
@@ -557,8 +557,8 @@ function getReconciledMonthsFromSheet() {
       if (cellVal instanceof Date) {
         monthStr = Utilities.formatDate(cellVal, "GMT+8", "yyyy-MM");
       } else {
-        monthStr = String(cellVal || "").trim().replace(/\//g, "-");
-        if (/^\d{4}-\d{2}-\d{2}/.test(monthStr)) {
+        monthStr = String(cellVal || "").trim().split('/').join('-');
+        if (/^\\d{4}-\\d{2}-\\d{2}/.test(monthStr)) {
           monthStr = monthStr.substring(0, 7);
         }
       }
@@ -584,8 +584,8 @@ function setMonthReconciled(month, isReconciled) {
       sheet = ss.getSheetByName("月度核銷狀態");
     }
 
-    var cleanMonth = String(month).trim().replace(/\//g, "-");
-    if (/^\d{4}-\d{2}-\d{2}/.test(cleanMonth)) {
+    var cleanMonth = String(month).trim().split('/').join('-');
+    if (/^\\d{4}-\\d{2}-\\d{2}/.test(cleanMonth)) {
       cleanMonth = cleanMonth.substring(0, 7);
     }
 
@@ -597,8 +597,8 @@ function setMonthReconciled(month, isReconciled) {
       var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
       for (var i = 0; i < values.length; i++) {
         var val = values[i][0];
-        var mStr = val instanceof Date ? Utilities.formatDate(val, "GMT+8", "yyyy-MM") : String(val || "").trim().replace(/\//g, "-");
-        if (/^\d{4}-\d{2}-\d{2}/.test(mStr)) {
+        var mStr = val instanceof Date ? Utilities.formatDate(val, "GMT+8", "yyyy-MM") : String(val || "").trim().split('/').join('-');
+        if (/^\\d{4}-\\d{2}-\\d{2}/.test(mStr)) {
           mStr = mStr.substring(0, 7);
         }
         if (mStr === cleanMonth) {
@@ -1140,7 +1140,7 @@ function getTravelData() {
           var sDate = String(rawDate).trim();
           if (sDate.indexOf("T") !== -1) sDate = sDate.split("T")[0];
           else if (sDate.indexOf(" ") !== -1) sDate = sDate.split(" ")[0];
-          sDate = sDate.replace(/[\/.]/g, "-");
+          sDate = sDate.split('/').join('-').split('.').join('-');
           dateStr = sDate;
         }
 
@@ -1165,7 +1165,7 @@ function getTravelData() {
         }
 
         if (splitTargetStr) {
-          var cleanTarget = splitTargetStr.replace(/\(.*?\)/g, "").trim();
+          var cleanTarget = splitTargetStr.replace(/\\(.*?\\)/g, "").trim();
           if (cleanTarget === "全體AA" || cleanTarget === "AA平分" || cleanTarget === "AA" || cleanTarget === "平分" || cleanTarget === "全部") {
             splitMode = "全體AA";
             participants = matchedTrip.members || [DEFAULT_USER_A_SHORT, DEFAULT_USER_B_SHORT];

@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.7.0';
+export const APP_VERSION = 'v2.7.1';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,16 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.7.1',
+    date: '2026.09.12',
+    title: '修復 Google Apps Script 後端代碼 (Code.gs) 語法錯誤',
+    highlights: [
+      '徹底修復 Apps Script 編輯器回報「SyntaxError: Unexpected token if 行數: 513」的問題',
+      '解決模板字串反斜線轉義引起的正規表達式註解誤判與日期格式轉換異常',
+      '全面驗證 Code.gs 後端腳本與一鍵複製功能，確保 100% 通過 JavaScript 標準語法檢驗並可直接成功儲存部署'
+    ]
+  },
   {
     version: 'v2.7.0',
     date: '2026.09.12',
