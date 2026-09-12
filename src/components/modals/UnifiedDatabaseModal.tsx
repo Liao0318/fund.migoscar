@@ -1020,7 +1020,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                             />
                           </div>
 
-                          {/* 複製代碼區 */}
+                            {/* 複製代碼區 */}
                           <div className="bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#EAE6DC] space-y-2.5">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-bold text-[#3E3A36] flex items-center gap-1.5">
@@ -1041,13 +1041,22 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                             </pre>
                           </div>
 
+                          <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1">
+                            <div className="font-bold flex items-center gap-1.5">
+                              <span>⚠️ 跨裝置（平板/手機）同步關鍵步驟：</span>
+                            </div>
+                            <p className="text-[11px] leading-relaxed text-amber-800">
+                              在 Google 試算表貼上程式碼並儲存後，請務必點右上角<strong>「部署 ➔ 新增部署作業」</strong>（類型選網頁應用程式，誰可以存取選「所有人」），取得 <code>/exec</code> 網址後，點擊下方<strong>「前往第 2 步」</strong>貼上並驗證綁定。完成後，平板登入同一個 Google 帳號就會立即自動連動！
+                            </p>
+                          </div>
+
                           <div className="flex justify-end pt-2">
                             <button
                               type="button"
                               onClick={() => setAdminWizardStep(2)}
                               className="px-5 py-2.5 bg-gradient-to-r from-amber-800 to-amber-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 cursor-pointer"
                             >
-                              <span>前往第 2 步：驗證並綁定 API</span>
+                              <span>前往第 2 步：驗證並綁定 API 網址</span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           </div>

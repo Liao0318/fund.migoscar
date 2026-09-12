@@ -284,6 +284,113 @@ const isMonthReconciled = (month: string, list: string[]): boolean => {
   return list.some(item => normalizeMonth(item) === normMonth);
 };
 
+// 🛡️ 智慧對帳紀錄修復防護網：自動校正 Google 試算表可能因欄位推移或表頭版本不一致造成的資料錯位
+export const sanitizeAndHealRecord = (r: any): RecordItem => {
+  if (!r || typeof r !== 'object') return r;
+  let rec = { ...r };
+
+  // 1. 偵測欄位位移特徵：
+  // 特徵 A：month 存放的是 ID (例如 'rec_1789220107510_4663')
+  const monthLooksLikeId = typeof rec.month === 'string' && (rec.month.startsWith('rec_') || rec.month.length > 12);
+  // 特徵 B：item 存放的是完整日期時間字串 (例如 'Sun Sep 06 2026 00:00:00 GMT+0800 (台北標準時間)')
+  const itemLooksLikeDate = typeof rec.item === 'string' && (
+    rec.item.includes('GMT') || 
+    rec.item.includes('台北標準時間') || 
+    /^[A-Z][a-z]{2}\s[A-Z][a-z]{2}\s\d{1,2}\s\d{4}/.test(rec.item) ||
+    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{2}:\d{2}/.test(rec.item)
+  );
+
+  if (monthLooksLikeId || itemLooksLikeDate) {
+    // 發生欄位位移錯位！進行精準欄位解包還原：
+    const trueId = (monthLooksLikeId ? rec.month : rec.id) || `rec_${Date.now()}`;
+
+    // 還原日期
+    let trueDate = '';
+    if (itemLooksLikeDate) {
+      try {
+        const d = new Date(rec.item);
+        if (!isNaN(d.getTime())) {
+          const pad = (n: number) => String(n).padStart(2, '0');
+          trueDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+      } catch (e) {}
+    }
+    if (!trueDate && typeof rec.date === 'string') {
+      const match = rec.date.match(/\d{4}-\d{2}(-\d{2})?/);
+      if (match) {
+        trueDate = match[0].length === 7 ? `${match[0]}-01` : match[0];
+      }
+    }
+    if (!trueDate) trueDate = new Date().toISOString().split('T')[0];
+
+    const trueMonth = trueDate.substring(0, 7);
+
+    // 還原項目描述
+    const trueItem = (rec.payer && !['廖', '周', '廖尹丞', '周沛緹', '小廖', '小周', '共同帳戶'].includes(rec.payer))
+      ? rec.payer
+      : (itemLooksLikeDate ? '日常生活支出' : rec.item);
+
+    // 還原金額：檢查 rec.type 是否為數值，或者 rec.amount
+    let trueAmount = 0;
+    const typeClean = String(rec.type || '').trim();
+    const typeNum = parseFloat(typeClean.replace(/[^0-9.]/g, ''));
+    if (!isNaN(typeNum) && typeNum > 0 && !typeClean.includes('撥入') && !typeClean.includes('支出') && !typeClean.includes('公積金')) {
+      trueAmount = typeNum;
+    } else {
+      const amtNum = parseFloat(String(rec.amount || '').replace(/[^0-9.]/g, ''));
+      if (!isNaN(amtNum) && amtNum > 0) {
+        trueAmount = amtNum;
+      }
+    }
+
+    // 還原付款人
+    let truePayer = '廖尹丞';
+    const allContext = `${rec.amount || ''} ${rec.type || ''} ${rec.timestamp || ''} ${rec.payer || ''}`;
+    if (allContext.includes('周沛緹') || allContext.includes('沛緹') || allContext.includes('周')) {
+      truePayer = '周沛緹';
+    } else if (allContext.includes('廖尹丞') || allContext.includes('尹丞') || allContext.includes('廖')) {
+      truePayer = '廖尹丞';
+    }
+
+    // 還原類型
+    let trueType: '支出-日常代墊' | '收入-固定公積金' = '支出-日常代墊';
+    if (String(rec.timestamp || '').includes('撥入') || String(rec.type || '').includes('撥入') || String(rec.item || '').includes('撥入')) {
+      trueType = '收入-固定公積金';
+    }
+
+    rec = {
+      ...rec,
+      id: trueId,
+      month: trueMonth,
+      date: trueDate,
+      item: trueItem,
+      payer: truePayer,
+      amount: trueAmount,
+      type: trueType,
+      timestamp: `${trueDate} 12:00:00`
+    };
+  }
+
+  // 二次確保 month 與 date 合法性
+  if (!rec.month || !/^\d{4}-\d{2}$/.test(rec.month)) {
+    if (rec.date && /^\d{4}-\d{2}/.test(rec.date)) {
+      rec.month = rec.date.substring(0, 7);
+    } else {
+      rec.month = new Date().toISOString().substring(0, 7);
+    }
+  }
+  if (!rec.date) {
+    rec.date = `${rec.month}-01`;
+  }
+  rec.amount = Number(rec.amount) || 0;
+  return rec as RecordItem;
+};
+
+export const sanitizeAndHealRecords = (list: any[]): RecordItem[] => {
+  if (!Array.isArray(list)) return [];
+  return list.map(sanitizeAndHealRecord);
+};
+
 export default function App() {
   const [records, setRecords] = useState<RecordItem[]>(() => {
     try {
@@ -325,26 +432,7 @@ export default function App() {
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              return parsed.map((r: any) => {
-                let mStr = String(r.month || '').trim();
-                if (!/^\d{4}-\d{2}$/.test(mStr)) {
-                  if (/^\d{4}-\d{2}-\d{2}$/.test(mStr)) {
-                    mStr = mStr.substring(0, 7);
-                  } else {
-                    const d = new Date(mStr);
-                    if (!isNaN(d.getTime())) {
-                      const year = d.getFullYear();
-                      const month = String(d.getMonth() + 1).padStart(2, '0');
-                      mStr = `${year}-${month}`;
-                    }
-                  }
-                }
-                return {
-                  ...r,
-                  month: mStr,
-                  date: r.date || `${mStr}-01`
-                };
-              });
+              return sanitizeAndHealRecords(parsed);
             }
           }
         } catch (e) {}
@@ -2098,13 +2186,14 @@ export default function App() {
       const res = await callGasApi('getDashboardData', undefined, overrideGasUrl);
       if (res && res.success) {
         if (Array.isArray(res.records)) {
+          const healed = sanitizeAndHealRecords(res.records);
           setRecords(prev => {
             // 只有在資料內容有變動時才更新狀態，避免無謂 re-render
             const prevStr = JSON.stringify(prev);
-            const nextStr = JSON.stringify(res.records);
-            if (prevStr !== nextStr && res.records.length > 0) {
+            const nextStr = JSON.stringify(healed);
+            if (prevStr !== nextStr && healed.length > 0) {
               localStorage.setItem('muji_ledger_data', nextStr);
-              return res.records;
+              return healed;
             }
             return prev;
           });
@@ -2920,8 +3009,8 @@ export default function App() {
     const cleanEmail = currentUser.email.trim().toLowerCase();
     if (!cleanEmail) return;
 
-    // 只有在非初次載入或資料有內容時才推送，避免以空陣列覆蓋
-    if (records.length === 0 && splitItems.length === 0 && shoppingItems.length === 0) return;
+    // 只有在完全無內容且無任何資料庫網址時才略過，避免無效請求
+    if (records.length === 0 && splitItems.length === 0 && shoppingItems.length === 0 && !gasWebUrl && !deploySheetUrl) return;
 
     const timer = setTimeout(() => {
       if (hasBackendServer()) {
@@ -4583,7 +4672,20 @@ export default function App() {
   // 1. 最新月份代墊與收入計算 (供底部浮動合計面板、首頁即時顯示使用)
   const latestMonth = React.useMemo(() => {
     if (records.length === 0) return '2026-06';
-    const unique = Array.from(new Set(records.map(r => r.month))) as string[];
+    const validMonths = records
+      .map(r => r.month)
+      .filter(m => typeof m === 'string' && /^\d{4}-\d{2}$/.test(m));
+    if (validMonths.length === 0) {
+      const fromDates = records
+        .map(r => (typeof r.date === 'string' && r.date.length >= 7 ? r.date.substring(0, 7) : ''))
+        .filter(m => /^\d{4}-\d{2}$/.test(m));
+      if (fromDates.length > 0) {
+        fromDates.sort((a, b) => b.localeCompare(a));
+        return fromDates[0];
+      }
+      return new Date().toISOString().substring(0, 7);
+    }
+    const unique = Array.from(new Set(validMonths)) as string[];
     unique.sort((a, b) => b.localeCompare(a));
     return unique[0];
   }, [records]);

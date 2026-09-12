@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.7.1';
+export const APP_VERSION = 'v2.7.2';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.7.2',
+    date: '2026.09.12',
+    title: '試算表跨版本欄位位移智慧校正與異常數據自動修復',
+    highlights: [
+      '徹底修復 Google 試算表歷史欄位位移導致「月份顯示為 rec_...、品項顯示日期、金額全部變成 $0」的嚴重錯位問題',
+      '前端全面架設智慧自我修復防禦網（sanitizeAndHealRecord），載入任何舊版或錯位快取時自動解包還原真實品項、金額、姓名與月份',
+      '後端 Google Apps Script 升級動態表頭解析與特徵探測引擎，100% 相容各版本（有無 ID 欄、中文表頭、英文表頭）之試算表',
+      '防護月份計算與統計聚合邏輯，確保公積金餘額、廖/周代墊統計與即時面板在任何異常格式下皆可即時正常計算與渲染'
+    ]
+  },
   {
     version: 'v2.7.1',
     date: '2026.09.12',

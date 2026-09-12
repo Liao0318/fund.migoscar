@@ -326,9 +326,63 @@ function getDashboardData() {
     if (lastRow <= 1) return response;
 
     var maxCols = Math.max(sheet.getLastColumn(), 8);
+    var headerRow = sheet.getRange(1, 1, 1, maxCols).getValues()[0];
     var values = sheet.getRange(2, 1, lastRow - 1, maxCols).getValues();
-    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
-    var hasIdCol = (firstHeader === "ID");
+
+    // 1. 動態解析表頭欄位
+    var colMap = {
+      id: -1,
+      month: -1,
+      date: -1,
+      item: -1,
+      payer: -1,
+      amount: -1,
+      type: -1,
+      timestamp: -1
+    };
+
+    for (var c = 0; c < headerRow.length; c++) {
+      var h = String(headerRow[c] || "").trim().toLowerCase();
+      if (!h) continue;
+      if (colMap.id === -1 && (h === "id" || h.indexOf("編號") !== -1 || h.indexOf("序號") !== -1 || h.indexOf("流水號") !== -1)) colMap.id = c;
+      else if (colMap.month === -1 && (h.indexOf("月") !== -1 || h.indexOf("month") !== -1)) colMap.month = c;
+      else if (colMap.date === -1 && (h.indexOf("日") !== -1 || h.indexOf("date") !== -1)) colMap.date = c;
+      else if (colMap.item === -1 && (h.indexOf("項") !== -1 || h.indexOf("品") !== -1 || h.indexOf("內容") !== -1 || h.indexOf("描述") !== -1 || h.indexOf("item") !== -1)) colMap.item = c;
+      else if (colMap.payer === -1 && (h.indexOf("出錢") !== -1 || h.indexOf("付款") !== -1 || h.indexOf("代墊人") !== -1 || h.indexOf("payer") !== -1)) colMap.payer = c;
+      else if (colMap.amount === -1 && (h.indexOf("金額") !== -1 || h.indexOf("費用") !== -1 || h.indexOf("amount") !== -1 || h.indexOf("台幣") !== -1)) colMap.amount = c;
+      else if (colMap.type === -1 && (h.indexOf("類") !== -1 || h.indexOf("收支") !== -1 || h.indexOf("type") !== -1)) colMap.type = c;
+      else if (colMap.timestamp === -1 && (h.indexOf("時間") !== -1 || h.indexOf("戳記") !== -1 || h.indexOf("建立") !== -1 || h.indexOf("time") !== -1)) colMap.timestamp = c;
+    }
+
+    // 2. 若欄位對應不完整，藉由資料特徵自主校正
+    var firstRow = values[0] || [];
+    var firstCellStr = String(firstRow[0] || "").trim();
+    var firstCellIsId = firstCellStr.indexOf("rec_") === 0 || firstCellStr.length > 15;
+    var firstHeaderStr = String(headerRow[0] || "").trim().toUpperCase();
+
+    var hasIdCol = (firstCellIsId || colMap.id === 0 || firstHeaderStr === "ID" || firstHeaderStr.indexOf("編號") !== -1 || firstHeaderStr.indexOf("序號") !== -1);
+
+    if (colMap.amount === -1 || colMap.item === -1) {
+      if (hasIdCol) {
+        colMap.id = 0;
+        colMap.month = 1;
+        colMap.date = 2;
+        colMap.item = 3;
+        colMap.payer = 4;
+        colMap.amount = 5;
+        colMap.type = 6;
+        colMap.timestamp = 7;
+      } else {
+        colMap.id = -1;
+        colMap.month = 0;
+        colMap.date = 1;
+        colMap.item = 2;
+        colMap.payer = 3;
+        colMap.amount = 4;
+        colMap.type = 5;
+        colMap.timestamp = 6;
+      }
+    }
 
     var liaoTotal = 0;
     var zhouTotal = 0;
@@ -336,30 +390,28 @@ function getDashboardData() {
 
     for (var i = values.length - 1; i >= 0; i--) {
       var row = values[i];
-      var idVal, monthVal, dateVal, item, payer, amount, type, timestampVal;
+      var idVal = colMap.id !== -1 ? String(row[colMap.id] || ("rec_" + (i + 2))) : ("rec_" + (i + 2));
+      var monthVal = colMap.month !== -1 ? row[colMap.month] : "";
+      var dateVal = colMap.date !== -1 ? row[colMap.date] : "";
+      var item = colMap.item !== -1 ? String(row[colMap.item] || "") : "";
+      var payer = colMap.payer !== -1 ? String(row[colMap.payer] || "") : "";
+      var amount = colMap.amount !== -1 ? (parseFloat(row[colMap.amount]) || 0) : 0;
+      var type = colMap.type !== -1 ? String(row[colMap.type] || "") : "";
+      var timestampVal = colMap.timestamp !== -1 ? row[colMap.timestamp] : "";
 
-      if (hasIdCol) {
-        idVal = String(row[0] || ("rec_" + (i + 2)));
-        monthVal = row[1];
-        dateVal = row[2];
-        item = String(row[3] || "");
-        payer = String(row[4] || "");
-        amount = parseFloat(row[5]) || 0;
-        type = String(row[6] || "");
-        timestampVal = row[7];
-      } else {
-        idVal = i + 2;
-        monthVal = row[0];
-        dateVal = row[1];
-        item = String(row[2] || "");
-        payer = String(row[3] || "");
-        amount = parseFloat(row[4]) || 0;
-        type = String(row[5] || "");
-        timestampVal = row[6];
+      // 防禦性資料修正：若發生錯位
+      if (String(monthVal).indexOf("rec_") === 0) {
+        idVal = String(monthVal);
+        monthVal = "";
+      }
+      if (item instanceof Date || String(item).indexOf("GMT") !== -1) {
+        dateVal = item;
+        item = payer && payer !== DEFAULT_USER_A_NAME && payer !== DEFAULT_USER_B_NAME ? payer : "日常生活支出";
       }
 
       var month = monthVal instanceof Date ? Utilities.formatDate(monthVal, "GMT+8", "yyyy-MM") : String(monthVal || "").substring(0, 7);
       var dateStr = dateVal instanceof Date ? Utilities.formatDate(dateVal, "GMT+8", "yyyy-MM-dd") : String(dateVal || (month ? month + "-01" : ""));
+      if (!month && dateStr && dateStr.length >= 7) month = dateStr.substring(0, 7);
       var timestampStr = timestampVal ? (timestampVal instanceof Date ? formatAmPmTime(timestampVal) : String(timestampVal)) : dateStr + " 上午 12:00";
 
       recordsList.push({
@@ -391,8 +443,14 @@ function getDashboardData() {
 function addRecord(data) {
   try {
     var sheet = getDbSheet();
-    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
-    var hasIdCol = (firstHeader === "ID");
+    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim().toUpperCase();
+    var hasIdCol = (firstHeader === "ID" || firstHeader.indexOf("編號") !== -1 || firstHeader.indexOf("序號") !== -1);
+    if (!hasIdCol && sheet.getLastRow() >= 2) {
+      var firstCellSample = String(sheet.getRange(2, 1).getValue() || "").trim();
+      if (firstCellSample.indexOf("rec_") === 0 || firstCellSample.length > 15) {
+        hasIdCol = true;
+      }
+    }
 
     var id = String(data.id || ("rec_" + new Date().getTime() + "_" + Math.floor(Math.random() * 10000)));
     var now = new Date();
@@ -438,8 +496,14 @@ function updateRecordByRow(data) {
     var lastRow = sheet.getLastRow();
     if (lastRow <= 1) return { success: false, message: "資料庫目前沒有任何紀錄可供更新" };
 
-    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
-    var hasIdCol = (firstHeader === "ID");
+    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim().toUpperCase();
+    var hasIdCol = (firstHeader === "ID" || firstHeader.indexOf("編號") !== -1 || firstHeader.indexOf("序號") !== -1);
+    if (!hasIdCol && lastRow >= 2) {
+      var firstCellSample = String(sheet.getRange(2, 1).getValue() || "").trim();
+      if (firstCellSample.indexOf("rec_") === 0 || firstCellSample.length > 15) {
+        hasIdCol = true;
+      }
+    }
 
     var foundRow = -1;
     var values = sheet.getRange(2, 1, lastRow - 1, hasIdCol ? 8 : 7).getValues();
@@ -500,8 +564,14 @@ function deleteRecordByRow(payload) {
     var lastRow = sheet.getLastRow();
     if (lastRow <= 1) return { success: false, message: "資料庫目前沒有任何紀錄可供刪除" };
 
-    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim();
-    var hasIdCol = (firstHeader === "ID");
+    var firstHeader = String(sheet.getRange(1, 1).getValue() || "").trim().toUpperCase();
+    var hasIdCol = (firstHeader === "ID" || firstHeader.indexOf("編號") !== -1 || firstHeader.indexOf("序號") !== -1);
+    if (!hasIdCol && lastRow >= 2) {
+      var firstCellSample = String(sheet.getRange(2, 1).getValue() || "").trim();
+      if (firstCellSample.indexOf("rec_") === 0 || firstCellSample.length > 15) {
+        hasIdCol = true;
+      }
+    }
 
     var foundRow = -1;
     var values = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
