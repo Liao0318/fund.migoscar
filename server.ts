@@ -182,11 +182,23 @@ async function startServer() {
   // 2. Partner Invites API
   app.get('/api/partner-invite', (req, res) => {
     try {
-      const rawCode = typeof req.query.code === 'string' ? req.query.code.trim().toUpperCase() : '';
+      let rawCode = typeof req.query.code === 'string' ? req.query.code.trim().toUpperCase() : '';
       const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
       const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
       const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
       const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
+
+      // 若傳入整段網址或訊息，智慧萃取 BB-XXXX
+      const matchBB = rawCode.match(/BB\s*[-_]?\s*([A-Za-z0-9]{3,10})/i);
+      if (matchBB && matchBB[1]) {
+        rawCode = `BB-${matchBB[1].toUpperCase()}`;
+      } else {
+        const matchBracket = rawCode.match(/[【「\[]([A-Za-z0-9_-]{3,10})[】」\]]/);
+        if (matchBracket && matchBracket[1]) {
+          const inner = matchBracket[1].toUpperCase();
+          rawCode = inner.startsWith('BB-') ? inner : `BB-${inner}`;
+        }
+      }
 
       if (rawCode) {
         const cleanNoPrefix = rawCode.replace(/^BB-?/, '');

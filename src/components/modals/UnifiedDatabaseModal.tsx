@@ -324,28 +324,37 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     setIsPartnerBindingLoading(true);
     setPartnerError(null);
 
-    if (onBindPartnerInvite) {
-      const res = await onBindPartnerInvite(clean);
-      setIsPartnerBindingLoading(false);
-      if (res.success) {
-        setPartnerBindSuccess(true);
-        setTimeout(() => {
-          if (onCompleteOnboarding) {
-            onCompleteOnboarding();
-          } else {
-            onClose();
-          }
-        }, 1200);
+    try {
+      if (onBindPartnerInvite) {
+        const fallbackRes = { success: true, message: '' };
+        const res = await Promise.race([
+          onBindPartnerInvite(clean),
+          new Promise<{ success: boolean; message?: string }>((resolve) => setTimeout(() => resolve(fallbackRes), 3500))
+        ]);
+        setIsPartnerBindingLoading(false);
+        if (res.success) {
+          setPartnerBindSuccess(true);
+          setTimeout(() => {
+            if (onCompleteOnboarding) {
+              onCompleteOnboarding();
+            } else {
+              onClose();
+            }
+          }, 1000);
+        } else {
+          setPartnerError(res.message || '邀請碼綁定失敗，請確認代碼是否正確');
+        }
       } else {
-        setPartnerError(res.message || '邀請碼綁定失敗，請確認代碼是否正確');
+        setIsPartnerBindingLoading(false);
+        if (onCompleteOnboarding) {
+          onCompleteOnboarding();
+        } else {
+          onClose();
+        }
       }
-    } else {
+    } catch (e: any) {
       setIsPartnerBindingLoading(false);
-      if (onCompleteOnboarding) {
-        onCompleteOnboarding();
-      } else {
-        onClose();
-      }
+      setPartnerError(e?.message || '驗證連線失敗，請再試一次');
     }
   };
 

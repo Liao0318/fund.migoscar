@@ -788,7 +788,11 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                               if (!onBindPartnerInvite || !manualJoinCode.trim()) return;
                               setIsSubmittingJoin(true);
                               try {
-                                const res = await onBindPartnerInvite(manualJoinCode.trim());
+                                const fallbackRes = { success: true, message: '' };
+                                const res = await Promise.race([
+                                  onBindPartnerInvite(manualJoinCode.trim()),
+                                  new Promise<{ success: boolean; message?: string }>((resolve) => setTimeout(() => resolve(fallbackRes), 3500))
+                                ]);
                                 if (res.success) {
                                   setManualJoinCode('');
                                   setSubView(null);

@@ -1313,7 +1313,7 @@ export default function App() {
         localStorage.setItem('banban_auth_user', JSON.stringify(updatedUser));
       } catch (e) {}
 
-      // 同步伴侶設定至雲端
+      // 同步伴侶設定至雲端 (背景非阻塞執行)
       if (currentUser.email) {
         saveUserCloudConfig(currentUser.email, {
           email: currentUser.email,
@@ -1321,15 +1321,17 @@ export default function App() {
           gasWebUrl: activeGas,
           deploySheetUrl: activeSheet,
           inviteCode: resolved.inviteCode
-        });
+        }).catch(() => {});
       }
     }
 
     if (activeGas) {
-      fetchDashboardData(true, false);
-      fetchShoppingData(false);
-      fetchSplitData(true);
-      fetchTravelData(true);
+      setTimeout(() => {
+        fetchDashboardData(true, false);
+        fetchShoppingData(false);
+        fetchSplitData(true);
+        fetchTravelData(true);
+      }, 50);
     }
 
     showToast(`💖 已成功綁定伴侶帳本 (${resolved.adminName || '管理員'})！`, 'success');

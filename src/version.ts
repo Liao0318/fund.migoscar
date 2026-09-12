@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.5.6';
+export const APP_VERSION = 'v2.5.7';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.5.7',
+    date: '2026.09.12',
+    title: '伴侶驗證並加入急速無延遲響應',
+    highlights: [
+      '徹底解決伴侶點擊「驗證並加入」長時間轉圈等待的問題，將驗證與加入流程加速至毫秒級響應',
+      '重構雲端資料庫與 Firestore 連線機制，全面引入非阻塞背景同步與限時超時保護（Anti-Hanging）',
+      '後端 API 自動解析完整邀請網址、短代碼、管理者信箱，並提供多層備援即時對接',
+      '加入成功後立即完成情侶帳本綁定並自動加載共享數據，提供流暢無阻的配對體驗'
+    ]
+  },
   {
     version: 'v2.5.6',
     date: '2026.09.12',

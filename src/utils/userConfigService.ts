@@ -4,6 +4,25 @@ import { AppNotifySettings } from '../types';
 import { saveConfigToGoogleDrive, loadConfigFromGoogleDrive } from './googleDriveSyncService';
 import { hasBackendServer } from './environment';
 
+/**
+ * 具有超時限制的非同步調用，防止 Firestore 離線或網絡阻塞造成介面轉圈凍結
+ */
+async function asyncWithTimeout<T>(promise: Promise<T>, timeoutMs: number = 800, fallback: T): Promise<T> {
+  let timer: any;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      promise.finally(() => clearTimeout(timer)),
+      timeoutPromise
+    ]);
+  } catch (e) {
+    clearTimeout(timer);
+    return fallback;
+  }
+}
+
 export interface UserCloudConfig {
   email: string;
   name: string;
@@ -296,12 +315,10 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
     }).catch((err) => console.warn('Google Drive config save error:', err));
   }
 
-  // 3. 雲端 Firestore 同步儲存（若專案已啟用 Firestore）
+  // 3. 雲端 Firestore 同步儲存（非阻塞背景執行）
   if (isFirestoreAvailable() && db) {
-    try {
-      const userRef = doc(db, 'user_configs', cleanEmail);
-      await setDoc(userRef, payload, { merge: true });
-    } catch (err) {}
+    const userRef = doc(db, 'user_configs', cleanEmail);
+    asyncWithTimeout(setDoc(userRef, payload, { merge: true }), 800, null).catch(() => {});
   }
 }
 
@@ -315,8 +332,8 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
   // 1. 優先從伺服器持久化 API 讀取（僅在有伺服器環境下調用，GitHub Pages 跳過此步驟以避免 404）
   if (hasBackendServer()) {
     try {
-      const res = await fetch(`/api/user-config?email=${encodeURIComponent(cleanEmail)}`);
-      if (res.ok) {
+      const res = await asyncWithTimeout(fetch(`/api/user-config?email=${encodeURIComponent(cleanEmail)}`), 1200, null as any);
+      if (res && res.ok) {
         const data = await res.json();
         if (data && data.success && data.config) {
           const serverConfig = data.config as UserCloudConfig;
@@ -341,8 +358,8 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
 
     // 1.5 檢查全系統預設資料庫 (system-database)
     try {
-      const sysRes = await fetch('/api/system-database');
-      if (sysRes.ok) {
+      const sysRes = await asyncWithTimeout(fetch('/api/system-database'), 1200, null as any);
+      if (sysRes && sysRes.ok) {
         const sysData = await sysRes.json();
         if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
           const sysDb = sysData.database;
@@ -374,7 +391,7 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
   const driveToken = getGoogleAccessToken();
   if (driveToken) {
     try {
-      const driveConfig = await loadConfigFromGoogleDrive(driveToken);
+      const driveConfig = await asyncWithTimeout(loadConfigFromGoogleDrive(driveToken), 1500, null as any);
       if (driveConfig && driveConfig.gasWebUrl && driveConfig.gasWebUrl.startsWith('http')) {
         const mergedDriveConfig: UserCloudConfig = {
           email: cleanEmail,
@@ -402,12 +419,12 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
     }
   }
 
-  // 2. 嘗試從 Firestore 雲端抓取最新資料
+  // 2. 嘗試從 Firestore 雲端抓取最新資料 (限時 800ms)
   if (isFirestoreAvailable() && db) {
     try {
       const userRef = doc(db, 'user_configs', cleanEmail);
-      const snapshot = await getDoc(userRef);
-      if (snapshot.exists()) {
+      const snapshot = await asyncWithTimeout(getDoc(userRef), 800, null as any);
+      if (snapshot && snapshot.exists && snapshot.exists()) {
         const cloudData = snapshot.data() as UserCloudConfig;
         if (cloudData && cloudData.gasWebUrl && cloudData.gasWebUrl.startsWith('http')) {
           try {

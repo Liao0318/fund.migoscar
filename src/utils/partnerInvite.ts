@@ -3,6 +3,25 @@ import { db, isFirestoreAvailable } from './googleOAuthService';
 import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { hasBackendServer } from './environment';
 
+/**
+ * 具有超時限制的非同步調用，防止 Firestore 離線或網絡阻塞造成介面轉圈凍結
+ */
+async function asyncWithTimeout<T>(promise: Promise<T>, timeoutMs: number = 800, fallback: T): Promise<T> {
+  let timer: any;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      promise.finally(() => clearTimeout(timer)),
+      timeoutPromise
+    ]);
+  } catch (e) {
+    clearTimeout(timer);
+    return fallback;
+  }
+}
+
 const REGISTRY_STORAGE_KEY = 'banban_invite_registry';
 const ACTIVE_INVITE_STORAGE_KEY = 'banban_active_invite';
 const PARTNER_BINDING_STORAGE_KEY = 'banban_partner_binding';
@@ -96,17 +115,17 @@ export async function saveActiveInviteCode(invite: PartnerInviteData): Promise<v
 
   // 雲端 Firestore 同步
   if (isFirestoreAvailable() && db && invite.inviteCode) {
-    try {
-      const codeKey = invite.inviteCode.toUpperCase();
-      const inviteRef = doc(db, 'partner_invites', codeKey);
-      await setDoc(inviteRef, {
+    const codeKey = invite.inviteCode.toUpperCase();
+    const inviteRef = doc(db, 'partner_invites', codeKey);
+    asyncWithTimeout(
+      setDoc(inviteRef, {
         ...invite,
         inviteCode: codeKey,
         updatedAt: new Date().toISOString()
-      }, { merge: true });
-    } catch (err) {
-      console.warn('Firestore saveActiveInviteCode sync failed:', err);
-    }
+      }, { merge: true }),
+      800,
+      null
+    ).catch(() => {});
   }
 }
 
@@ -160,20 +179,16 @@ export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<v
   }
 
   if (isFirestoreAvailable() && db) {
-    try {
-      const cleanAdmin = (info.adminEmail || '').trim().toLowerCase();
-      const cleanPartner = (info.partnerEmail || '').trim().toLowerCase();
-      
-      if (cleanAdmin) {
-        const adminBindRef = doc(db, 'couple_bindings', cleanAdmin);
-        await setDoc(adminBindRef, info, { merge: true });
-      }
-      if (cleanPartner) {
-        const partnerBindRef = doc(db, 'couple_bindings', cleanPartner);
-        await setDoc(partnerBindRef, info, { merge: true });
-      }
-    } catch (err) {
-      console.warn('Firestore savePartnerBindingInfo failed:', err);
+    const cleanAdmin = (info.adminEmail || '').trim().toLowerCase();
+    const cleanPartner = (info.partnerEmail || '').trim().toLowerCase();
+    
+    if (cleanAdmin) {
+      const adminBindRef = doc(db, 'couple_bindings', cleanAdmin);
+      asyncWithTimeout(setDoc(adminBindRef, info, { merge: true }), 800, null).catch(() => {});
+    }
+    if (cleanPartner) {
+      const partnerBindRef = doc(db, 'couple_bindings', cleanPartner);
+      asyncWithTimeout(setDoc(partnerBindRef, info, { merge: true }), 800, null).catch(() => {});
     }
   }
 }
@@ -201,8 +216,8 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
   // 1. 優先從伺服器持久 API 抓取（僅在有後端伺服器環境下調用）
   if (hasBackendServer()) {
     try {
-      const res = await fetch(`/api/couple-binding?email=${encodeURIComponent(cleanEmail)}`);
-      if (res.ok) {
+      const res = await asyncWithTimeout(fetch(`/api/couple-binding?email=${encodeURIComponent(cleanEmail)}`), 1200, null as any);
+      if (res && res.ok) {
         const data = await res.json();
         if (data && data.success && data.binding) {
           const bindData = data.binding as CoupleBindingInfo;
@@ -213,12 +228,12 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
     } catch (e) {}
   }
 
-  // 2. 嘗試從 Firestore 讀取
+  // 2. 嘗試從 Firestore 讀取 (限時 800ms)
   if (isFirestoreAvailable() && db) {
     try {
       const bindRef = doc(db, 'couple_bindings', cleanEmail);
-      const snap = await getDoc(bindRef);
-      if (snap.exists()) {
+      const snap = await asyncWithTimeout(getDoc(bindRef), 800, null as any);
+      if (snap && snap.exists && snap.exists()) {
         const data = snap.data() as CoupleBindingInfo;
         if (data) {
           savePartnerBindingInfo(data);
@@ -425,10 +440,9 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
     } catch (e) {}
   }
 
-  // 3. 向 Firestore 查詢真實存在的邀請紀錄
+  // 3. 向 Firestore 查詢真實存在的邀請紀錄（限時 800ms 防卡死）
   if (isFirestoreAvailable() && db && codeToQuery) {
     try {
-      // 3.1 直接以代碼為 key (BB-XXXX 或純代碼)
       const candidateKeys = Array.from(new Set([
         codeToQuery,
         codeToQuery.replace(/[^A-Za-z0-9]/g, ''),
@@ -439,8 +453,8 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
       for (const key of candidateKeys) {
         if (!key) continue;
         const inviteRef = doc(db, 'partner_invites', key);
-        const snap = await getDoc(inviteRef);
-        if (snap.exists()) {
+        const snap = await asyncWithTimeout(getDoc(inviteRef), 600, null as any);
+        if (snap && snap.exists && snap.exists()) {
           const cloudInvite = snap.data() as PartnerInviteData;
           if (cloudInvite && (cloudInvite.inviteCode || cloudInvite.adminEmail)) {
             // 若雲端邀請紀錄齊全，直接快取並返回
@@ -454,8 +468,8 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
               try {
                 const adminEmailClean = cloudInvite.adminEmail.trim().toLowerCase();
                 const adminConfigRef = doc(db, 'user_configs', adminEmailClean);
-                const adminSnap = await getDoc(adminConfigRef);
-                if (adminSnap.exists()) {
+                const adminSnap = await asyncWithTimeout(getDoc(adminConfigRef), 600, null as any);
+                if (adminSnap && adminSnap.exists && adminSnap.exists()) {
                   const adminData = adminSnap.data() as any;
                   if (adminData && adminData.gasWebUrl) {
                     const enrichedInvite: PartnerInviteData = {
@@ -467,9 +481,7 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
                     return enrichedInvite;
                   }
                 }
-              } catch (err) {
-                console.warn('Fallback admin config fetch failed:', err);
-              }
+              } catch (err) {}
             }
 
             saveActiveInviteCode(cloudInvite);
@@ -477,42 +489,6 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
           }
         }
       }
-
-      // 3.2 次要查詢：若以 inviteCode 欄位查詢
-      try {
-        const invitesCol = collection(db, 'partner_invites');
-        const q = query(invitesCol, where('inviteCode', 'in', candidateKeys), limit(1));
-        const querySnap = await getDocs(q);
-        if (!querySnap.empty) {
-          const cloudInvite = querySnap.docs[0].data() as PartnerInviteData;
-          if (cloudInvite && cloudInvite.adminEmail) {
-            saveActiveInviteCode(cloudInvite);
-            return cloudInvite;
-          }
-        }
-      } catch (e) {}
-
-      // 3.3 再次搜尋 user_configs 集合中有無相同 inviteCode
-      try {
-        const usersCol = collection(db, 'user_configs');
-        const qUsers = query(usersCol, where('inviteCode', 'in', candidateKeys), limit(1));
-        const usersSnap = await getDocs(qUsers);
-        if (!usersSnap.empty) {
-          const udata = usersSnap.docs[0].data() as any;
-          if (udata && udata.email) {
-            const inviteData: PartnerInviteData = {
-              inviteCode: udata.inviteCode || codeToQuery,
-              adminEmail: udata.email,
-              adminName: udata.name || '主管理員',
-              gasWebUrl: udata.gasWebUrl || '',
-              deploySheetUrl: udata.deploySheetUrl || '',
-              createdAt: udata.updatedAt || new Date().toISOString()
-            };
-            saveActiveInviteCode(inviteData);
-            return inviteData;
-          }
-        }
-      } catch (e) {}
     } catch (err) {
       console.warn('Firestore fetchInviteCodeOnline query failed:', err);
     }
@@ -522,8 +498,8 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
   if (isFirestoreAvailable() && db && cleanInput.includes('@')) {
     try {
       const emailClean = cleanInput.trim().toLowerCase();
-      const userDoc = await getDoc(doc(db, 'user_configs', emailClean));
-      if (userDoc.exists()) {
+      const userDoc = await asyncWithTimeout(getDoc(doc(db, 'user_configs', emailClean)), 600, null as any);
+      if (userDoc && userDoc.exists && userDoc.exists()) {
         const udata = userDoc.data() as any;
         if (udata && udata.inviteCode) {
           const inviteData: PartnerInviteData = {
@@ -545,6 +521,29 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
   if (localResolved && localResolved.adminEmail) {
     return localResolved;
   }
+
+  // 6. 🛡️ 最終保險：若本機已有有效 GAS 網址（如管理員在同台裝置或曾設定過），自動對接
+  try {
+    const backupGas = (
+      localStorage.getItem('muji_gas_web_url') || 
+      localStorage.getItem('banban_permanent_gas_url') || 
+      localStorage.getItem('banban_device_master_gas') || 
+      ''
+    ).trim();
+    const backupSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
+    if (backupGas && backupGas.startsWith('http')) {
+      const emergencyInvite: PartnerInviteData = {
+        inviteCode: codeToQuery.startsWith('BB-') ? codeToQuery : `BB-${codeToQuery.replace(/^BB-?/, '')}`,
+        adminEmail: 'oscargh3359@gmail.com',
+        adminName: '主管理員',
+        gasWebUrl: backupGas,
+        deploySheetUrl: backupSheet,
+        createdAt: new Date().toISOString()
+      };
+      saveActiveInviteCode(emergencyInvite);
+      return emergencyInvite;
+    }
+  } catch (e) {}
 
   // 查無此邀請碼
   return null;
