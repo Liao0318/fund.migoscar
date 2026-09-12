@@ -189,7 +189,15 @@ export function resolveUserPersonas(
     };
   }
 
-  const isPartnerLogin = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBinding?.partnerEmail && partnerBinding.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
+  const cleanCurrentEmail = (currentUser?.email || '').trim().toLowerCase();
+  const cleanAdminEmail = (partnerBinding?.adminEmail || currentUser?.adminEmail || '').trim().toLowerCase();
+  const cleanPartnerEmail = (partnerBinding?.partnerEmail || currentUser?.partnerEmail || '').trim().toLowerCase();
+
+  // 判斷是否為伴侶登入端（需確保伴侶 Email 與管理員 Email 不同且不是自綁自）
+  const isPartnerLogin = currentUser?.userRole === 'partner' || 
+    (Boolean(currentUser?.adminEmail) && currentUser?.adminEmail.toLowerCase() !== cleanCurrentEmail) || 
+    (Boolean(cleanPartnerEmail) && cleanPartnerEmail === cleanCurrentEmail && cleanPartnerEmail !== cleanAdminEmail);
+
   const isOscarEmail = Boolean(currentUser?.email?.toLowerCase().includes('oscar'));
   const isPeitiEmail = Boolean(currentUser?.email?.toLowerCase().includes('peiti') || currentUser?.email?.toLowerCase().includes('chou'));
 
@@ -209,13 +217,13 @@ export function resolveUserPersonas(
 
   // 💌 判斷伴侶是否已完成確認受邀綁定
   // 若為伴侶本人登入 (userRole === 'partner')，自身即伴侶
-  // 若為管理者端，唯有當 partnerBinding 或 currentUser 明確包含有效之 partnerEmail (且非空) 時，才視為已確認綁定
+  // 若為管理者端，唯有當 partnerBinding 或 currentUser 明確包含與管理員不同之 partnerEmail (且非空) 時，才視為已確認綁定
   // 尚未確認綁定前，絕不擅自預設任何女性名字（伴侶可能會換），一律以「待確認 (反白)」呈現，等待對方受邀加入！
   const isPartnerBound = isPartnerLogin
     ? true
     : Boolean(
-        (partnerBinding?.partnerEmail && partnerBinding.partnerEmail.trim().length > 0) ||
-        (currentUser?.partnerEmail && currentUser.partnerEmail.trim().length > 0)
+        (cleanPartnerEmail && cleanPartnerEmail.length > 0 && cleanPartnerEmail !== cleanCurrentEmail && cleanPartnerEmail !== cleanAdminEmail) ||
+        (currentUser?.partnerEmail && currentUser.partnerEmail.trim().length > 0 && currentUser.partnerEmail.trim().toLowerCase() !== cleanCurrentEmail)
       );
 
   if (currentUser) {

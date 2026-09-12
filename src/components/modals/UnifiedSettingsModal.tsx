@@ -138,8 +138,16 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   const [joinErrorMessage, setJoinErrorMessage] = useState('');
 
   // 稱呼偏好表單狀態
-  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
-  const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
+  const cleanUserEmail = (currentUser?.email || '').trim().toLowerCase();
+  const cleanAdminEmail = (partnerBindingInfo?.adminEmail || currentUser?.adminEmail || '').trim().toLowerCase();
+  const cleanPartnerEmail = (partnerBindingInfo?.partnerEmail || '').trim().toLowerCase();
+
+  const isPartner = currentUser?.userRole === 'partner' || 
+    (Boolean(currentUser?.adminEmail) && currentUser?.adminEmail.toLowerCase() !== cleanUserEmail) || 
+    (Boolean(cleanPartnerEmail) && cleanPartnerEmail === cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
+
+  const isAdmin = !isPartner;
+  const hasValidPartner = Boolean(cleanPartnerEmail && cleanPartnerEmail !== cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
   const userFirstChar = currentUser?.name ? currentUser.name.charAt(0) : (isAdmin ? '我' : '伴');
   const userShort = currentUser?.name && currentUser.name.length >= 2 ? currentUser.name.slice(0, 2) : (isAdmin ? '管理' : '伴侶');
 
@@ -403,12 +411,12 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                           <div>
                             <div className="text-sm font-bold text-[#3E3A36]">情侶連線與邀請</div>
                             <div className="text-xs text-[#8C8475]">
-                              {partnerBindingInfo?.partnerEmail ? `已綁定：${partnerBindingInfo.partnerName || '伴侶'}` : '邀請代碼與雙向連動'}
+                              {hasValidPartner ? `已綁定：${partnerBindingInfo?.partnerName || '伴侶'}` : '邀請代碼與雙向連動'}
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs">
-                          {partnerBindingInfo?.partnerEmail ? (
+                          {hasValidPartner ? (
                             <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
                               已連線
                             </span>
@@ -773,11 +781,11 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
 
                           <div className="p-3 bg-[#FAF8F3] rounded-xl border border-[#EBE7DC] flex items-center justify-between text-xs">
                             <span className="text-[#8C8475]">伴侶連線狀態：</span>
-                            {(partnerBindingInfo?.partnerEmail || partnerBindingInfo?.partnerName || (partnerBindingInfo as any)?.isBound) ? (
+                            {hasValidPartner ? (
                               <div className="flex items-center gap-2">
                                 <span className="text-emerald-700 font-bold flex items-center gap-1">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>已綁定 ({partnerBindingInfo?.partnerName || '周沛緹 (伴侶)'})</span>
+                                  <span>已綁定 ({partnerBindingInfo?.partnerName || '伴侶'})</span>
                                 </span>
                                 {onUnbindPartner && (
                                   <button

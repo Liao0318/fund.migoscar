@@ -243,11 +243,34 @@ export function getInviteRegistry(): Record<string, PartnerInviteData> {
 }
 
 /**
+ * 清理與校驗情侶綁定資訊，杜絕「自己綁定自己」的錯誤邏輯
+ */
+export function sanitizeBindingInfo(info?: CoupleBindingInfo | null): CoupleBindingInfo | null {
+  if (!info) return null;
+  const admin = (info.adminEmail || '').trim().toLowerCase();
+  const partner = (info.partnerEmail || '').trim().toLowerCase();
+  if (admin && partner && admin === partner) {
+    return {
+      ...info,
+      partnerEmail: '',
+      partnerName: ''
+    };
+  }
+  return info;
+}
+
+/**
  * 儲存伴侶綁定資訊 (三軌：本地 + 伺服器 API + Firestore)
  */
 export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<void> {
+  const cleanAdmin = (info.adminEmail || '').trim().toLowerCase();
+  const cleanPartner = (info.partnerEmail || '').trim().toLowerCase();
+
+  // 🛡️ 拒絕將自己設定為伴侶
+  const sanitized = sanitizeBindingInfo(info) || info;
+
   try {
-    localStorage.setItem(PARTNER_BINDING_STORAGE_KEY, JSON.stringify(info));
+    localStorage.setItem(PARTNER_BINDING_STORAGE_KEY, JSON.stringify(sanitized));
   } catch (e) {
     console.error('Error saving partner binding info locally', e);
   }
@@ -258,49 +281,55 @@ export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<v
       fetch('/api/couple-binding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(info)
+        body: JSON.stringify(sanitized)
       }).catch(() => {});
     } catch (e) {}
   }
 
   if (isFirestoreAvailable() && db) {
-    const cleanAdmin = (info.adminEmail || '').trim().toLowerCase();
-    const cleanPartner = (info.partnerEmail || '').trim().toLowerCase();
-    const codeKey = (info.inviteCode || '').trim().toUpperCase();
+    const codeKey = (sanitized.inviteCode || '').trim().toUpperCase();
     const codeNoPrefix = codeKey.replace(/^BB[-_]?/i, '');
 
     const syncPromises: Promise<any>[] = [];
 
     if (cleanAdmin) {
       const adminBindRef = doc(db, 'couple_bindings', cleanAdmin);
-      syncPromises.push(setDoc(adminBindRef, { ...info, isBound: true, updatedAt: new Date().toISOString() }, { merge: true }));
+      const isRealPartner = Boolean(cleanPartner && cleanPartner !== cleanAdmin);
+      syncPromises.push(setDoc(adminBindRef, {
+        ...sanitized,
+        isBound: isRealPartner,
+        partnerEmail: isRealPartner ? cleanPartner : '',
+        partnerName: isRealPartner ? (sanitized.partnerName || '伴侶') : '',
+        updatedAt: new Date().toISOString()
+      }, { merge: true }));
       syncPromises.push(setDoc(doc(db, 'user_configs', cleanAdmin), {
-        partnerEmail: cleanPartner,
-        partnerName: info.partnerName || '伴侶',
-        isBound: true,
+        partnerEmail: isRealPartner ? cleanPartner : '',
+        partnerName: isRealPartner ? (sanitized.partnerName || '伴侶') : '',
+        isBound: isRealPartner,
         updatedAt: new Date().toISOString()
       }, { merge: true }));
     }
-    if (cleanPartner) {
+    if (cleanPartner && cleanPartner !== cleanAdmin) {
       const partnerBindRef = doc(db, 'couple_bindings', cleanPartner);
-      syncPromises.push(setDoc(partnerBindRef, { ...info, isBound: true, updatedAt: new Date().toISOString() }, { merge: true }));
+      syncPromises.push(setDoc(partnerBindRef, { ...sanitized, isBound: true, updatedAt: new Date().toISOString() }, { merge: true }));
       syncPromises.push(setDoc(doc(db, 'user_configs', cleanPartner), {
         adminEmail: cleanAdmin,
-        adminName: info.adminName || '主管理員',
-        gasWebUrl: info.gasWebUrl || '',
-        deploySheetUrl: info.deploySheetUrl || '',
-        inviteCode: info.inviteCode,
+        adminName: sanitized.adminName || '主管理員',
+        gasWebUrl: sanitized.gasWebUrl || '',
+        deploySheetUrl: sanitized.deploySheetUrl || '',
+        inviteCode: sanitized.inviteCode,
         isBound: true,
         userRole: 'partner',
         updatedAt: new Date().toISOString()
       }, { merge: true }));
     }
     if (codeKey) {
+      const isRealPartner = Boolean(cleanPartner && cleanPartner !== cleanAdmin);
       const boundInvitePayload = {
-        isBound: true,
-        partnerEmail: cleanPartner,
-        partnerName: info.partnerName || '伴侶',
-        boundAt: info.boundAt || new Date().toISOString()
+        isBound: isRealPartner,
+        partnerEmail: isRealPartner ? cleanPartner : '',
+        partnerName: isRealPartner ? (sanitized.partnerName || '伴侶') : '',
+        boundAt: sanitized.boundAt || new Date().toISOString()
       };
       syncPromises.push(setDoc(doc(db, 'partner_invites', codeKey), boundInvitePayload, { merge: true }));
       if (codeNoPrefix) {
@@ -322,7 +351,10 @@ export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<v
 export function getPartnerBindingInfo(): CoupleBindingInfo | null {
   try {
     const data = localStorage.getItem(PARTNER_BINDING_STORAGE_KEY);
-    if (data) return JSON.parse(data);
+    if (data) {
+      const parsed = JSON.parse(data);
+      return sanitizeBindingInfo(parsed);
+    }
   } catch (e) {}
   return null;
 }
@@ -341,9 +373,11 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
       if (res && res.ok) {
         const data = await res.json();
         if (data && data.success && data.binding) {
-          const bindData = data.binding as CoupleBindingInfo;
-          savePartnerBindingInfo(bindData);
-          return bindData;
+          const bindData = sanitizeBindingInfo(data.binding as CoupleBindingInfo);
+          if (bindData) {
+            savePartnerBindingInfo(bindData);
+            return bindData;
+          }
         }
       }
     } catch (e) {}
@@ -358,9 +392,10 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
         const snap = await asyncWithTimeout(getDoc(bindRef), 3000, null as any);
         if (snap && snap.exists && snap.exists()) {
           const data = snap.data() as CoupleBindingInfo;
-          if (data && (data.partnerEmail || data.adminEmail)) {
-            savePartnerBindingInfo(data);
-            return data;
+          const sanitized = sanitizeBindingInfo(data);
+          if (sanitized && (sanitized.partnerEmail || sanitized.adminEmail)) {
+            savePartnerBindingInfo(sanitized);
+            return sanitized;
           }
         }
 
@@ -370,18 +405,21 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
         if (userSnap && userSnap.exists && userSnap.exists()) {
           const udata = userSnap.data() as any;
           if (udata && (udata.partnerEmail || udata.partnerName)) {
-            const synthesized: CoupleBindingInfo = {
-              adminEmail: cleanEmail,
-              adminName: udata.name || '主管理員',
-              partnerEmail: udata.partnerEmail || '',
-              partnerName: udata.partnerName || '伴侶',
-              inviteCode: udata.inviteCode || '',
-              gasWebUrl: udata.gasWebUrl || '',
-              deploySheetUrl: udata.deploySheetUrl || '',
-              boundAt: udata.updatedAt || new Date().toISOString()
-            };
-            savePartnerBindingInfo(synthesized);
-            return synthesized;
+            const pEmail = (udata.partnerEmail || '').trim().toLowerCase();
+            if (pEmail && pEmail !== cleanEmail) {
+              const synthesized: CoupleBindingInfo = {
+                adminEmail: cleanEmail,
+                adminName: udata.name || '主管理員',
+                partnerEmail: pEmail,
+                partnerName: udata.partnerName || '伴侶',
+                inviteCode: udata.inviteCode || '',
+                gasWebUrl: udata.gasWebUrl || '',
+                deploySheetUrl: udata.deploySheetUrl || '',
+                boundAt: udata.updatedAt || new Date().toISOString()
+              };
+              savePartnerBindingInfo(synthesized);
+              return synthesized;
+            }
           }
         }
       }
@@ -394,11 +432,13 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
         const invSnap = await asyncWithTimeout(getDoc(inviteRef), 2500, null as any);
         if (invSnap && invSnap.exists && invSnap.exists()) {
           const invData = invSnap.data() as any;
-          if (invData && (invData.isBound || invData.partnerEmail || invData.partnerName)) {
+          const pEmail = (invData.partnerEmail || '').trim().toLowerCase();
+          const aEmail = (activeInvite.adminEmail || cleanEmail || '').trim().toLowerCase();
+          if (invData && (invData.isBound || pEmail) && pEmail && pEmail !== aEmail) {
             const synthesized: CoupleBindingInfo = {
-              adminEmail: activeInvite.adminEmail || cleanEmail || 'oscargh3359@gmail.com',
+              adminEmail: aEmail,
               adminName: activeInvite.adminName || '主管理員',
-              partnerEmail: invData.partnerEmail || '',
+              partnerEmail: pEmail,
               partnerName: invData.partnerName || '伴侶',
               inviteCode: activeInvite.inviteCode,
               gasWebUrl: activeInvite.gasWebUrl || invData.gasWebUrl || '',
@@ -415,7 +455,7 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
     }
   }
 
-  return local;
+  return sanitizeBindingInfo(local);
 }
 
 /**

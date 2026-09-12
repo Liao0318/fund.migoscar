@@ -108,8 +108,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     }
   }, [currentUser, isOpen]);
 
-  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
-  const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
+  const cleanUserEmail = (currentUser?.email || '').trim().toLowerCase();
+  const cleanAdminEmail = (partnerBindingInfo?.adminEmail || currentUser?.adminEmail || '').trim().toLowerCase();
+  const cleanPartnerEmail = (partnerBindingInfo?.partnerEmail || '').trim().toLowerCase();
+
+  const isPartner = currentUser?.userRole === 'partner' || 
+    (Boolean(currentUser?.adminEmail) && currentUser?.adminEmail.toLowerCase() !== cleanUserEmail) || 
+    (Boolean(cleanPartnerEmail) && cleanPartnerEmail === cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
+
+  const isAdmin = !isPartner;
+  const hasValidPartner = Boolean(cleanPartnerEmail && cleanPartnerEmail !== cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
 
   // 驗證暱稱：限文字且少於 3 個字 (即 1~2 個字元)
   const trimmedNickname = nicknameInput.trim();
@@ -511,10 +519,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 text-xs space-y-1">
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-[#8C8475] font-bold">伴侶綁定狀態：</span>
-                          {partnerBindingInfo?.partnerEmail ? (
+                          {hasValidPartner ? (
                             <span className="text-emerald-700 font-bold flex items-center gap-1">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>已綁定 ({partnerBindingInfo.partnerName || '伴侶'})</span>
+                              <span>已綁定 ({partnerBindingInfo?.partnerName || '伴侶'})</span>
                             </span>
                           ) : (
                             <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
@@ -522,7 +530,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                             </span>
                           )}
                         </div>
-                        {partnerBindingInfo?.partnerEmail && (
+                        {hasValidPartner && partnerBindingInfo?.partnerEmail && (
                           <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#F4EFE6]">
                             <span className="text-[#8C8475] font-mono">{partnerBindingInfo.partnerEmail}</span>
                             {onUnbindPartner && (

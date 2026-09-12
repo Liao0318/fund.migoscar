@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.5.8';
+export const APP_VERSION = 'v2.5.9';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.5.9',
+    date: '2026.09.12',
+    title: '伴侶配對邏輯防自綁與資料庫跨裝置即時修復與 15 分鐘邀請碼時效',
+    highlights: [
+      '徹底解決「管理員自己綁定自己」的邏輯判定問題，強化伴侶身分檢驗與配對狀態判斷',
+      '新增 15 分鐘邀請碼動態倒數時效機制與逾期防護，支援一鍵即時重新生成最新邀請代碼',
+      '修復跨裝置 Google 試算表資料庫與 GAS Web App 即時同步機制，確保伴侶端加入後帳本即刻就緒',
+      '支援一鍵解除伴侶綁定與狀態重置，提供更安全可靠的情侶對帳與資料同步體驗'
+    ]
+  },
   {
     version: 'v2.5.8',
     date: '2026.09.12',

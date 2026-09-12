@@ -145,9 +145,16 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
   const [adminValidationError, setAdminValidationError] = useState<string | null>(null);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState(false);
 
-  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || Boolean(partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
-  const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
   const cleanUserEmail = (currentUser?.email || '').trim().toLowerCase();
+  const cleanAdminEmail = (partnerBindingInfo?.adminEmail || currentUser?.adminEmail || '').trim().toLowerCase();
+  const cleanPartnerEmail = (partnerBindingInfo?.partnerEmail || '').trim().toLowerCase();
+
+  const isPartner = currentUser?.userRole === 'partner' || 
+    (Boolean(currentUser?.adminEmail) && currentUser?.adminEmail.toLowerCase() !== cleanUserEmail) || 
+    (Boolean(cleanPartnerEmail) && cleanPartnerEmail === cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
+
+  const isAdmin = !isPartner;
+  const hasValidPartner = Boolean(cleanPartnerEmail && cleanPartnerEmail !== cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
   const hasLoggedInBefore = cleanUserEmail ? (
     localStorage.getItem(`banban_user_has_logged_in_${cleanUserEmail}`) === 'true' ||
     Boolean(localStorage.getItem(`banban_permanent_gas_url_${cleanUserEmail}`)) ||
@@ -1572,11 +1579,11 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                         {/* 伴侶綁定狀態 */}
                         <div className="bg-[#FAF8F3] p-3 rounded-xl border border-[#EBE7DC] text-xs flex items-center justify-between">
                           <span className="text-[11px] text-[#8C8475] font-bold">伴侶連線狀態：</span>
-                          {(partnerBindingInfo?.partnerEmail || partnerBindingInfo?.partnerName || (partnerBindingInfo as any)?.isBound) ? (
+                          {hasValidPartner ? (
                             <div className="flex items-center gap-2">
                               <span className="text-emerald-700 font-bold flex items-center gap-1 text-[11px]">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>已綁定 ({partnerBindingInfo?.partnerName || '周沛緹 (伴侶)'})</span>
+                                <span>已綁定 ({partnerBindingInfo?.partnerName || '伴侶'})</span>
                               </span>
                               {onUnbindPartner && (
                                 <button

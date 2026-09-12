@@ -4,5 +4,13 @@
     "gasWebUrl": "",
     "deploySheetUrl": "",
     "updatedAt": "2026-09-10T14:52:12.836Z"
+  },
+  "developer.admin@banbanji.internal": {
+    "email": "developer.admin@banbanji.internal",
+    "name": "系統架構師 (開發模式)",
+    "gasWebUrl": "",
+    "deploySheetUrl": "https://docs.google.com/spreadsheets/d/test",
+    "inviteCode": "BB-63TK",
+    "updatedAt": "2026-09-12T14:44:50.211Z"
   }
 }

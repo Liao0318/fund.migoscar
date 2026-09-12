@@ -416,25 +416,45 @@ async function startServer() {
       const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
       const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
 
+      const sanitize = (b: any, queryEmail?: string) => {
+        if (!b) return null;
+        const adm = (b.adminEmail || '').trim().toLowerCase();
+        const prt = (b.partnerEmail || '').trim().toLowerCase();
+        // 拒絕自綁自
+        if (adm && prt && adm === prt) {
+          if (queryEmail && queryEmail === adm) {
+            return { ...b, partnerEmail: '', partnerName: '', isBound: false };
+          }
+          return null;
+        }
+        return b;
+      };
+
       if (!email) {
-        const anyBinding = Object.values(bindings)[0] || null;
-        return res.json({ success: true, binding: anyBinding });
+        for (const b of Object.values(bindings)) {
+          const clean = sanitize(b);
+          if (clean && clean.adminEmail && clean.partnerEmail && clean.adminEmail.toLowerCase() !== clean.partnerEmail.toLowerCase()) {
+            return res.json({ success: true, binding: clean });
+          }
+        }
+        return res.json({ success: true, binding: null });
       }
 
-      let binding = bindings[email] || null;
+      let rawBinding = bindings[email] || null;
 
-      if (!binding) {
-        binding = Object.values(bindings).find((b: any) => 
+      if (!rawBinding) {
+        rawBinding = Object.values(bindings).find((b: any) => 
           (b.adminEmail && b.adminEmail.toLowerCase() === email) ||
           (b.partnerEmail && b.partnerEmail.toLowerCase() === email)
         ) || null;
       }
 
-      if (!binding) {
+      // 檢查 userConfigs 中是否有已綁定伴侶
+      if (!rawBinding || (rawBinding.adminEmail && rawBinding.partnerEmail && rawBinding.adminEmail.toLowerCase() === rawBinding.partnerEmail.toLowerCase())) {
         const userCfg = userConfigs[email];
-        if (userCfg && userCfg.userRole === 'partner' && userCfg.adminEmail) {
-          binding = {
-            adminEmail: userCfg.adminEmail,
+        if (userCfg && userCfg.userRole === 'partner' && userCfg.adminEmail && userCfg.adminEmail.toLowerCase() !== email) {
+          rawBinding = {
+            adminEmail: userCfg.adminEmail.toLowerCase(),
             adminName: userCfg.adminName || '主管理員',
             partnerEmail: email,
             partnerName: userCfg.name || '伴侶',
@@ -443,32 +463,36 @@ async function startServer() {
             deploySheetUrl: userCfg.deploySheetUrl || sysDb?.deploySheetUrl || '',
             boundAt: userCfg.updatedAt || new Date().toISOString()
           };
-          bindings[email] = binding;
-          if (userCfg.adminEmail) bindings[userCfg.adminEmail.toLowerCase()] = binding;
+          bindings[email] = rawBinding;
+          bindings[userCfg.adminEmail.toLowerCase()] = rawBinding;
           writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
         } else {
-          const adminPartnerMatch = Object.values(userConfigs).find((c: any) => 
-            c && c.partnerEmail && c.partnerEmail.toLowerCase() === email
+          // 搜尋是否有其他人綁定此 email 作為 admin
+          const partnerMatch = Object.values(userConfigs).find((c: any) => 
+            c && c.email && c.email.toLowerCase() !== email &&
+            ((c.adminEmail && c.adminEmail.toLowerCase() === email) ||
+             (c.partnerEmail && c.partnerEmail.toLowerCase() === email))
           );
-          if (adminPartnerMatch) {
-            binding = {
-              adminEmail: adminPartnerMatch.email,
-              adminName: adminPartnerMatch.name || '主管理員',
-              partnerEmail: email,
-              partnerName: adminPartnerMatch.partnerName || '伴侶',
-              inviteCode: adminPartnerMatch.inviteCode || '',
-              gasWebUrl: isValidGasUrl(adminPartnerMatch.gasWebUrl) ? adminPartnerMatch.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : ''),
-              deploySheetUrl: adminPartnerMatch.deploySheetUrl || sysDb?.deploySheetUrl || '',
-              boundAt: adminPartnerMatch.updatedAt || new Date().toISOString()
+          if (partnerMatch && partnerMatch.email) {
+            rawBinding = {
+              adminEmail: email,
+              adminName: userConfigs[email]?.name || '主管理員',
+              partnerEmail: partnerMatch.email.toLowerCase(),
+              partnerName: partnerMatch.name || '伴侶',
+              inviteCode: partnerMatch.inviteCode || userConfigs[email]?.inviteCode || '',
+              gasWebUrl: isValidGasUrl(userConfigs[email]?.gasWebUrl) ? userConfigs[email].gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : ''),
+              deploySheetUrl: userConfigs[email]?.deploySheetUrl || sysDb?.deploySheetUrl || '',
+              boundAt: partnerMatch.updatedAt || new Date().toISOString()
             };
-            bindings[email] = binding;
-            bindings[adminPartnerMatch.email.toLowerCase()] = binding;
+            bindings[email] = rawBinding;
+            bindings[partnerMatch.email.toLowerCase()] = rawBinding;
             writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
           }
         }
       }
 
-      return res.json({ success: true, binding });
+      const finalBinding = sanitize(rawBinding, email);
+      return res.json({ success: true, binding: finalBinding });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
@@ -482,21 +506,49 @@ async function startServer() {
       if (!adminEmail && !partnerEmail) {
         return res.status(400).json({ success: false, message: 'Email required' });
       }
-      const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
-      if (adminEmail) bindings[adminEmail] = binding;
-      if (partnerEmail) bindings[partnerEmail] = binding;
-      bindings['default'] = binding;
-      writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
 
       const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
+
+      // 🛡️ 同帳號自我操作（非情侶綁定，僅為多裝置資料庫同步）
+      if (adminEmail && partnerEmail && adminEmail === partnerEmail) {
+        if (adminEmail) {
+          userConfigs[adminEmail] = {
+            ...(userConfigs[adminEmail] || {}),
+            email: adminEmail,
+            gasWebUrl: isValidGasUrl(binding.gasWebUrl) ? binding.gasWebUrl : (userConfigs[adminEmail]?.gasWebUrl || ''),
+            deploySheetUrl: binding.deploySheetUrl || userConfigs[adminEmail]?.deploySheetUrl || '',
+            updatedAt: new Date().toISOString()
+          };
+          writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+        }
+        return res.json({ success: true, isSelfSync: true, message: '跨裝置資料庫設定已同步' });
+      }
+
+      const cleanBinding = {
+        adminEmail,
+        adminName: binding.adminName || userConfigs[adminEmail]?.name || '主管理員',
+        partnerEmail,
+        partnerName: binding.partnerName || userConfigs[partnerEmail]?.name || '伴侶',
+        inviteCode: binding.inviteCode || '',
+        gasWebUrl: isValidGasUrl(binding.gasWebUrl) ? binding.gasWebUrl : (userConfigs[adminEmail]?.gasWebUrl || ''),
+        deploySheetUrl: binding.deploySheetUrl || userConfigs[adminEmail]?.deploySheetUrl || '',
+        boundAt: binding.boundAt || new Date().toISOString()
+      };
+
+      if (adminEmail) bindings[adminEmail] = cleanBinding;
+      if (partnerEmail) bindings[partnerEmail] = cleanBinding;
+      writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
 
       // 同步更新管理者在 user_configs.json 的伴侶綁定資訊
       if (adminEmail) {
         userConfigs[adminEmail] = {
           ...(userConfigs[adminEmail] || {}),
           email: adminEmail,
-          partnerEmail: partnerEmail || userConfigs[adminEmail]?.partnerEmail || '',
-          partnerName: binding.partnerName || userConfigs[adminEmail]?.partnerName || '伴侶',
+          partnerEmail: partnerEmail,
+          partnerName: cleanBinding.partnerName,
+          gasWebUrl: isValidGasUrl(cleanBinding.gasWebUrl) ? cleanBinding.gasWebUrl : (userConfigs[adminEmail]?.gasWebUrl || ''),
+          deploySheetUrl: cleanBinding.deploySheetUrl || userConfigs[adminEmail]?.deploySheetUrl || '',
           updatedAt: new Date().toISOString()
         };
       }
@@ -506,28 +558,63 @@ async function startServer() {
         userConfigs[partnerEmail] = {
           ...(userConfigs[partnerEmail] || {}),
           email: partnerEmail,
-          name: binding.partnerName || userConfigs[partnerEmail]?.name || '伴侶',
+          name: cleanBinding.partnerName,
           userRole: 'partner',
           adminEmail: adminEmail,
-          adminName: binding.adminName || '主管理員',
-          gasWebUrl: isValidGasUrl(binding.gasWebUrl) ? binding.gasWebUrl : (userConfigs[partnerEmail]?.gasWebUrl || ''),
-          deploySheetUrl: binding.deploySheetUrl || userConfigs[partnerEmail]?.deploySheetUrl || '',
-          inviteCode: binding.inviteCode,
+          adminName: cleanBinding.adminName,
+          gasWebUrl: isValidGasUrl(cleanBinding.gasWebUrl) ? cleanBinding.gasWebUrl : (userConfigs[partnerEmail]?.gasWebUrl || ''),
+          deploySheetUrl: cleanBinding.deploySheetUrl || userConfigs[partnerEmail]?.deploySheetUrl || '',
+          inviteCode: cleanBinding.inviteCode,
           updatedAt: new Date().toISOString()
         };
       }
       writeJsonFile(USER_CONFIGS_FILE, userConfigs);
 
-      if (isValidGasUrl(binding.gasWebUrl)) {
+      if (isValidGasUrl(cleanBinding.gasWebUrl)) {
         writeJsonFile(SYSTEM_DATABASE_FILE, {
-          gasWebUrl: binding.gasWebUrl,
-          deploySheetUrl: binding.deploySheetUrl || '',
+          gasWebUrl: cleanBinding.gasWebUrl,
+          deploySheetUrl: cleanBinding.deploySheetUrl || '',
           configuredBy: adminEmail || partnerEmail || 'system',
           updatedAt: new Date().toISOString()
         });
       }
 
-      return res.json({ success: true, binding });
+      return res.json({ success: true, binding: cleanBinding });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/partner-unbind', (req, res) => {
+    try {
+      const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'Email required' });
+      }
+      const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+
+      const currentBinding = bindings[email];
+      if (currentBinding) {
+        const adm = (currentBinding.adminEmail || '').toLowerCase();
+        const prt = (currentBinding.partnerEmail || '').toLowerCase();
+        if (adm) delete bindings[adm];
+        if (prt) delete bindings[prt];
+        writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
+
+        if (adm && userConfigs[adm]) {
+          delete userConfigs[adm].partnerEmail;
+          delete userConfigs[adm].partnerName;
+          writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+        }
+        if (prt && userConfigs[prt]) {
+          userConfigs[prt].userRole = 'admin';
+          delete userConfigs[prt].adminEmail;
+          delete userConfigs[prt].adminName;
+          writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+        }
+      }
+      return res.json({ success: true, message: '已解除伴侶綁定' });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
