@@ -361,10 +361,16 @@ async function startServer() {
   app.get('/api/couple-binding', (req, res) => {
     try {
       const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
-      if (!email) {
-        return res.status(400).json({ success: false, message: 'Email required' });
-      }
       const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
+
+      if (!email) {
+        // 若未提供 email，回傳最新的伴侶綁定紀錄
+        const anyBinding = Object.values(bindings)[0] || null;
+        return res.json({ success: true, binding: anyBinding });
+      }
+
       let binding = bindings[email] || null;
 
       // 若以 partnerEmail 或 adminEmail 查詢
@@ -373,6 +379,51 @@ async function startServer() {
           (b.adminEmail && b.adminEmail.toLowerCase() === email) ||
           (b.partnerEmail && b.partnerEmail.toLowerCase() === email)
         ) || null;
+      }
+
+      // 若 bindings 中未命中，嘗試自 user_configs 推導
+      if (!binding) {
+        const userCfg = userConfigs[email];
+        if (userCfg && userCfg.userRole === 'partner' && userCfg.adminEmail) {
+          binding = {
+            adminEmail: userCfg.adminEmail,
+            adminName: userCfg.adminName || '主管理員',
+            partnerEmail: email,
+            partnerName: userCfg.name || '伴侶',
+            inviteCode: userCfg.inviteCode || '',
+            gasWebUrl: userCfg.gasWebUrl || sysDb?.gasWebUrl || '',
+            deploySheetUrl: userCfg.deploySheetUrl || sysDb?.deploySheetUrl || '',
+            boundAt: userCfg.updatedAt || new Date().toISOString()
+          };
+          bindings[email] = binding;
+          if (userCfg.adminEmail) bindings[userCfg.adminEmail.toLowerCase()] = binding;
+          writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
+        } else {
+          // 檢查是否有人認證此 email 為其伴侶
+          const adminPartnerMatch = Object.values(userConfigs).find((c: any) => 
+            c && c.partnerEmail && c.partnerEmail.toLowerCase() === email
+          );
+          if (adminPartnerMatch) {
+            binding = {
+              adminEmail: adminPartnerMatch.email,
+              adminName: adminPartnerMatch.name || '主管理員',
+              partnerEmail: email,
+              partnerName: adminPartnerMatch.partnerName || '伴侶',
+              inviteCode: adminPartnerMatch.inviteCode || '',
+              gasWebUrl: adminPartnerMatch.gasWebUrl || sysDb?.gasWebUrl || '',
+              deploySheetUrl: adminPartnerMatch.deploySheetUrl || sysDb?.deploySheetUrl || '',
+              boundAt: adminPartnerMatch.updatedAt || new Date().toISOString()
+            };
+            bindings[email] = binding;
+            bindings[adminPartnerMatch.email.toLowerCase()] = binding;
+            writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
+          }
+        }
+      }
+
+      // 若仍未找到特定綁定，但系統存在有效綁定紀錄
+      if (!binding && Object.keys(bindings).length > 0) {
+        binding = Object.values(bindings)[0] || null;
       }
 
       return res.json({ success: true, binding });
@@ -392,11 +443,24 @@ async function startServer() {
       const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
       if (adminEmail) bindings[adminEmail] = binding;
       if (partnerEmail) bindings[partnerEmail] = binding;
+      bindings['default'] = binding;
       writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
+
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+
+      // 同步更新管理者在 user_configs.json 的伴侶綁定資訊
+      if (adminEmail) {
+        userConfigs[adminEmail] = {
+          ...(userConfigs[adminEmail] || {}),
+          email: adminEmail,
+          partnerEmail: partnerEmail || userConfigs[adminEmail]?.partnerEmail || '',
+          partnerName: binding.partnerName || userConfigs[adminEmail]?.partnerName || '伴侶',
+          updatedAt: new Date().toISOString()
+        };
+      }
 
       // 同步更新伴侶在 user_configs.json 的資料庫與模式
       if (partnerEmail) {
-        const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
         userConfigs[partnerEmail] = {
           ...(userConfigs[partnerEmail] || {}),
           email: partnerEmail,
@@ -409,7 +473,17 @@ async function startServer() {
           inviteCode: binding.inviteCode,
           updatedAt: new Date().toISOString()
         };
-        writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+      }
+      writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+
+      // 若綁定中帶有有效 gasWebUrl，同步至系統預設資料庫
+      if (binding.gasWebUrl && typeof binding.gasWebUrl === 'string' && binding.gasWebUrl.startsWith('http')) {
+        writeJsonFile(SYSTEM_DATABASE_FILE, {
+          gasWebUrl: binding.gasWebUrl,
+          deploySheetUrl: binding.deploySheetUrl || '',
+          configuredBy: adminEmail || partnerEmail || 'system',
+          updatedAt: new Date().toISOString()
+        });
       }
 
       return res.json({ success: true, binding });

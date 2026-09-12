@@ -1179,7 +1179,7 @@ export default function App() {
    */
   const handleBindPartnerInvite = async (inviteInput: string): Promise<{ success: boolean; message?: string }> => {
     let resolved = resolveInviteCodeOrToken(inviteInput);
-    if (!resolved || !resolved.gasWebUrl) {
+    if (!resolved || !resolved.gasWebUrl || resolved.gasWebUrl.includes('/test/')) {
       try {
         const cloudResolved = await fetchInviteCodeOnline(inviteInput);
         if (cloudResolved) {
@@ -1188,17 +1188,50 @@ export default function App() {
       } catch (e) {}
     }
 
-    // 🛡️ 智慧容錯：若仍未解析出，且本機或伺服器有有效資料庫，自動對接
-    if (!resolved || !resolved.gasWebUrl) {
-      const fallbackGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
-      const fallbackSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
-      if (fallbackGas && fallbackGas.startsWith('http')) {
+    // 🛡️ 智慧容錯：若仍未解析出有效 GAS 網址，向伺服器系統資料庫與管理者設定查詢
+    if (!resolved || !resolved.gasWebUrl || resolved.gasWebUrl.includes('/test/')) {
+      let candidateGas = '';
+      let candidateSheet = '';
+
+      if (hasBackendServer()) {
+        try {
+          const sysRes = await fetch('/api/system-database');
+          if (sysRes.ok) {
+            const sysData = await sysRes.json();
+            if (sysData?.database?.gasWebUrl && sysData.database.gasWebUrl.startsWith('http')) {
+              candidateGas = sysData.database.gasWebUrl;
+              candidateSheet = sysData.database.deploySheetUrl || '';
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!candidateGas && resolved?.adminEmail) {
+        try {
+          const adminCfg = await getUserCloudConfig(resolved.adminEmail);
+          if (adminCfg?.gasWebUrl && adminCfg.gasWebUrl.startsWith('http')) {
+            candidateGas = adminCfg.gasWebUrl;
+            candidateSheet = adminCfg.deploySheetUrl || '';
+          }
+        } catch (e) {}
+      }
+
+      if (!candidateGas) {
+        const fallbackGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || localStorage.getItem('banban_device_master_gas') || '').trim();
+        const fallbackSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
+        if (fallbackGas && fallbackGas.startsWith('http')) {
+          candidateGas = fallbackGas;
+          candidateSheet = fallbackSheet;
+        }
+      }
+
+      if (candidateGas) {
         resolved = {
-          inviteCode: inviteInput.trim().toUpperCase(),
-          adminEmail: 'oscargh3359@gmail.com',
-          adminName: '主管理員',
-          gasWebUrl: fallbackGas,
-          deploySheetUrl: fallbackSheet,
+          inviteCode: (resolved?.inviteCode || inviteInput).trim().toUpperCase(),
+          adminEmail: resolved?.adminEmail || 'oscargh3359@gmail.com',
+          adminName: resolved?.adminName || '主管理員',
+          gasWebUrl: candidateGas,
+          deploySheetUrl: candidateSheet,
           createdAt: new Date().toISOString()
         };
       }
@@ -1233,6 +1266,7 @@ export default function App() {
           localStorage.setItem(`muji_gas_web_url_${currentEmail}`, activeGas);
           localStorage.setItem('banban_permanent_gas_url', activeGas);
           localStorage.setItem(`banban_permanent_gas_url_${currentEmail}`, activeGas);
+          localStorage.setItem('banban_device_master_gas', activeGas);
         } catch (e) {}
       }
       if (activeSheet) {
@@ -1277,12 +1311,25 @@ export default function App() {
 
     if (activeGas) {
       setGasWebUrl(activeGas);
-      try { localStorage.setItem('muji_gas_web_url', activeGas); } catch (e) {}
+      try { 
+        localStorage.setItem('muji_gas_web_url', activeGas);
+        localStorage.setItem('banban_permanent_gas_url', activeGas);
+        localStorage.setItem('banban_device_master_gas', activeGas);
+        if (currentEmail) {
+          localStorage.setItem(`muji_gas_web_url_${currentEmail}`, activeGas);
+          localStorage.setItem(`banban_permanent_gas_url_${currentEmail}`, activeGas);
+        }
+      } catch (e) {}
     }
     if (activeSheet) {
       setDeploySheetUrl(activeSheet);
-      try { localStorage.setItem('muji_deploy_sheet_url', activeSheet); } catch (e) {}
-      try { localStorage.setItem('muji_sheet_url', activeSheet); } catch (e) {}
+      try { 
+        localStorage.setItem('muji_deploy_sheet_url', activeSheet);
+        localStorage.setItem('muji_sheet_url', activeSheet);
+        if (currentEmail) {
+          localStorage.setItem(`muji_sheet_url_${currentEmail}`, activeSheet);
+        }
+      } catch (e) {}
     }
 
     const bindingData: CoupleBindingInfo = {
@@ -2618,7 +2665,12 @@ export default function App() {
           unsubscribe = onSnapshot(docRef, (snapshot) => {
             if (snapshot.exists()) {
               const data = snapshot.data() as CoupleBindingInfo;
-              setPartnerBindingInfo(data);
+              setPartnerBindingInfo(prev => {
+                if (!prev?.partnerEmail && data.partnerEmail && !isPartnerRole) {
+                  showToast(`💖 伴侶 (${data.partnerName || data.partnerEmail}) 已加入情侶帳本！`, 'success');
+                }
+                return data;
+              });
               if (isPartnerRole && data.gasWebUrl && data.gasWebUrl !== gasWebUrl) {
                 setGasWebUrl(data.gasWebUrl);
                 try { localStorage.setItem('muji_gas_web_url', data.gasWebUrl); } catch (e) {}
@@ -2626,6 +2678,12 @@ export default function App() {
                   setDeploySheetUrl(data.deploySheetUrl);
                   try { localStorage.setItem('muji_sheet_url', data.deploySheetUrl); } catch (e) {}
                 }
+                setTimeout(() => {
+                  fetchDashboardData(true, false);
+                  fetchShoppingData(false);
+                  fetchSplitData(true);
+                  fetchTravelData(true);
+                }, 50);
               }
             }
           }, (err) => {
@@ -2636,10 +2694,61 @@ export default function App() {
         }
       }
 
+      // 3.5 🔄 雙軌心跳自動輪詢：即使 Firestore 離線或無權限，亦能每 3 秒自動與伺服器同步情侶狀態
+      let pollTimer: any = null;
+      const pollCoupleBindingHeartbeat = async () => {
+        try {
+          const latest = await fetchPartnerBindingInfoOnline(cleanEmail);
+          if (latest) {
+            setPartnerBindingInfo(prev => {
+              if (!prev || prev.partnerEmail !== latest.partnerEmail || prev.gasWebUrl !== latest.gasWebUrl) {
+                if (!prev?.partnerEmail && latest.partnerEmail && !isPartnerRole) {
+                  showToast(`💖 伴侶 (${latest.partnerName || latest.partnerEmail}) 已成功綁定共同帳本！`, 'success');
+                }
+                return latest;
+              }
+              return prev;
+            });
+
+            if (isPartnerRole && latest.gasWebUrl && latest.gasWebUrl !== gasWebUrl) {
+              setGasWebUrl(latest.gasWebUrl);
+              try { 
+                localStorage.setItem('muji_gas_web_url', latest.gasWebUrl);
+                localStorage.setItem('banban_permanent_gas_url', latest.gasWebUrl);
+                localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, latest.gasWebUrl);
+              } catch (e) {}
+              if (latest.deploySheetUrl && latest.deploySheetUrl !== deploySheetUrl) {
+                setDeploySheetUrl(latest.deploySheetUrl);
+                try { 
+                  localStorage.setItem('muji_sheet_url', latest.deploySheetUrl);
+                  localStorage.setItem(`muji_sheet_url_${cleanEmail}`, latest.deploySheetUrl);
+                } catch (e) {}
+              }
+              setTimeout(() => {
+                fetchDashboardData(true, false);
+                fetchShoppingData(false);
+                fetchSplitData(true);
+                fetchTravelData(true);
+              }, 50);
+            }
+          }
+        } catch (e) {}
+      };
+
+      pollTimer = setInterval(pollCoupleBindingHeartbeat, 3000);
+      const onWindowActive = () => { pollCoupleBindingHeartbeat(); };
+      window.addEventListener('focus', onWindowActive);
+      document.addEventListener('visibilitychange', onWindowActive);
+
       return () => {
         if (unsubscribe) {
           unsubscribe();
         }
+        if (pollTimer) {
+          clearInterval(pollTimer);
+        }
+        window.removeEventListener('focus', onWindowActive);
+        document.removeEventListener('visibilitychange', onWindowActive);
       };
     } else {
       setIsCheckingCloudConfig(false);

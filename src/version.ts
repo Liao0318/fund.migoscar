@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.5.7';
+export const APP_VERSION = 'v2.5.8';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.5.8',
+    date: '2026.09.12',
+    title: '情侶雙向即時綁定與共享資料庫同步修復',
+    highlights: [
+      '修復伴侶端顯示綁定成功而管理者手機未即時顯示綁定狀態的問題，新增 3 秒雙向心跳輪詢與即時彈窗慶祝提醒',
+      '解決伴侶加入後未出現相同 Google 試算表資料庫的問題，配對當下立即繼承管理者的 GAS 網址並自動載入全域帳本明細',
+      '後端 API 全面支援跨裝置綁定繼承，自動對齊管理者與伴侶的 API 存取權限與情侶模式',
+      '強化裝置焦點切換（Focus）與換頁喚醒時的主動對齊機制，確保雙方隨時看見完全一致的共同帳本與綁定資訊'
+    ]
+  },
   {
     version: 'v2.5.7',
     date: '2026.09.12',
