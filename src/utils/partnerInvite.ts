@@ -647,29 +647,6 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
     return localResolved;
   }
 
-  // 6. 🛡️ 最終保險：若本機已有有效 GAS 網址（如管理員在同台裝置或曾設定過），自動對接
-  try {
-    const backupGas = (
-      localStorage.getItem('muji_gas_web_url') || 
-      localStorage.getItem('banban_permanent_gas_url') || 
-      localStorage.getItem('banban_device_master_gas') || 
-      ''
-    ).trim();
-    const backupSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
-    if (backupGas && backupGas.startsWith('http') && !backupGas.includes('/test/')) {
-      const emergencyInvite: PartnerInviteData = {
-        inviteCode: codeToQuery.startsWith('BB-') ? codeToQuery : `BB-${codeToQuery.replace(/^BB-?/, '')}`,
-        adminEmail: 'oscargh3359@gmail.com',
-        adminName: '主管理員',
-        gasWebUrl: backupGas,
-        deploySheetUrl: backupSheet,
-        createdAt: new Date().toISOString()
-      };
-      saveActiveInviteCode(emergencyInvite);
-      return emergencyInvite;
-    }
-  } catch (e) {}
-
   // 查無此邀請碼
   return null;
 }

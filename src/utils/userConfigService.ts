@@ -95,9 +95,12 @@ export function scanAndRecoverGasUrl(email?: string): PersistentDbResult {
         }
       }
     } catch (e) {}
+
+    // 指定特定使用者時，嚴格避免誤讀其他帳號之設定
+    return { gasWebUrl: '', deploySheetUrl: '', source: 'none' };
   }
 
-  // 2. 本機全域專屬金鑰
+  // 2. 本機全域專屬金鑰 (僅在完全未指定 email 的單機無帳號模式下)
   try {
     const g1 = localStorage.getItem('muji_gas_web_url')?.trim();
     if (g1 && g1.startsWith('http')) {
@@ -188,26 +191,6 @@ export function scanAndRecoverGasUrl(email?: string): PersistentDbResult {
     }
 
     if (foundGas) {
-      // 自動鞏固儲存以加速下次讀取
-      try {
-        localStorage.setItem('muji_gas_web_url', foundGas);
-        localStorage.setItem('banban_permanent_gas_url', foundGas);
-        localStorage.setItem('banban_device_master_gas', foundGas);
-        if (cleanEmail) {
-          localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, foundGas);
-          localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, foundGas);
-        }
-        if (foundSheet) {
-          localStorage.setItem('muji_sheet_url', foundSheet);
-          localStorage.setItem('banban_permanent_sheet_url', foundSheet);
-          localStorage.setItem('banban_device_master_sheet', foundSheet);
-          if (cleanEmail) {
-            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, foundSheet);
-            localStorage.setItem(`banban_permanent_sheet_url_${cleanEmail}`, foundSheet);
-          }
-        }
-      } catch (e) {}
-
       return {
         gasWebUrl: foundGas,
         deploySheetUrl: foundSheet,
@@ -352,36 +335,6 @@ export async function getUserCloudConfig(email: string): Promise<UserCloudConfig
             } catch (e) {}
             return serverConfig;
           }
-        }
-      }
-    } catch (e) {}
-
-    // 1.5 檢查全系統預設資料庫 (system-database)
-    try {
-      const sysRes = await asyncWithTimeout(fetch('/api/system-database'), 1200, null as any);
-      if (sysRes && sysRes.ok) {
-        const sysData = await sysRes.json();
-        if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
-          const sysDb = sysData.database;
-          const fallbackConfig: UserCloudConfig = {
-            email: cleanEmail,
-            name: '',
-            gasWebUrl: sysDb.gasWebUrl,
-            deploySheetUrl: sysDb.deploySheetUrl || '',
-            updatedAt: sysDb.updatedAt || new Date().toISOString()
-          };
-          try {
-            localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(fallbackConfig));
-            localStorage.setItem('muji_gas_web_url', sysDb.gasWebUrl);
-            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, sysDb.gasWebUrl);
-            localStorage.setItem('banban_permanent_gas_url', sysDb.gasWebUrl);
-            localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, sysDb.gasWebUrl);
-            if (sysDb.deploySheetUrl) {
-              localStorage.setItem('muji_sheet_url', sysDb.deploySheetUrl);
-              localStorage.setItem(`muji_sheet_url_${cleanEmail}`, sysDb.deploySheetUrl);
-            }
-          } catch (e) {}
-          return fallbackConfig;
         }
       }
     } catch (e) {}

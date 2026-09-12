@@ -112,7 +112,9 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);
-  const [partnerSubTab, setPartnerSubTab] = useState<'share' | 'join'>('share');
+  const [partnerSubTab, setPartnerSubTab] = useState<'share' | 'join'>(() => {
+    return gasWebUrl ? 'share' : 'join';
+  });
   const [manualJoinCode, setManualJoinCode] = useState('');
   const [isSubmittingJoin, setIsSubmittingJoin] = useState(false);
   const [joinErrorMessage, setJoinErrorMessage] = useState('');
@@ -148,6 +150,7 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
     if (isOpen) {
       setSubView(null);
       setJoinErrorMessage('');
+      setPartnerSubTab(gasWebUrl ? 'share' : 'join');
     }
     if (currentUser) {
       const pref = currentUser.nicknameLengthPreference || (currentUser.nickname && currentUser.nickname.length === 1 ? '1-char' : '2-char');
@@ -155,7 +158,7 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
       setN1Input(currentUser.nickname1Char || (currentUser.nickname?.length === 1 ? currentUser.nickname : userFirstChar));
       setN2Input(currentUser.nickname2Char || (currentUser.nickname?.length === 2 ? currentUser.nickname : userShort));
     }
-  }, [currentUser, isOpen, userFirstChar, userShort]);
+  }, [currentUser, isOpen, gasWebUrl, userFirstChar, userShort]);
 
   const handleCopyCode = () => {
     if (!currentInviteCode) return;

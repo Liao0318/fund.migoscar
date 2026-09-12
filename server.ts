@@ -251,37 +251,8 @@ async function startServer() {
           }
         }
 
-        // 4. 🛡️ 深度容錯備援：若系統已有任一有效資料庫（如 oscargh3359@gmail.com 或 system_database）
-        const adminWithGas = Object.values(userConfigs).find((c: any) => 
-          c && isValidGasUrl(c.gasWebUrl)
-        ) || (isValidGasUrl(sysDb?.gasWebUrl) ? { 
-          email: sysDb.configuredBy || 'oscargh3359@gmail.com',
-          name: '主管理員',
-          gasWebUrl: sysDb.gasWebUrl,
-          deploySheetUrl: sysDb.deploySheetUrl || ''
-        } : null);
-
-        if (adminWithGas && (cleanNoPrefix.length >= 4 || rawCode.startsWith('BB-'))) {
-          const matchedCode = rawCode.startsWith('BB-') ? rawCode : withPrefix;
-          const fallbackInvite = {
-            inviteCode: matchedCode,
-            adminEmail: adminWithGas.email || 'oscargh3359@gmail.com',
-            adminName: adminWithGas.name || '主管理員',
-            gasWebUrl: adminWithGas.gasWebUrl,
-            deploySheetUrl: adminWithGas.deploySheetUrl || '',
-            createdAt: new Date().toISOString()
-          };
-          invites[matchedCode] = fallbackInvite;
-          invites[cleanNoPrefix] = fallbackInvite;
-          writeJsonFile(PARTNER_INVITES_FILE, invites);
-
-          if (adminWithGas.email && userConfigs[adminWithGas.email.toLowerCase()]) {
-            userConfigs[adminWithGas.email.toLowerCase()].inviteCode = matchedCode;
-            writeJsonFile(USER_CONFIGS_FILE, userConfigs);
-          }
-
-          return res.json({ success: true, invite: fallbackInvite });
-        }
+        // 4. 若以上比對皆查無此邀請碼，回傳找不到邀請碼（不進行未經註冊的任意邀請碼虛構）
+        return res.json({ success: false, message: `查無邀請碼 ${rawCode}`, invite: null });
       }
 
       if (email) {
@@ -295,29 +266,21 @@ async function startServer() {
           return res.json({ success: true, invite: found });
         }
 
-        // 2. 比對 user_configs
+        // 2. 比對 user_configs (僅當該帳號本身有 inviteCode 且有專屬 gasWebUrl 時)
         const userCfg = userConfigs[email];
-        const gasToUse = userCfg && isValidGasUrl(userCfg.gasWebUrl) ? userCfg.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : '');
-        if (userCfg && gasToUse) {
-          const inviteCode = userCfg.inviteCode || 'BB-8888';
+        if (userCfg && isValidGasUrl(userCfg.gasWebUrl) && userCfg.inviteCode) {
+          const inviteCode = userCfg.inviteCode;
           const synInvite = {
             inviteCode,
             adminEmail: userCfg.email || email,
             adminName: userCfg.name || '主管理員',
-            gasWebUrl: gasToUse,
-            deploySheetUrl: userCfg.deploySheetUrl || sysDb?.deploySheetUrl || '',
+            gasWebUrl: userCfg.gasWebUrl,
+            deploySheetUrl: userCfg.deploySheetUrl || '',
             createdAt: userCfg.updatedAt || new Date().toISOString()
           };
           invites[inviteCode] = synInvite;
           writeJsonFile(PARTNER_INVITES_FILE, invites);
           return res.json({ success: true, invite: synInvite });
-        }
-      }
-
-      if (!rawCode && !email) {
-        const anyInvite = Object.values(invites).find((inv: any) => inv && isValidGasUrl(inv.gasWebUrl));
-        if (anyInvite) {
-          return res.json({ success: true, invite: anyInvite });
         }
       }
 

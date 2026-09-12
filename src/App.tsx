@@ -988,15 +988,9 @@ export default function App() {
         }
       } catch (e) {}
 
-      // 3. 檢查此帳號先前是否曾建立過 API 資料庫 (主管理員) 或同裝置曾綁定資料庫
+      // 3. 檢查此帳號先前是否曾建立過專屬 API 資料庫 (主管理員)
       let activeGas = initialCloudGasUrl || cachedPerUserGas || '';
       let activeSheet = initialCloudSheetUrl || cachedPerUserSheet || '';
-
-      // 若本地專屬尚未取得，嘗試載入本機既有裝置設定（避免同電腦切換或登出後重登變新帳戶）
-      if (!activeGas && cachedDeviceGas && cachedDeviceGas.startsWith('http')) {
-        activeGas = cachedDeviceGas;
-        activeSheet = cachedDeviceSheet || '';
-      }
 
       try {
         const cloudConfig = await getUserCloudConfig(user.email);
@@ -1047,26 +1041,12 @@ export default function App() {
             }
           } else {
             const onlineInvite = await fetchInviteCodeOnline(cleanEmail);
-            if (onlineInvite && onlineInvite.gasWebUrl && onlineInvite.gasWebUrl.startsWith('http')) {
+            if (onlineInvite && onlineInvite.gasWebUrl && onlineInvite.gasWebUrl.startsWith('http') && onlineInvite.adminEmail?.toLowerCase() === cleanEmail) {
               activeGas = onlineInvite.gasWebUrl;
               activeSheet = onlineInvite.deploySheetUrl || activeSheet || '';
               if (onlineInvite.inviteCode) {
                 setCurrentInviteCode(onlineInvite.inviteCode);
               }
-            }
-          }
-        } catch (e) {}
-      }
-
-      // 🛡️ 雙重保險備援 3：直接向伺服器全系統資料庫端點提取（僅在伺服器環境下調用）
-      if (!activeGas && hasBackendServer()) {
-        try {
-          const sysRes = await fetch('/api/system-database');
-          if (sysRes.ok) {
-            const sysData = await sysRes.json();
-            if (sysData?.success && sysData?.database?.gasWebUrl) {
-              activeGas = sysData.database.gasWebUrl;
-              activeSheet = sysData.database.deploySheetUrl || activeSheet || '';
             }
           }
         } catch (e) {}
@@ -2511,21 +2491,24 @@ export default function App() {
     syncSystemDatabase();
   }, [currentUser?.email]);
 
-  // ☁️ 確保管理者的有效邀請碼在 Firestore 與後端資料庫隨時就緒
+  // ☁️ 確保管理者的有效邀請碼在 Firestore 與後端資料庫隨時就緒 (僅限主管理員帳號)
   useEffect(() => {
-    const activeGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
-    const activeSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
-    if (activeGas && activeGas.startsWith('http') && currentInviteCode) {
+    const isPartnerRole = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail) || (partnerBindingInfo?.partnerEmail && partnerBindingInfo.partnerEmail.toLowerCase() === currentUser?.email?.toLowerCase());
+    if (isPartnerRole) return;
+
+    const activeGas = (gasWebUrl || (currentUser?.email ? localStorage.getItem(`muji_gas_web_url_${currentUser.email.toLowerCase()}`) : '') || '').trim();
+    const activeSheet = (deploySheetUrl || (currentUser?.email ? localStorage.getItem(`muji_sheet_url_${currentUser.email.toLowerCase()}`) : '') || '').trim();
+    if (activeGas && activeGas.startsWith('http') && currentInviteCode && currentUser?.email) {
       saveActiveInviteCode({
         inviteCode: currentInviteCode,
-        adminEmail: currentUser?.email || 'oscargh3359@gmail.com',
-        adminName: currentUser?.name || '主管理員',
+        adminEmail: currentUser.email,
+        adminName: currentUser.name || '主管理員',
         gasWebUrl: activeGas,
         deploySheetUrl: activeSheet,
         createdAt: new Date().toISOString()
       });
     }
-  }, [currentUser?.email, currentUser?.name, currentInviteCode, gasWebUrl, deploySheetUrl, isSandboxMode]);
+  }, [currentUser?.email, currentUser?.name, currentUser?.userRole, currentUser?.adminEmail, partnerBindingInfo?.partnerEmail, currentInviteCode, gasWebUrl, deploySheetUrl, isSandboxMode]);
 
   // ☁️ 開機自動同步使用者 Google 帳號所綁定的 API 設定與情侶雙向即時同步
   useEffect(() => {
