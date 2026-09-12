@@ -1188,64 +1188,19 @@ export default function App() {
       } catch (e) {}
     }
 
-    // 🛡️ 智慧容錯：若仍未解析出有效 GAS 網址，向伺服器系統資料庫與管理者設定查詢
-    if (!resolved || !resolved.gasWebUrl || resolved.gasWebUrl.includes('/test/')) {
-      let candidateGas = '';
-      let candidateSheet = '';
-
-      if (hasBackendServer()) {
-        try {
-          const sysRes = await fetch('/api/system-database');
-          if (sysRes.ok) {
-            const sysData = await sysRes.json();
-            if (sysData?.database?.gasWebUrl && sysData.database.gasWebUrl.startsWith('http')) {
-              candidateGas = sysData.database.gasWebUrl;
-              candidateSheet = sysData.database.deploySheetUrl || '';
-            }
-          }
-        } catch (e) {}
-      }
-
-      if (!candidateGas && resolved?.adminEmail) {
-        try {
-          const adminCfg = await getUserCloudConfig(resolved.adminEmail);
-          if (adminCfg?.gasWebUrl && adminCfg.gasWebUrl.startsWith('http')) {
-            candidateGas = adminCfg.gasWebUrl;
-            candidateSheet = adminCfg.deploySheetUrl || '';
-          }
-        } catch (e) {}
-      }
-
-      if (!candidateGas) {
-        const fallbackGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || localStorage.getItem('banban_device_master_gas') || '').trim();
-        const fallbackSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
-        if (fallbackGas && fallbackGas.startsWith('http')) {
-          candidateGas = fallbackGas;
-          candidateSheet = fallbackSheet;
-        }
-      }
-
-      if (candidateGas) {
-        resolved = {
-          inviteCode: (resolved?.inviteCode || inviteInput).trim().toUpperCase(),
-          adminEmail: resolved?.adminEmail || 'oscargh3359@gmail.com',
-          adminName: resolved?.adminName || '主管理員',
-          gasWebUrl: candidateGas,
-          deploySheetUrl: candidateSheet,
-          createdAt: new Date().toISOString()
-        };
-      }
+    // 嚴格校驗：邀請碼必須真實存在且解析出發起管理者，絕不允許任意代碼自動通過
+    if (!resolved || !resolved.adminEmail) {
+      return { 
+        success: false, 
+        message: '找不到符合的邀請碼，請確認 6 碼代碼是否輸入正確（例如 BB-XXXX）或請主管理者提供最新邀請碼' 
+      };
     }
 
-    if (resolved && isInviteExpired(resolved)) {
+    if (isInviteExpired(resolved)) {
       return {
         success: false,
         message: '⚠️ 此邀請碼已超過 15 分鐘有效時限，請向伴侶索取最新邀請碼！'
       };
-    }
-
-    if (!resolved) {
-      return { success: false, message: '找不到符合的邀請碼，請確認 6 碼代碼或向伴侶索取最新邀請碼' };
     }
 
     const currentEmail = (currentUser?.email || '').trim().toLowerCase();
@@ -1393,6 +1348,9 @@ export default function App() {
         }).catch(() => {});
       }
     }
+
+    // 🚀 立即固化伴侶端資料庫設定並啟動資料庫全模組雙向連動
+    saveDeployConfig(activeGas, activeSheet);
 
     if (activeGas) {
       setTimeout(() => {

@@ -278,11 +278,11 @@ export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<v
   // 伺服器 API 同步（僅在有後端伺服器環境下調用）
   if (hasBackendServer()) {
     try {
-      fetch('/api/couple-binding', {
+      await fetch('/api/couple-binding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sanitized)
-      }).catch(() => {});
+      });
     } catch (e) {}
   }
 
@@ -375,7 +375,9 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
         if (data && data.success && data.binding) {
           const bindData = sanitizeBindingInfo(data.binding as CoupleBindingInfo);
           if (bindData) {
-            savePartnerBindingInfo(bindData);
+            try {
+              localStorage.setItem(PARTNER_BINDING_STORAGE_KEY, JSON.stringify(bindData));
+            } catch (e) {}
             return bindData;
           }
         }
@@ -628,26 +630,9 @@ export async function fetchInviteCodeOnline(input: string): Promise<PartnerInvit
             saveActiveInviteCode(inv);
             return inv;
           }
-        }
-      }
-    } catch (e) {}
-
-    // 備援查詢：若以代碼查無結果，嘗試抓取伺服器全域資料庫並自動綁定
-    try {
-      const sysRes = await fetch('/api/system-database');
-      if (sysRes.ok) {
-        const sysData = await sysRes.json();
-        if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
-          const sysInvite: PartnerInviteData = {
-            inviteCode: codeToQuery.startsWith('BB-') ? codeToQuery : `BB-${codeToQuery.replace(/^BB-?/, '')}`,
-            adminEmail: sysData.database.configuredBy || 'oscargh3359@gmail.com',
-            adminName: '主管理員',
-            gasWebUrl: sysData.database.gasWebUrl,
-            deploySheetUrl: sysData.database.deploySheetUrl || '',
-            createdAt: sysData.database.updatedAt || new Date().toISOString()
-          };
-          saveActiveInviteCode(sysInvite);
-          return sysInvite;
+        } else if (data && data.expired) {
+          // 邀請碼已逾期，明確返回 null 杜絕任意配對
+          return null;
         }
       }
     } catch (e) {}

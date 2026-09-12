@@ -147,7 +147,11 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
     (Boolean(cleanPartnerEmail) && cleanPartnerEmail === cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
 
   const isAdmin = !isPartner;
-  const hasValidPartner = Boolean(cleanPartnerEmail && cleanPartnerEmail !== cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
+  const isCoupleConnected = Boolean(cleanAdminEmail && cleanPartnerEmail && cleanAdminEmail !== cleanPartnerEmail);
+  const hasValidPartner = isAdmin ? isCoupleConnected : Boolean(cleanAdminEmail && cleanAdminEmail !== cleanUserEmail);
+  const partnerDisplayName = isPartner 
+    ? (partnerBindingInfo?.adminName || currentUser?.adminName || '主管理員')
+    : (partnerBindingInfo?.partnerName || '伴侶');
   const userFirstChar = currentUser?.name ? currentUser.name.charAt(0) : (isAdmin ? '我' : '伴');
   const userShort = currentUser?.name && currentUser.name.length >= 2 ? currentUser.name.slice(0, 2) : (isAdmin ? '管理' : '伴侶');
 
@@ -411,7 +415,7 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                           <div>
                             <div className="text-sm font-bold text-[#3E3A36]">情侶連線與邀請</div>
                             <div className="text-xs text-[#8C8475]">
-                              {hasValidPartner ? `已綁定：${partnerBindingInfo?.partnerName || '伴侶'}` : '邀請代碼與雙向連動'}
+                              {hasValidPartner ? (isPartner ? `已連線管理者：${partnerDisplayName}` : `已綁定伴侶：${partnerDisplayName}`) : '邀請代碼與雙向連動'}
                             </div>
                           </div>
                         </div>
@@ -780,12 +784,12 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                           </div>
 
                           <div className="p-3 bg-[#FAF8F3] rounded-xl border border-[#EBE7DC] flex items-center justify-between text-xs">
-                            <span className="text-[#8C8475]">伴侶連線狀態：</span>
+                            <span className="text-[#8C8475]">{isPartner ? '管理者連線狀態：' : '伴侶連線狀態：'}</span>
                             {hasValidPartner ? (
                               <div className="flex items-center gap-2">
                                 <span className="text-emerald-700 font-bold flex items-center gap-1">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>已綁定 ({partnerBindingInfo?.partnerName || '伴侶'})</span>
+                                  <span>{isPartner ? `已連線 (${partnerDisplayName})` : `已綁定 (${partnerDisplayName})`}</span>
                                 </span>
                                 {onUnbindPartner && (
                                   <button

@@ -281,11 +281,21 @@ async function startServer() {
           }
         }
 
-        // 3. 比對 user_configs.json 中有無該 inviteCode
+        // 3. 比對 user_configs.json 中有無該 inviteCode (嚴格檢查 15 分鐘時限)
         for (const [cfgEmail, cfg] of Object.entries(userConfigs)) {
           const cfgCode = (cfg.inviteCode || '').toUpperCase();
           const cfgClean = cfgCode.replace(/^BB-?/, '');
           if (cfgCode && (candidates.includes(cfgCode) || candidates.includes(cfgClean))) {
+            const updatedAtTime = cfg.updatedAt ? new Date(cfg.updatedAt).getTime() : 0;
+            const isExpired = !updatedAtTime || (Date.now() - updatedAtTime > 15 * 60 * 1000);
+            if (isExpired) {
+              return res.json({ 
+                success: false, 
+                expired: true, 
+                message: `此邀請碼 ${rawCode} 已超過 15 分鐘有效時限，請向伴侶索取最新邀請碼！`, 
+                invite: null 
+              });
+            }
             const candidateGas = isValidGasUrl(cfg.gasWebUrl) ? cfg.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : '');
             if (candidateGas) {
               const synthesizedInvite = {
@@ -295,7 +305,7 @@ async function startServer() {
                 gasWebUrl: candidateGas,
                 deploySheetUrl: cfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
                 createdAt: cfg.updatedAt || new Date().toISOString(),
-                expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+                expiresAt: new Date(updatedAtTime + 15 * 60 * 1000).toISOString(),
                 validMinutes: 15
               };
               invites[withPrefix] = synthesizedInvite;

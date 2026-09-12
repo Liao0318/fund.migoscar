@@ -154,7 +154,11 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     (Boolean(cleanPartnerEmail) && cleanPartnerEmail === cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
 
   const isAdmin = !isPartner;
-  const hasValidPartner = Boolean(cleanPartnerEmail && cleanPartnerEmail !== cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
+  const isCoupleConnected = Boolean(cleanAdminEmail && cleanPartnerEmail && cleanAdminEmail !== cleanPartnerEmail);
+  const hasValidPartner = isAdmin ? isCoupleConnected : Boolean(cleanAdminEmail && cleanAdminEmail !== cleanUserEmail);
+  const partnerDisplayName = isPartner 
+    ? (partnerBindingInfo?.adminName || currentUser?.adminName || '主管理員')
+    : (partnerBindingInfo?.partnerName || '伴侶');
   const hasLoggedInBefore = cleanUserEmail ? (
     localStorage.getItem(`banban_user_has_logged_in_${cleanUserEmail}`) === 'true' ||
     Boolean(localStorage.getItem(`banban_permanent_gas_url_${cleanUserEmail}`)) ||
@@ -1578,12 +1582,12 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
 
                         {/* 伴侶綁定狀態 */}
                         <div className="bg-[#FAF8F3] p-3 rounded-xl border border-[#EBE7DC] text-xs flex items-center justify-between">
-                          <span className="text-[11px] text-[#8C8475] font-bold">伴侶連線狀態：</span>
+                          <span className="text-[11px] text-[#8C8475] font-bold">{isPartner ? '管理者連線狀態：' : '伴侶連線狀態：'}</span>
                           {hasValidPartner ? (
                             <div className="flex items-center gap-2">
                               <span className="text-emerald-700 font-bold flex items-center gap-1 text-[11px]">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>已綁定 ({partnerBindingInfo?.partnerName || '伴侶'})</span>
+                                <span>{isPartner ? `已連線 (${partnerDisplayName})` : `已綁定 (${partnerDisplayName})`}</span>
                               </span>
                               {onUnbindPartner && (
                                 <button

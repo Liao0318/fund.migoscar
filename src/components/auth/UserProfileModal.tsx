@@ -117,7 +117,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     (Boolean(cleanPartnerEmail) && cleanPartnerEmail === cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
 
   const isAdmin = !isPartner;
-  const hasValidPartner = Boolean(cleanPartnerEmail && cleanPartnerEmail !== cleanUserEmail && cleanPartnerEmail !== cleanAdminEmail);
+  const isCoupleConnected = Boolean(cleanAdminEmail && cleanPartnerEmail && cleanAdminEmail !== cleanPartnerEmail);
+  const hasValidPartner = isAdmin ? isCoupleConnected : Boolean(cleanAdminEmail && cleanAdminEmail !== cleanUserEmail);
+  const partnerDisplayName = isPartner 
+    ? (partnerBindingInfo?.adminName || currentUser?.adminName || '主管理員')
+    : (partnerBindingInfo?.partnerName || '伴侶');
 
   // 驗證暱稱：限文字且少於 3 個字 (即 1~2 個字元)
   const trimmedNickname = nicknameInput.trim();
@@ -518,11 +522,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       {/* 伴侶綁定狀態 */}
                       <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 text-xs space-y-1">
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-[#8C8475] font-bold">伴侶綁定狀態：</span>
+                          <span className="text-[#8C8475] font-bold">{isPartner ? '管理者連線狀態：' : '伴侶綁定狀態：'}</span>
                           {hasValidPartner ? (
                             <span className="text-emerald-700 font-bold flex items-center gap-1">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>已綁定 ({partnerBindingInfo?.partnerName || '伴侶'})</span>
+                              <span>{isPartner ? `已連線 (${partnerDisplayName})` : `已綁定 (${partnerDisplayName})`}</span>
                             </span>
                           ) : (
                             <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
