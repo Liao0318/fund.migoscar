@@ -33,7 +33,7 @@ export async function requestNativeNotificationPermission(): Promise<NativeNotif
 }
 
 /**
- * 播放輕巧溫和的通知提示音 (使用 Web Audio API，無需外掛音檔)
+ * 播放 Apple Pay 經典雙音清脆叮鈴聲 (使用 Web Audio API 高擬真合成，無需外掛音檔)
  */
 export function playNotificationSound() {
   if (typeof window === 'undefined') return;
@@ -48,41 +48,106 @@ export function playNotificationSound() {
 
     const now = ctx.currentTime;
     
-    // 雙音和弦 (柔和的清脆提示鈴聲: E5 -> B5)
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const gain = ctx.createGain();
+    // 主音量與防破音壓縮器
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.28, now);
 
-    osc1.type = 'sine';
-    osc2.type = 'sine';
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-12, now);
+    compressor.knee.setValueAtTime(8, now);
+    compressor.ratio.setValueAtTime(4, now);
+    compressor.attack.setValueAtTime(0.002, now);
+    compressor.release.setValueAtTime(0.15, now);
 
-    osc1.frequency.setValueAtTime(659.25, now); // E5
-    osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15); // A5
+    masterGain.connect(compressor);
+    compressor.connect(ctx.destination);
 
-    osc2.frequency.setValueAtTime(1318.5, now + 0.05); // E6
-    osc2.frequency.exponentialRampToValueAtTime(1760, now + 0.25); // A6
+    // 🍎 1. 觸感微低音輕敲 (Sub-bass Haptic Tap: 140Hz -> 50Hz)
+    const subOsc = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(140, now);
+    subOsc.frequency.exponentialRampToValueAtTime(45, now + 0.04);
+    subGain.gain.setValueAtTime(0.2, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+    subOsc.connect(subGain);
+    subGain.connect(masterGain);
+    subOsc.start(now);
+    subOsc.stop(now + 0.05);
 
-    gain.gain.setValueAtTime(0.001, now);
-    gain.gain.linearRampToValueAtTime(0.12, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    // 🍎 2. 第一聲清脆鈴音 (Tone 1: D#6 / Eb6 ~ 1244.5 Hz)
+    const t1 = now;
+    const osc1Main = ctx.createOscillator();
+    const osc1Harmonic = ctx.createOscillator();
+    const gain1 = ctx.createGain();
 
-    osc1.connect(gain);
-    osc2.connect(gain);
-    gain.connect(ctx.destination);
+    osc1Main.type = 'sine';
+    osc1Main.frequency.setValueAtTime(1244.5, t1);
 
-    osc1.start(now);
-    osc2.start(now + 0.05);
-    osc1.stop(now + 0.35);
-    osc2.stop(now + 0.35);
+    osc1Harmonic.type = 'sine';
+    osc1Harmonic.frequency.setValueAtTime(2489, t1); // 2nd Harmonic
+
+    gain1.gain.setValueAtTime(0.0001, t1);
+    gain1.gain.linearRampToValueAtTime(0.35, t1 + 0.004);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, t1 + 0.26);
+
+    osc1Main.connect(gain1);
+    osc1Harmonic.connect(gain1);
+    gain1.connect(masterGain);
+
+    osc1Main.start(t1);
+    osc1Harmonic.start(t1);
+    osc1Main.stop(t1 + 0.28);
+    osc1Harmonic.stop(t1 + 0.28);
+
+    // 🍎 3. 第二聲標誌性高頻晶透尾韻 (Tone 2: A#6 / Bb6 ~ 1864.7 Hz - Apple Pay 標誌性高五度和弦)
+    const t2 = now + 0.088; // 約 88ms 後清脆接續
+    const osc2Main = ctx.createOscillator();
+    const osc2H1 = ctx.createOscillator();
+    const osc2H2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+
+    osc2Main.type = 'sine';
+    osc2Main.frequency.setValueAtTime(1864.7, t2);
+
+    osc2H1.type = 'sine';
+    osc2H1.frequency.setValueAtTime(3729.4, t2); // 晶亮泛音
+
+    osc2H2.type = 'sine';
+    osc2H2.frequency.setValueAtTime(5594.1, t2); // 金屬光澤泛音
+
+    gain2.gain.setValueAtTime(0.0001, t2);
+    gain2.gain.linearRampToValueAtTime(0.48, t2 + 0.004);
+    gain2.gain.exponentialRampToValueAtTime(0.0001, t2 + 0.82); // 0.82 秒晶透長延音尾韻
+
+    osc2Main.connect(gain2);
+    osc2H1.connect(gain2);
+    osc2H2.connect(gain2);
+    gain2.connect(masterGain);
+
+    osc2Main.start(t2);
+    osc2H1.start(t2);
+    osc2H2.start(t2);
+    osc2Main.stop(t2 + 0.85);
+    osc2H1.stop(t2 + 0.85);
+    osc2H2.stop(t2 + 0.85);
+
+    // 播放完畢後自動釋放 AudioContext 節省資源
+    setTimeout(() => {
+      try {
+        if (ctx.state !== 'closed') ctx.close().catch(() => {});
+      } catch (e) {}
+    }, 1100);
+
   } catch (e) {
     // 忽略自動播放限制錯誤
   }
 }
 
 /**
- * 觸發手機震動回饋
+ * 觸發手機震動回饋 (Apple Pay 風格俐落雙震動)
  */
-export function triggerVibration(pattern: number | number[] = [120, 60, 120]) {
+export function triggerVibration(pattern: number | number[] = [35, 45, 55]) {
   if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
     try {
       navigator.vibrate(pattern);

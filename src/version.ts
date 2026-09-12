@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.5.4';
+export const APP_VERSION = 'v2.5.5';
 export const APP_BUILD_DATE = '2026.09.12';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.5.5',
+    date: '2026.09.12',
+    title: 'Apple Pay 經典雙音清脆提示鈴聲',
+    highlights: [
+      '提醒與推播鈴聲升級為 Apple Pay 經典雙音高擬真晶透鈴聲（D#6 ➔ A#6 高五度和弦）',
+      '內建微觸感低頻輕敲與金屬光澤晶亮泛音，搭配 DynamicsCompressor 防破音立體聲音場',
+      '優化手機原生雙擊微震動回饋（Haptic Feedback），提供如同刷卡成功般的俐落爽快感',
+      '支援即時通知、系統推播、測試鈴聲與各類財務變動提醒'
+    ]
+  },
   {
     version: 'v2.5.4',
     date: '2026.09.12',
