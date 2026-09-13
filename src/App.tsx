@@ -61,7 +61,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { exportFundRecordsToCSV } from './utils/exportCsv';
 import { formatAmPmTime, isTodayNotification, isIncomingFromPartner, getShoppingItemDisplayTime } from './utils/formatters';
 import { sendNativeNotification } from './utils/nativeNotify';
-import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from './utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB, isNonPersonTerm, NON_PERSON_ITEM_TERMS } from './utils/userPersona';
 import { CODE_GS_TEMPLATE, INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from './data/gasTemplates';
 import { SplitHomeTab } from './components/split/SplitHomeTab';
 import { SplitHistoryTab } from './components/split/SplitHistoryTab';
@@ -284,6 +284,20 @@ const isMonthReconciled = (month: string, list: string[]): boolean => {
   return list.some(item => normalizeMonth(item) === normMonth);
 };
 
+// 已知收支類別關鍵字清單（若出現在品項欄位，代表發生了類別與品項對調錯位）
+export const KNOWN_CATEGORY_TERMS = [
+  '日常生活支出', '日常代墊支出', '日常支出', '生活支出', '固定公積金', '公積金固定撥入', '公積金',
+  '支出-日常代墊', '收入-固定公積金', '餐飲支出', '餐飲', '生活用品', '交通支出', '交通', '娛樂支出', '娛樂',
+  '醫療支出', '醫療', '住宿支出', '住宿', '其他支出', '其他', '支出', '收入', '固定支出', '非固定支出'
+];
+
+export const isCategoryLikeTerm = (text?: string): boolean => {
+  if (!text || typeof text !== 'string') return false;
+  const s = text.trim();
+  if (!s) return false;
+  return KNOWN_CATEGORY_TERMS.some(cat => s === cat || (s.length <= 8 && s.includes(cat)));
+};
+
 // 已知代墊人/出資人姓名關鍵字判定清單
 export const KNOWN_PAYER_KEYWORDS = [
   '共同帳戶', '共同', '待確認伴侶', '待確認', '待', '伴侶', '我', '本人'
@@ -294,8 +308,9 @@ export const isPayerNameRecognized = (p?: string): boolean => {
   const s = p.trim();
   if (!s) return false;
   if (/^\d+(\.\d+)?$/.test(s)) return false; // 純數字不是人名
-  if (s.includes('GMT') || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(s)) return false; // 日期字串不是人名
+  if (s.includes('GMT') || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(s) || /^\d{4}[-/]\d{1,2}$/.test(s)) return false; // 日期字串不是人名
   if (s.startsWith('rec_')) return false;
+  if (isNonPersonTerm(s)) return false; // 排除非人名之品項、類別、店名、商品
   return true;
 };
 
@@ -369,15 +384,22 @@ export const sanitizeAndHealRecord = (r: any): RecordItem => {
   );
   // 特徵 C：date 存放的只有 YYYY-MM（而非 YYYY-MM-DD）且 item 是日期格式
   const dateLooksLikeMonth = typeof rec.date === 'string' && /^\d{4}[-/]\d{1,2}$/.test(rec.date.trim());
-  // 特徵 D：payer 與 item 完全相同（例如「晚餐」===「晚餐」或「大全聯」===「大全聯」），且非合法出資人人名
-  const payerSameAsItem = typeof rec.payer === 'string' && typeof rec.item === 'string' && 
-    rec.payer.trim().length > 0 && rec.payer.trim() === rec.item.trim() && !isPayerNameRecognized(rec.payer);
+  const rawPayer = String(rec.payer || '').trim();
+  const rawItem = String(rec.item || '').trim();
+  const rawType = String(rec.type || '').trim();
 
-  const isShifted = monthLooksLikeId || itemLooksLikeDate || dateLooksLikeMonth || payerSameAsItem;
+  // 特徵 D：payer 與 item 完全相同（例如「晚餐」===「晚餐」或「大全聯」===「大全聯」），且非合法出資人人名
+  const payerSameAsItem = rawPayer.length > 0 && rawPayer === rawItem && !isPayerNameRecognized(rawPayer);
+  // 特徵 E：item 為「日常生活支出/固定公積金」等類別名，而 payer 存放的是「晚餐/大全聯」等非人名消費品項
+  const categoryInItemAndItemInPayer = isCategoryLikeTerm(rawItem) && isNonPersonTerm(rawPayer);
+  // 特徵 F：payer 為純品項名稱（如「晚餐」）且非人名
+  const payerIsItemName = isNonPersonTerm(rawPayer) && rawPayer.length > 0;
+
+  const isShifted = monthLooksLikeId || itemLooksLikeDate || dateLooksLikeMonth || payerSameAsItem || categoryInItemAndItemInPayer;
 
   if (isShifted) {
     // 發生欄位位移錯位！進行精準欄位解包還原：
-    const trueId = (monthLooksLikeId ? rec.month : rec.id) || `rec_${Date.now()}`;
+    const trueId = (monthLooksLikeId ? rec.month : rec.id) || `rec_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
     // 還原日期與月份
     let trueDate = normalizedDate;
@@ -398,42 +420,40 @@ export const sanitizeAndHealRecord = (r: any): RecordItem => {
     const trueMonth = trueDate ? trueDate.substring(0, 7) : normalizedMonth;
 
     // 還原項目描述 (trueItem)：
-    // 在推移列中，原項目名稱通常被推至 payer 欄位（例如「晚餐」、「大全聯」）
     let trueItem = '';
-    const rawPayer = String(rec.payer || '').trim();
-    const rawItem = String(rec.item || '').trim();
-
-    if (rawPayer && !isPayerNameRecognized(rawPayer)) {
+    if (rawPayer && isNonPersonTerm(rawPayer) && !isCategoryLikeTerm(rawPayer)) {
+      // 在錯位中，原項目名稱通常被推至 payer 欄位（例如「晚餐」、「大全聯」）
       trueItem = rawPayer;
-    } else if (rawItem && !itemLooksLikeDate) {
+    } else if (rawItem && !isCategoryLikeTerm(rawItem) && !itemLooksLikeDate) {
       trueItem = rawItem;
+    } else if (rawItem && (rawItem.includes('公積金') || rawItem.includes('撥入') || rawItem.includes('注資'))) {
+      trueItem = '固定公積金';
+    } else if (rawPayer && !itemLooksLikeDate) {
+      trueItem = rawPayer;
     } else {
-      trueItem = '日常生活支出';
+      trueItem = '日常代墊消費';
     }
 
     // 還原金額 (trueAmount)：
-    // 在推移列中，原金額通常被推移至 type 欄位（例如 470、462、20000），
-    // 而原 payer 欄位（例如「廖尹丞」）可能被推至 amount 欄位或被 GAS parseFloat 轉成 0
     let trueAmount = 0;
-    const typeStr = String(rec.type || '').trim();
-    const typeNum = parseFloat(typeStr.replace(/[^0-9.]/g, ''));
+    const typeNum = parseFloat(rawType.replace(/[^0-9.]/g, ''));
     const amtNum = parseFloat(String(rec.amount || '').replace(/[^0-9.]/g, ''));
     const origNum = parseFloat(String(rec.originalAmount || '').replace(/[^0-9.]/g, ''));
 
-    // 若 type 欄位含有數字且非純文字標籤（例如不是「支出-日常代墊」），優先作為金額
-    if (!isNaN(typeNum) && typeNum > 0 && !typeStr.includes('支出') && !typeStr.includes('代墊') && !typeStr.includes('收入')) {
-      trueAmount = typeNum;
-    } else if (!isNaN(amtNum) && amtNum > 0) {
+    // 若 amount 本身有正確數字，優先採用
+    if (!isNaN(amtNum) && amtNum > 0) {
       trueAmount = amtNum;
-    } else if (!isNaN(typeNum) && typeNum > 0) {
+    } else if (!isNaN(typeNum) && typeNum > 0 && !rawType.includes('支出') && !rawType.includes('收入') && !rawType.includes('代墊')) {
       trueAmount = typeNum;
     } else if (!isNaN(origNum) && origNum > 0) {
       trueAmount = origNum;
+    } else if (!isNaN(typeNum) && typeNum > 0) {
+      trueAmount = typeNum;
     }
 
     // 還原收支類型 (trueType)：
     let trueType: '支出-日常代墊' | '收入-固定公積金' = '支出-日常代墊';
-    const allContext = `${rec.type || ''} ${rec.timestamp || ''} ${trueItem} ${rec.item || ''} ${rec.payer || ''}`;
+    const allContext = `${rawType} ${rec.timestamp || ''} ${rawItem} ${rawPayer} ${trueItem}`;
     if (
       allContext.includes('收入') || 
       allContext.includes('公積金') || 
@@ -451,18 +471,18 @@ export const sanitizeAndHealRecord = (r: any): RecordItem => {
     if (trueType === '收入-固定公積金') {
       truePayer = '共同帳戶';
     } else {
-      // 支出項目：代墊人必須是人名或出資人，若 rawPayer 存在且不等於品項，直接採用
-      if (rawPayer && rawPayer !== trueItem && isPayerNameRecognized(rawPayer)) {
+      // 支出項目：代墊人必須是人名或出資人，若 rawPayer 存在且為合法出資人人名，直接採用
+      if (rawPayer && isPayerNameRecognized(rawPayer) && rawPayer !== trueItem) {
         truePayer = rawPayer;
       } else {
         // rawPayer 是品項名稱或被污染，自上下文嘗試擷取
-        const ctx = `${rec.note || ''} ${rec.rawPayer || ''}`;
-        if (ctx.includes('共同')) {
+        const ctx = `${rec.note || ''} ${rec.rawPayer || ''} ${rec.timestamp || ''}`;
+        if (ctx.includes('周') || ctx.includes('沛緹')) {
+          truePayer = '周沛緹';
+        } else if (ctx.includes('共同')) {
           truePayer = '共同帳戶';
-        } else if (rawPayer && rawPayer !== trueItem) {
-          truePayer = rawPayer;
         } else {
-          truePayer = '主要付款人';
+          truePayer = '廖尹丞';
         }
       }
     }
@@ -497,10 +517,6 @@ export const sanitizeAndHealRecord = (r: any): RecordItem => {
     }
 
     // 校正類型與付款人
-    const rawType = String(rec.type || '').trim();
-    const rawItem = String(rec.item || '').trim();
-    const rawPayer = String(rec.payer || '').trim();
-
     if (
       rawType === '收入-固定公積金' || 
       rawType.includes('收入') || 
@@ -514,12 +530,18 @@ export const sanitizeAndHealRecord = (r: any): RecordItem => {
     ) {
       rec.type = '收入-固定公積金';
       rec.payer = '共同帳戶';
+      if (isCategoryLikeTerm(rec.item) || !rec.item) {
+        rec.item = '固定公積金';
+      }
     } else {
       rec.type = '支出-日常代墊';
 
-      // 關鍵防禦：保留真實 payer，若空或等於 item 則給予預設
-      if (!rawPayer || rawPayer === rawItem) {
-        rec.payer = '主要付款人';
+      // 關鍵防禦：若 payer 是品項名稱（如晚餐），校正為真實人名
+      if (payerIsItemName) {
+        rec.item = rawPayer;
+        rec.payer = '廖尹丞';
+      } else if (!rawPayer || rawPayer === rawItem || !isPayerNameRecognized(rawPayer)) {
+        rec.payer = '廖尹丞';
       } else {
         rec.payer = rawPayer;
       }
@@ -648,6 +670,8 @@ export default function App() {
       const needsHeal = records.some(r => 
         (r.payer && r.item && r.payer === r.item && !isPayerNameRecognized(r.payer)) ||
         !isPayerNameRecognized(r.payer) ||
+        isNonPersonTerm(r.payer) ||
+        (isCategoryLikeTerm(r.item) && isNonPersonTerm(r.payer)) ||
         (r.month && String(r.month).startsWith('rec_')) ||
         (typeof r.item === 'string' && (r.item.includes('GMT') || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(r.item.trim())))
       );

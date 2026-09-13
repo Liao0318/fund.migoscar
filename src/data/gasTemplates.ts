@@ -335,71 +335,104 @@ function getDashboardData() {
     var headerRow = sheet.getRange(1, 1, 1, maxCols).getValues()[0];
     var values = sheet.getRange(2, 1, lastRow - 1, maxCols).getValues();
 
-    // 1. 動態解析表頭欄位
+    // 1. 動態多階表頭欄位解析
     var colMap = {
       id: -1,
       month: -1,
       date: -1,
+      type: -1,
       item: -1,
       payer: -1,
       amount: -1,
-      type: -1,
       timestamp: -1
     };
 
+    // 第一階段：精準比對各欄表頭名稱
     for (var c = 0; c < headerRow.length; c++) {
       var h = String(headerRow[c] || "").trim().toLowerCase();
       if (!h) continue;
-      if (colMap.id === -1 && (h === "id" || h.indexOf("編號") !== -1 || h.indexOf("序號") !== -1 || h.indexOf("流水號") !== -1)) colMap.id = c;
-      else if (colMap.month === -1 && (h.indexOf("月") !== -1 || h.indexOf("month") !== -1)) colMap.month = c;
-      else if (colMap.date === -1 && (h.indexOf("日") !== -1 || h.indexOf("date") !== -1)) colMap.date = c;
-      else if (colMap.item === -1 && (h.indexOf("項") !== -1 || h.indexOf("品") !== -1 || h.indexOf("內容") !== -1 || h.indexOf("描述") !== -1 || h.indexOf("item") !== -1)) colMap.item = c;
-      else if (colMap.payer === -1 && (h.indexOf("出錢") !== -1 || h.indexOf("付款") !== -1 || h.indexOf("代墊人") !== -1 || h.indexOf("payer") !== -1)) colMap.payer = c;
-      else if (colMap.amount === -1 && (h.indexOf("金額") !== -1 || h.indexOf("費用") !== -1 || h.indexOf("amount") !== -1 || h.indexOf("台幣") !== -1)) colMap.amount = c;
-      else if (colMap.type === -1 && (h.indexOf("類") !== -1 || h.indexOf("收支") !== -1 || h.indexOf("type") !== -1)) colMap.type = c;
-      else if (colMap.timestamp === -1 && (h.indexOf("時間") !== -1 || h.indexOf("戳記") !== -1 || h.indexOf("建立") !== -1 || h.indexOf("time") !== -1)) colMap.timestamp = c;
-    }
-
-    // 2. 表頭與資料特徵全方位比對（自動探測是否首欄遺漏 ID 標籤造成欄位全體左移）
-    var firstRow = values[0] || [];
-    var firstCellStr = String(firstRow[0] || "").trim();
-    var firstCellIsId = firstCellStr.indexOf("rec_") === 0 || firstCellStr.length > 15;
-    var firstHeaderStr = String(headerRow[0] || "").trim().toUpperCase();
-
-    // 關鍵特徵：如果資料第 0 欄是 rec_ 開頭的 ID，但表頭第 0 欄不是 ID（例如是「月份」）
-    // 這代表使用者的試算表表頭只有 7 欄無 ID，但下方資料列全部是 8 欄包含 ID！
-    // 造成所有表頭對應被左移了 1 格，必須強制修正映射為 8 欄標準格局
-    if (firstCellIsId && colMap.id !== 0) {
-      colMap.id = 0;
-      colMap.month = 1;
-      colMap.date = 2;
-      colMap.item = 3;
-      colMap.payer = 4;
-      colMap.amount = 5;
-      colMap.type = 6;
-      colMap.timestamp = 7;
-    } else if (colMap.amount === -1 || colMap.item === -1) {
-      var hasIdCol = (firstCellIsId || colMap.id === 0 || firstHeaderStr === "ID" || firstHeaderStr.indexOf("編號") !== -1 || firstHeaderStr.indexOf("序號") !== -1);
-      if (hasIdCol) {
-        colMap.id = 0;
-        colMap.month = 1;
-        colMap.date = 2;
-        colMap.item = 3;
-        colMap.payer = 4;
-        colMap.amount = 5;
-        colMap.type = 6;
-        colMap.timestamp = 7;
-      } else {
-        colMap.id = -1;
-        colMap.month = 0;
-        colMap.date = 1;
-        colMap.item = 2;
-        colMap.payer = 3;
-        colMap.amount = 4;
-        colMap.type = 5;
-        colMap.timestamp = 6;
+      if (colMap.id === -1 && (h === "id" || h.indexOf("編號") !== -1 || h.indexOf("序號") !== -1 || h.indexOf("流水號") !== -1)) {
+        colMap.id = c;
+      } else if (colMap.month === -1 && (h.indexOf("月") !== -1 || h.indexOf("month") !== -1) && h.indexOf("日") === -1) {
+        colMap.month = c;
+      } else if (colMap.date === -1 && (h.indexOf("日") !== -1 || h.indexOf("date") !== -1) && h.indexOf("月") === -1) {
+        colMap.date = c;
+      } else if (colMap.type === -1 && (h.indexOf("收支") !== -1 || h.indexOf("類") !== -1 || h.indexOf("category") !== -1 || h.indexOf("type") !== -1 || h.indexOf("類型") !== -1)) {
+        colMap.type = c;
+      } else if (colMap.amount === -1 && (h.indexOf("金額") !== -1 || h.indexOf("費用") !== -1 || h.indexOf("花費") !== -1 || h.indexOf("價錢") !== -1 || h.indexOf("amount") !== -1 || h.indexOf("cost") !== -1 || h.indexOf("台幣") !== -1)) {
+        colMap.amount = c;
+      } else if (colMap.payer === -1 && (h.indexOf("代墊") !== -1 || h.indexOf("出資") !== -1 || h.indexOf("付款") !== -1 || h.indexOf("出錢") !== -1 || h.indexOf("墊付") !== -1 || h.indexOf("經手") !== -1 || h.indexOf("支付") !== -1 || h.indexOf("誰") !== -1 || h.indexOf("payer") !== -1 || h.indexOf("who") !== -1)) {
+        colMap.payer = c;
+      } else if (colMap.timestamp === -1 && (h.indexOf("時間") !== -1 || h.indexOf("戳記") !== -1 || h.indexOf("建立") !== -1 || h.indexOf("登記") !== -1 || h.indexOf("time") !== -1 || h.indexOf("stamp") !== -1)) {
+        colMap.timestamp = c;
+      } else if (colMap.item === -1 && (h.indexOf("項目") !== -1 || h.indexOf("品項") !== -1 || h.indexOf("內容") !== -1 || h.indexOf("描述") !== -1 || h.indexOf("消費") !== -1 || h.indexOf("item") !== -1 || h.indexOf("desc") !== -1)) {
+        colMap.item = c;
       }
     }
+
+    // 第二階段：抽樣 5 列進行資料特徵啟發式分析（Data-Driven Heuristics）
+    var sampleRowsCount = Math.min(values.length, 5);
+    var colDataTypes = [];
+    for (var colIdx = 0; colIdx < maxCols; colIdx++) {
+      colDataTypes[colIdx] = { hasId: 0, hasDate: 0, hasMonth: 0, hasAmount: 0, hasPayer: 0, hasCategory: 0, hasTimestamp: 0, texts: [] };
+      for (var r = 0; r < sampleRowsCount; r++) {
+        var cell = values[r][colIdx];
+        if (cell === null || cell === undefined || cell === "") continue;
+        var cellStr = String(cell).trim();
+        if (cellStr.indexOf("rec_") === 0 || (cellStr.length > 20 && cellStr.indexOf("-") !== -1)) colDataTypes[colIdx].hasId++;
+        if (cell instanceof Date || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(cellStr) || cellStr.indexOf("GMT") !== -1) colDataTypes[colIdx].hasDate++;
+        if (/^\d{4}[-/]\d{1,2}$/.test(cellStr)) colDataTypes[colIdx].hasMonth++;
+        if (typeof cell === "number" || (/^\$?\s*\d+(\.\d+)?$/.test(cellStr) && !/^\d{4}/.test(cellStr))) colDataTypes[colIdx].hasAmount++;
+        if (cellStr.indexOf(DEFAULT_USER_A_NAME) !== -1 || cellStr.indexOf(DEFAULT_USER_B_NAME) !== -1 || cellStr.indexOf("廖") !== -1 || cellStr.indexOf("周") !== -1 || cellStr.indexOf("共同") !== -1 || cellStr === "待確認" || cellStr === "伴侶") colDataTypes[colIdx].hasPayer++;
+        if (cellStr.indexOf("支出") !== -1 || cellStr.indexOf("收入") !== -1 || cellStr.indexOf("公積金") !== -1 || cellStr.indexOf("日常生活") !== -1 || cellStr.indexOf("代墊") !== -1) colDataTypes[colIdx].hasCategory++;
+        if (cellStr.indexOf("上午") !== -1 || cellStr.indexOf("下午") !== -1 || cellStr.indexOf(":") !== -1) colDataTypes[colIdx].hasTimestamp++;
+        colDataTypes[colIdx].texts.push(cellStr);
+      }
+    }
+
+    // 依資料特徵自動校正/填補欄位映射
+    for (var colIdx = 0; colIdx < maxCols; colIdx++) {
+      var d = colDataTypes[colIdx];
+      if (colMap.id === -1 && d.hasId >= 1) colMap.id = colIdx;
+      if (colMap.month === -1 && d.hasMonth >= 1 && d.hasDate === 0) colMap.month = colIdx;
+      if (colMap.date === -1 && d.hasDate >= 1) colMap.date = colIdx;
+      if (colMap.amount === -1 && d.hasAmount >= 1 && d.hasDate === 0 && d.hasMonth === 0) colMap.amount = colIdx;
+      if (colMap.payer === -1 && d.hasPayer >= 1) colMap.payer = colIdx;
+      if (colMap.type === -1 && d.hasCategory >= 1) colMap.type = colIdx;
+      if (colMap.timestamp === -1 && d.hasTimestamp >= 1 && d.hasDate === 0) colMap.timestamp = colIdx;
+    }
+
+    // 若 item 仍未對應，尋找尚未被指派且非純數字/非純日期之欄位
+    if (colMap.item === -1) {
+      for (var colIdx = 0; colIdx < maxCols; colIdx++) {
+        if (colIdx !== colMap.id && colIdx !== colMap.month && colIdx !== colMap.date && 
+            colIdx !== colMap.amount && colIdx !== colMap.payer && colIdx !== colMap.type && 
+            colIdx !== colMap.timestamp) {
+          colMap.item = colIdx;
+          break;
+        }
+      }
+    }
+
+    // 關鍵保護：若 item 與 type 顛倒（例如 item 對應到「收支類別」欄位，而品項在別欄），主動交換校正
+    if (colMap.item !== -1 && colMap.type !== -1) {
+      var itemColData = colDataTypes[colMap.item];
+      var typeColData = colDataTypes[colMap.type];
+      if (itemColData && itemColData.hasCategory >= 2 && (!typeColData || typeColData.hasCategory === 0)) {
+        var temp = colMap.item;
+        colMap.item = colMap.type;
+        colMap.type = temp;
+      }
+    }
+
+    // 預設備援映射
+    if (colMap.month === -1) colMap.month = 0;
+    if (colMap.date === -1) colMap.date = 1;
+    if (colMap.item === -1) colMap.item = 2;
+    if (colMap.payer === -1) colMap.payer = 3;
+    if (colMap.amount === -1) colMap.amount = 4;
+    if (colMap.type === -1) colMap.type = 5;
+    if (colMap.timestamp === -1) colMap.timestamp = 6;
 
     var liaoTotal = 0;
     var zhouTotal = 0;
@@ -408,51 +441,42 @@ function getDashboardData() {
     for (var i = values.length - 1; i >= 0; i--) {
       var row = values[i];
       var rowCell0 = String(row[0] || "").trim();
-      var isThisRow8ColWithId = rowCell0.indexOf("rec_") === 0;
 
-      var idVal = "";
-      var monthVal = "";
-      var dateVal = "";
-      var item = "";
-      var payer = "";
-      var amount = 0;
-      var type = "";
-      var timestampVal = "";
+      // 擷取各欄位內容
+      var idVal = colMap.id !== -1 ? String(row[colMap.id] || ("rec_" + (i + 2))) : ("rec_" + (i + 2));
+      var monthVal = colMap.month !== -1 ? row[colMap.month] : "";
+      var dateVal = colMap.date !== -1 ? row[colMap.date] : "";
+      var item = colMap.item !== -1 ? String(row[colMap.item] || "").trim() : "";
+      var payer = colMap.payer !== -1 ? String(row[colMap.payer] || "").trim() : "";
+      var amount = colMap.amount !== -1 ? (parseFloat(String(row[colMap.amount] || "").replace(/[^0-9.]/g, '')) || 0) : 0;
+      var type = colMap.type !== -1 ? String(row[colMap.type] || "").trim() : "";
+      var timestampVal = colMap.timestamp !== -1 ? row[colMap.timestamp] : "";
 
-      if (isThisRow8ColWithId) {
-        // 資料列首欄即為 rec_ ID，直接按 8 欄標準順序取值，徹底免疫表頭錯位
-        idVal = rowCell0;
-        monthVal = row[1];
-        dateVal = row[2];
-        item = String(row[3] || "");
-        payer = String(row[4] || "");
-        amount = parseFloat(row[5]) || 0;
-        type = String(row[6] || "");
-        timestampVal = row[7];
-      } else {
-        idVal = colMap.id !== -1 ? String(row[colMap.id] || ("rec_" + (i + 2))) : ("rec_" + (i + 2));
-        monthVal = colMap.month !== -1 ? row[colMap.month] : "";
-        dateVal = colMap.date !== -1 ? row[colMap.date] : "";
-        item = colMap.item !== -1 ? String(row[colMap.item] || "") : "";
-        payer = colMap.payer !== -1 ? String(row[colMap.payer] || "") : "";
-        amount = colMap.amount !== -1 ? (parseFloat(row[colMap.amount]) || 0) : 0;
-        type = colMap.type !== -1 ? String(row[colMap.type] || "") : "";
-        timestampVal = colMap.timestamp !== -1 ? row[colMap.timestamp] : "";
+      // 🛡️ 列級智慧對齊與防禦校正：
+      // 情境 1: item 存放了「日常生活支出/固定公積金」等類別名，而 payer 存放的是「晚餐/大全聯」等消費品項
+      var isItemCategory = (item === "日常生活支出" || item === "日常代墊支出" || item === "固定公積金" || item === "公積金固定撥入" || item === "支出-日常代墊" || item === "收入-固定公積金" || item === "支出" || item === "收入");
+      var isPayerNonPerson = (payer === "晚餐" || payer === "午餐" || payer === "早餐" || payer === "大全聯" || payer === "全聯" || payer === "好市多" || payer === "家樂福" || (payer.length > 0 && payer !== DEFAULT_USER_A_NAME && payer !== DEFAULT_USER_B_NAME && payer !== "共同帳戶" && payer.indexOf("廖") === -1 && payer.indexOf("周") === -1));
+
+      if (isItemCategory && isPayerNonPerson) {
+        var realItemName = payer;
+        var realTypeName = (item.indexOf("公積金") !== -1 || item.indexOf("收入") !== -1) ? "收入-固定公積金" : "支出-日常代墊";
+        var realPayerName = realTypeName === "收入-固定公積金" ? "共同帳戶" : DEFAULT_USER_A_NAME;
+        // 若 amount 讀取為 0，嘗試自 type 或其他欄位提取金額
+        var typeNum = parseFloat(String(type).replace(/[^0-9.]/g, ''));
+        if ((!amount || amount === 0) && !isNaN(typeNum) && typeNum > 0) {
+          amount = typeNum;
+        }
+        item = realItemName;
+        type = realTypeName;
+        payer = realPayerName;
       }
 
-      // 防禦性資料修正：若個別列因歷史原因仍殘留位移
-      if (String(monthVal).indexOf("rec_") === 0) {
-        idVal = String(monthVal);
-        monthVal = "";
-      }
+      // 情境 2: item 是 Date 物件（整列推移）
       var isDateLikeItem = item instanceof Date || String(item).indexOf("GMT") !== -1 || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(String(item).trim());
       if (isDateLikeItem) {
         dateVal = item;
-        // 發生推移時：原項目名稱被推入 payer 欄位（例如「晚餐」或「大全聯」）
         var realItem = (payer && payer !== DEFAULT_USER_A_NAME && payer !== DEFAULT_USER_B_NAME && payer !== "共同帳戶") ? payer : "日常生活支出";
-        // 金額被推入 type 欄位
         var realAmount = parseFloat(String(type).replace(/[^0-9.]/g, '')) || amount || 0;
-        // 代墊人還原：不能等於項目名稱
         var realPayer = DEFAULT_USER_A_NAME;
         if (String(amount).indexOf("周") !== -1 || String(type).indexOf("周") !== -1 || String(timestampVal).indexOf("周") !== -1) {
           realPayer = DEFAULT_USER_B_NAME;
@@ -463,15 +487,26 @@ function getDashboardData() {
         amount = realAmount;
         payer = realPayer;
         type = String(timestampVal).indexOf("收入") !== -1 || String(realItem).indexOf("公積金") !== -1 ? "收入-固定公積金" : "支出-日常代墊";
-      } else if (payer && item && payer === item && payer !== DEFAULT_USER_A_NAME && payer !== DEFAULT_USER_B_NAME && payer !== "共同帳戶") {
-        // 若 payer 與 item 相同（例如都是「晚餐」），payer 必須恢復為真實出資人人名
+      }
+
+      // 情境 3: payer 與 item 相同（例如都是「晚餐」），payer 必須恢復為真實出資人人名
+      if (payer && item && payer === item && payer !== DEFAULT_USER_A_NAME && payer !== DEFAULT_USER_B_NAME && payer !== "共同帳戶") {
         payer = DEFAULT_USER_A_NAME;
       }
 
+      // 格式化日期與月份
       var month = monthVal instanceof Date ? Utilities.formatDate(monthVal, "GMT+8", "yyyy-MM") : String(monthVal || "").substring(0, 7);
       var dateStr = dateVal instanceof Date ? Utilities.formatDate(dateVal, "GMT+8", "yyyy-MM-dd") : String(dateVal || (month ? month + "-01" : ""));
       if (!month && dateStr && dateStr.length >= 7) month = dateStr.substring(0, 7);
       var timestampStr = timestampVal ? (timestampVal instanceof Date ? formatAmPmTime(timestampVal) : String(timestampVal)) : dateStr + " 上午 12:00";
+
+      // 預設類型與付款人歸一化
+      if (!type || (type.indexOf("支出") === -1 && type.indexOf("收入") === -1)) {
+        type = (item.indexOf("公積金") !== -1 || item.indexOf("撥入") !== -1) ? "收入-固定公積金" : "支出-日常代墊";
+      }
+      if (!payer || payer === "未指定" || payer === "未填寫") {
+        payer = type === "收入-固定公積金" ? "共同帳戶" : DEFAULT_USER_A_NAME;
+      }
 
       recordsList.push({
         id: idVal,

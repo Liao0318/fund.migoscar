@@ -497,12 +497,36 @@ export function resolveUserPersonas(
   };
 }
 
+export const NON_PERSON_ITEM_TERMS = [
+  '晚餐', '午餐', '早餐', '宵夜', '點心', '下午茶', '夜市', '便當', '吃飯', '大餐',
+  '大全聯', '全聯', '好市多', '家樂福', '7-11', '7-eleven', '全家', '萊爾富', 'ok超商', '美廉社', '愛買', '寶雅', '屈臣氏', '康是美', '大潤發', 'ikea', '特力屋',
+  '日常生活支出', '日常代墊支出', '日常支出', '生活支出', '固定公積金', '公積金固定撥入', '支出-日常代墊', '收入-固定公積金',
+  '餐飲', '生活用品', '交通', '娛樂', '醫療', '住宿', '購物', '其他', '支出', '收入',
+  '加油', '高鐵', '台鐵', '捷運', '計程車', '停車費', '買菜', '水果', '飲料', '咖啡', '外送', 'ubereats', 'foodpanda',
+  '蝦皮', '淘寶', 'momo', 'pchome', '水電費', '瓦斯費', '房租', '管理費', '電信費', '網路費', '未分類項目'
+];
+
+export function isNonPersonTerm(text?: string): boolean {
+  if (!text || typeof text !== 'string') return true;
+  const s = text.trim().toLowerCase();
+  if (!s) return true;
+  if (/^\d+(\.\d+)?$/.test(s)) return true; // 純數字
+  if (s.includes('gmt') || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(s) || /^\d{4}[-/]\d{1,2}$/.test(s)) return true; // 日期
+  if (s.startsWith('rec_')) return true; // ID
+  return NON_PERSON_ITEM_TERMS.some(term => s === term || (s.length <= 8 && s.includes(term)));
+}
+
 /**
  * 檢查某一筆記帳紀錄是否屬於 User A (支援自訂姓名、暱稱、簡稱及舊版相容標記)
  */
 export function isRecordOfUserA(recordPayer: string, userA: UserPersona, userB: UserPersona): boolean {
   if (!recordPayer) return false;
   const p = recordPayer.trim();
+
+  // 排除品項、類別、金額與日期等非人名字串
+  if (isNonPersonTerm(p)) {
+    return false;
+  }
 
   // 排除共同帳戶
   if (p === '共同帳戶' || p === '共同基金' || p === '公積金' || p === '共同') {
@@ -563,6 +587,11 @@ export function isRecordOfUserA(recordPayer: string, userA: UserPersona, userB: 
 export function isRecordOfUserB(recordPayer: string, userA: UserPersona, userB: UserPersona): boolean {
   if (!recordPayer) return false;
   const p = recordPayer.trim();
+
+  // 排除品項、類別、金額與日期等非人名字串
+  if (isNonPersonTerm(p)) {
+    return false;
+  }
 
   // 排除共同帳戶
   if (p === '共同帳戶' || p === '共同基金' || p === '公積金' || p === '共同') {

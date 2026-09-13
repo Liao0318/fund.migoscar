@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.8.7';
+export const APP_VERSION = 'v2.8.8';
 export const APP_BUILD_DATE = '2026.09.13';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,16 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.8.8',
+    date: '2026.09.13',
+    title: '跨端試算表智慧欄位解析與消費品項／代墊人錯位自癒全面升級',
+    highlights: [
+      '解決跨端同步欄位錯位問題：全面升級雙端（Google Apps Script 雲端與客戶端自癒防護網）的資料解析引擎，精確區分收支類別（日常生活支出、固定公積金）與消費品項（如晚餐、大全聯），徹底解決代墊人被誤植為品項名稱與金額擷取歸零異常',
+      '非人名防禦比對：升級出資人判定邏輯，自動攔截消費品項、類別、店名與日期字串誤入代墊人名單，確保個人與待確認伴侶之代墊小計 100% 精準結算',
+      '公積金固定注資自動對齊：全面修正公積金固定撥入（如 $20,000）之來源識別，自動歸屬至共同帳戶與公積金收入池'
+    ]
+  },
   {
     version: 'v2.8.7',
     date: '2026.09.13',
