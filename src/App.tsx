@@ -974,6 +974,19 @@ export default function App() {
     }
   });
 
+  const formatShoppingCreatorName = useCallback((creator?: string) => {
+    if (!creator) return '夥伴';
+    const clean = creator.trim();
+    if (isRecordOfUserA(clean, userA, userB)) {
+      return userA.isCurrentUser ? `${userA.displayName} (您)` : userA.displayName;
+    }
+    if (isRecordOfUserB(clean, userA, userB)) {
+      if (userB.isPendingBinding) return '待確認伴侶';
+      return userB.isCurrentUser ? `${userB.displayName} (您)` : userB.displayName;
+    }
+    return clean;
+  }, [userA, userB]);
+
   const handleGenerateNewInviteCode = () => {
     const cleanGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
     const cleanSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
@@ -6964,7 +6977,7 @@ export default function App() {
                             {/* 底部時間與詳情按鈕 */}
                             <div className="mt-3 pt-2 border-t border-[#F3F0E6] flex flex-wrap items-center justify-between gap-1 text-[10px] text-[#A39E92]">
                               <span className="truncate max-w-[200px] sm:max-w-none">
-                                登記人：{item.creator || '夥伴'}
+                                登記人：{formatShoppingCreatorName(item.creator)}
                                 {(() => {
                                   const displayTime = getShoppingItemDisplayTime(item);
                                   return displayTime ? ` · ${displayTime}` : '';
@@ -7288,6 +7301,7 @@ export default function App() {
         shoppingStores={shoppingStores}
         onOpenManageStores={() => setIsManageStoresOpen(true)}
         currentUser={currentUser}
+        partnerBindingInfo={partnerBindingInfo}
       />
 
       {/* 🛒 新增/編輯採購項目專屬 Modal */}
@@ -7300,6 +7314,7 @@ export default function App() {
         shoppingStores={shoppingStores}
         onOpenManageStores={() => setIsManageStoresOpen(true)}
         currentUser={currentUser}
+        partnerBindingInfo={partnerBindingInfo}
       />
 
       {/* 🏪 管理常用商店 Modal */}
@@ -7333,6 +7348,8 @@ export default function App() {
         onToggleStatus={handleToggleShoppingStatus}
         onDelete={handleDeleteShoppingItem}
         onConvertToRecord={handleConvertShoppingToRecord}
+        currentUser={currentUser}
+        partnerBindingInfo={partnerBindingInfo}
       />
 
       {/* ✈️ 各國即時匯率與出國幣值試算器 Modal */}

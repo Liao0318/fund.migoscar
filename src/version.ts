@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.8.2';
+export const APP_VERSION = 'v2.8.3';
 export const APP_BUILD_DATE = '2026.09.13';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.8.3',
+    date: '2026.09.13',
+    title: '生活採購與代墊借還隨時即時同步與身分動態適配全面升級',
+    highlights: [
+      '生活採購與代墊借還隨時即時同步：完全比照公積金與記帳模組，無須手動重新整理，背景高頻輪詢與視窗焦點切換時無感自動更新最新清單與結算狀態',
+      '跨裝置 Google 試算表連線全面連動：生活採購待買清單、常用門市、代墊結算與旅行分攤資料於任何裝置新增或修改皆即時雙向寫入與同步',
+      '採購登記人與出資身分動態映射：全面接入動態 Persona 引擎，在採購清單卡片、新增對話框與詳情彈窗中正確將登記人顯示為「您」或「待確認伴侶」，消除任何舊版硬編碼不一致',
+      '彈窗上下文身分資訊完整傳遞：優化 AddRecordModal、AddShoppingModal 與 ShoppingDetailModal 之身分推導，保障跨裝置操作時體驗統一'
+    ]
+  },
   {
     version: 'v2.8.2',
     date: '2026.09.13',

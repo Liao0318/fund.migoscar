@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingBag, Pencil, X, Check, Store, Clock, User, FileText, Plus, Trash2, CreditCard } from 'lucide-react';
-import { ShoppingItem } from '../../types';
+import { ShoppingItem, AuthUser, CoupleBindingInfo } from '../../types';
 import { getShoppingItemDisplayTime } from '../../utils/formatters';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
 
 interface ShoppingDetailModalProps {
   item: ShoppingItem | null;
@@ -11,6 +12,8 @@ interface ShoppingDetailModalProps {
   onToggleStatus: (id: string, currentStatus: string) => void;
   onDelete: (id: string, name: string) => void;
   onConvertToRecord?: (item: ShoppingItem) => void;
+  currentUser?: AuthUser | null;
+  partnerBindingInfo?: CoupleBindingInfo | null;
 }
 
 export const ShoppingDetailModal: React.FC<ShoppingDetailModalProps> = ({
@@ -19,8 +22,26 @@ export const ShoppingDetailModal: React.FC<ShoppingDetailModalProps> = ({
   onEdit,
   onToggleStatus,
   onDelete,
-  onConvertToRecord
+  onConvertToRecord,
+  currentUser,
+  partnerBindingInfo
 }) => {
+  const { userA, userB } = useMemo(() => {
+    return resolveUserPersonas(currentUser, partnerBindingInfo);
+  }, [currentUser, partnerBindingInfo]);
+
+  const displayCreator = useMemo(() => {
+    if (!item?.creator) return '夥伴';
+    const clean = item.creator.trim();
+    if (isRecordOfUserA(clean, userA, userB)) {
+      return userA.isCurrentUser ? `${userA.displayName} (您)` : userA.displayName;
+    }
+    if (isRecordOfUserB(clean, userA, userB)) {
+      if (userB.isPendingBinding) return '待確認伴侶';
+      return userB.isCurrentUser ? `${userB.displayName} (您)` : userB.displayName;
+    }
+    return clean;
+  }, [item?.creator, userA, userB]);
   return (
     <AnimatePresence>
       {item && (
@@ -158,7 +179,7 @@ export const ShoppingDetailModal: React.FC<ShoppingDetailModalProps> = ({
                   <span className="text-[10px] text-[#A39E92] font-semibold flex items-center gap-1 mb-1">
                     <User className="w-3 h-3 text-amber-700" /> 登記人
                   </span>
-                  <p className="text-xs font-bold text-[#3E3A36]">{item.creator || '夥伴'}</p>
+                  <p className="text-xs font-bold text-[#3E3A36]">{displayCreator}</p>
                 </div>
 
                 <div className="bg-[#FAF9F5] p-3 rounded-xl border border-[#EFECE6]">
