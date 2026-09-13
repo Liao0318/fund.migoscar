@@ -425,7 +425,7 @@ export async function getUserCloudConfig(
     } catch (err) {}
   }
 
-  // 2.5 檢查全系統資料庫（若伺服器已記錄）
+  // 2.5 檢查全系統資料庫（若伺服器已記錄，且嚴格屬於此使用者）
   if (hasBackendServer()) {
     try {
       const sysRes = await asyncWithTimeout(fetch('/api/system-database'), 1500, null as any);
@@ -433,23 +433,26 @@ export async function getUserCloudConfig(
         const sysData = await sysRes.json();
         if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
           const sysDb = sysData.database;
-          const synthesized: UserCloudConfig = {
-            email: cleanEmail,
-            name: '',
-            gasWebUrl: sysDb.gasWebUrl,
-            deploySheetUrl: sysDb.deploySheetUrl || '',
-            updatedAt: sysDb.updatedAt || new Date().toISOString()
-          };
-          try {
-            localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(synthesized));
-            localStorage.setItem('muji_gas_web_url', synthesized.gasWebUrl!);
-            localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, synthesized.gasWebUrl!);
-            localStorage.setItem('banban_permanent_gas_url', synthesized.gasWebUrl!);
-            localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, synthesized.gasWebUrl!);
-            localStorage.setItem('banban_device_master_gas', synthesized.gasWebUrl!);
-            localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
-          } catch (e) {}
-          return synthesized;
+          // 🛡️ 嚴格使用者隔離：唯有當系統資料庫明確由該使用者本人設定時才採用
+          if (sysDb.configuredBy && sysDb.configuredBy.trim().toLowerCase() === cleanEmail) {
+            const synthesized: UserCloudConfig = {
+              email: cleanEmail,
+              name: '',
+              gasWebUrl: sysDb.gasWebUrl,
+              deploySheetUrl: sysDb.deploySheetUrl || '',
+              updatedAt: sysDb.updatedAt || new Date().toISOString()
+            };
+            try {
+              localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(synthesized));
+              localStorage.setItem('muji_gas_web_url', synthesized.gasWebUrl!);
+              localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, synthesized.gasWebUrl!);
+              localStorage.setItem('banban_permanent_gas_url', synthesized.gasWebUrl!);
+              localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, synthesized.gasWebUrl!);
+              localStorage.setItem('banban_device_master_gas', synthesized.gasWebUrl!);
+              localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
+            } catch (e) {}
+            return synthesized;
+          }
         }
       }
     } catch (e) {}
@@ -529,27 +532,90 @@ export function getUserNotifySettings(email?: string): AppNotifySettings | null 
 }
 
 /**
-  * 登出時清空當前工作階段快取（切換帳號或登出時，絕不清除本機資料庫與伴侶連線設定！）
+  * 登出時清空當前工作階段快取（安全清除當前用戶的會話快取，避免殘留至下一個登入用戶）
   */
 export function clearAllSessionLedgerCache(): void {
-  const keysToRemove = [
+  const globalSessionKeys = [
     'banban_auth_user',
     'muji_ledger_data',
     'banban_split_records',
+    'banban_split_summary',
     'banban_shopping_items',
     'banban_chat_messages',
     'muji_notifications',
     'muji_notification_day',
     'banban_is_sandbox_mode',
-    'banban_is_guest_mode'
+    'banban_is_guest_mode',
+    'banban_sync_version',
+    'banban_partner_binding',
+    'banban_active_invite',
+    'banban_pending_invite_code',
+    'muji_gas_web_url',
+    'muji_sheet_url',
+    'muji_deploy_sheet_url',
+    'banban_permanent_gas_url',
+    'banban_permanent_sheet_url',
+    'banban_device_master_gas',
+    'banban_device_master_sheet',
+    'banban_travel_trips',
+    'banban_travel_expenses',
+    'banban_travel_wishlist'
   ];
 
-  // ⚠️ 嚴格注意：絕不刪除資料庫連線金鑰與伴侶綁定設定！
-  // muji_gas_web_url, muji_sheet_url, banban_permanent_gas_url, banban_device_master_gas,
-  // 以及伴侶綁定設定與邀請碼，均為本機與使用者之持久設定，登出絕不可抹除！
-  keysToRemove.forEach(k => {
+  globalSessionKeys.forEach(k => {
     try {
       localStorage.removeItem(k);
     } catch (e) {}
   });
+
+  try {
+    sessionStorage.clear();
+  } catch (e) {}
 }
+
+/**
+ * 徹底硬重設並清除特定使用者（或當前登出帳號）的所有本地狀態與殘留金鑰，
+ * 確保在同一台裝置切換帳號（登出 A 帳號，以 B 帳號登入）時，絕對不會殘留 A 帳號的資料、帳本、網址或伴侶狀態！
+ */
+export function hardResetUserLocalState(email?: string): void {
+  // 1. 先清空全域當前活躍狀態
+  clearAllSessionLedgerCache();
+
+  // 2. 若指定特定 email，清理該 email 的專屬所有鍵值
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (cleanEmail) {
+    const userSpecificKeys = [
+      `muji_gas_web_url_${cleanEmail}`,
+      `muji_sheet_url_${cleanEmail}`,
+      `banban_permanent_gas_url_${cleanEmail}`,
+      `banban_permanent_sheet_url_${cleanEmail}`,
+      `${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`,
+      `banban_user_nickname_${cleanEmail}`,
+      `muji_ledger_data_${cleanEmail}`,
+      `banban_sync_version_${cleanEmail}`,
+      `muji_notification_settings_${cleanEmail}`
+    ];
+    userSpecificKeys.forEach(k => {
+      try {
+        localStorage.removeItem(k);
+      } catch (e) {}
+    });
+  }
+
+  // 3. 遍歷 localStorage，清除任何帶有該 email 的殘留金鑰
+  try {
+    const keysToDelete: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && cleanEmail && k.includes(cleanEmail)) {
+        keysToDelete.push(k);
+      }
+    }
+    keysToDelete.forEach(k => {
+      try {
+        localStorage.removeItem(k);
+      } catch (e) {}
+    });
+  } catch (e) {}
+}
+

@@ -136,6 +136,7 @@ import {
   saveUserNotifySettings,
   getUserNotifySettings,
   clearAllSessionLedgerCache,
+  hardResetUserLocalState,
   scanAndRecoverGasUrl
 } from './utils/userConfigService';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -287,15 +288,17 @@ const isMonthReconciled = (month: string, list: string[]): boolean => {
 
 // 已知代墊人/出資人姓名關鍵字判定清單
 export const KNOWN_PAYER_KEYWORDS = [
-  '廖', '周', '廖尹丞', '周沛緹', '小廖', '小周', 
-  '共同帳戶', '共同', '待確認伴侶', '待確認', '待', '伴侶'
+  '共同帳戶', '共同', '待確認伴侶', '待確認', '待', '伴侶', '我', '本人'
 ];
 
 export const isPayerNameRecognized = (p?: string): boolean => {
   if (!p || typeof p !== 'string') return false;
   const s = p.trim();
   if (!s) return false;
-  return KNOWN_PAYER_KEYWORDS.some(k => s === k || s.includes(k));
+  if (/^\d+(\.\d+)?$/.test(s)) return false; // 純數字不是人名
+  if (s.includes('GMT') || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(s)) return false; // 日期字串不是人名
+  if (s.startsWith('rec_')) return false;
+  return true;
 };
 
 // 🛡️ 智慧對帳紀錄修復防護網：自動校正 Google 試算表可能因欄位推移或表頭版本不一致造成的資料錯位
@@ -445,33 +448,23 @@ export const sanitizeAndHealRecord = (r: any): RecordItem => {
       trueType = '支出-日常代墊';
     }
 
-    // 🎯 還原代墊人/付款人 (truePayer) —— 徹底解決代墊人變跟項目名稱一樣的問題！
+    // 🎯 還原代墊人/付款人 (truePayer) —— 解決錯位並保留真實填寫的人名
     let truePayer = '';
     if (trueType === '收入-固定公積金') {
       truePayer = '共同帳戶';
     } else {
-      // 支出項目：代墊人必須是真實人名，絕對不能等於項目名稱（例如絕對不能是「晚餐」或「大全聯」）
+      // 支出項目：代墊人必須是人名或出資人，若 rawPayer 存在且不等於品項，直接採用
       if (rawPayer && rawPayer !== trueItem && isPayerNameRecognized(rawPayer)) {
-        // rawPayer 本身就是合法出資人人名
-        if (rawPayer.includes('周') || rawPayer.includes('沛緹') || rawPayer.includes('待')) {
-          truePayer = '周沛緹';
-        } else if (rawPayer.includes('共同')) {
-          truePayer = '共同帳戶';
-        } else {
-          truePayer = '廖尹丞';
-        }
+        truePayer = rawPayer;
       } else {
-        // rawPayer 是品項名稱或被污染，必須自上下文或帳本規則還原出資人
-        const ctx = `${rec.amount || ''} ${rec.type || ''} ${rec.timestamp || ''} ${rec.note || ''} ${rec.rawPayer || ''}`;
-        if (ctx.includes('周沛緹') || ctx.includes('沛緹') || ctx.includes('周') || ctx.includes('待')) {
-          truePayer = '周沛緹';
-        } else if (ctx.includes('廖尹丞') || ctx.includes('尹丞') || ctx.includes('廖')) {
-          truePayer = '廖尹丞';
-        } else if (ctx.includes('共同')) {
+        // rawPayer 是品項名稱或被污染，自上下文嘗試擷取
+        const ctx = `${rec.note || ''} ${rec.rawPayer || ''}`;
+        if (ctx.includes('共同')) {
           truePayer = '共同帳戶';
+        } else if (rawPayer && rawPayer !== trueItem) {
+          truePayer = rawPayer;
         } else {
-          // 預設為主要日常代墊人廖尹丞
-          truePayer = '廖尹丞';
+          truePayer = '主要付款人';
         }
       }
     }
@@ -526,23 +519,11 @@ export const sanitizeAndHealRecord = (r: any): RecordItem => {
     } else {
       rec.type = '支出-日常代墊';
 
-      // 關鍵防禦：若 rec.payer 等於 rec.item（例如「晚餐」或「大全聯」）或非合法出資人人名，強制矯正
-      if (!rawPayer || rawPayer === rawItem || !isPayerNameRecognized(rawPayer)) {
-        const ctx = `${rawItem} ${rec.timestamp || ''} ${rec.amount || ''} ${rec.note || ''}`;
-        if (ctx.includes('周') || ctx.includes('沛緹') || ctx.includes('待')) {
-          rec.payer = '周沛緹';
-        } else {
-          rec.payer = '廖尹丞';
-        }
+      // 關鍵防禦：保留真實 payer，若空或等於 item 則給予預設
+      if (!rawPayer || rawPayer === rawItem) {
+        rec.payer = '主要付款人';
       } else {
-        // 標準化人名格式
-        if (rawPayer.includes('周') || rawPayer.includes('沛緹') || rawPayer.includes('待')) {
-          rec.payer = '周沛緹';
-        } else if (rawPayer.includes('共同')) {
-          rec.payer = '共同帳戶';
-        } else {
-          rec.payer = '廖尹丞';
-        }
+        rec.payer = rawPayer;
       }
     }
   }
@@ -617,7 +598,7 @@ export default function App() {
           }
 
           const userSaved = cleanEmail ? localStorage.getItem(`muji_ledger_data_${cleanEmail}`) : null;
-          const saved = userSaved || localStorage.getItem('muji_ledger_data');
+          const saved = cleanEmail ? userSaved : localStorage.getItem('muji_ledger_data');
           if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
@@ -911,15 +892,26 @@ export default function App() {
     if (!p) return false;
     const clean = p.trim();
     if (isRecordOfUserA(clean, userA, userB)) return true;
-    return clean === userA.name || clean === userA.displayName || clean === userA.shortName || clean.includes(userA.shortName) || clean === '廖尹丞' || clean === '廖' || clean.includes('廖') || clean.includes('尹丞');
-  }, [userA, userB]);
+    if (userA.name && clean === userA.name) return true;
+    if (userA.displayName && clean === userA.displayName) return true;
+    if (userA.shortName && clean === userA.shortName) return true;
+    if (userA.nickname && clean === userA.nickname) return true;
+    if (currentUser?.isDevSandbox && (clean.includes('架構') || clean === '廖尹丞' || clean === '廖')) return true;
+    return false;
+  }, [userA, userB, currentUser?.isDevSandbox]);
 
   const isUserBPayer = useCallback((p?: string) => {
     if (!p) return false;
     const clean = p.trim();
     if (isRecordOfUserB(clean, userA, userB)) return true;
-    return clean === userB.name || clean === userB.displayName || clean === userB.shortName || clean.includes(userB.shortName) || clean === '周沛緹' || clean === '周' || clean.includes('周') || clean.includes('沛緹') || clean.includes('待') || clean.includes('伴侶');
-  }, [userA, userB]);
+    if (userB.name && clean === userB.name) return true;
+    if (userB.displayName && clean === userB.displayName) return true;
+    if (userB.shortName && clean === userB.shortName) return true;
+    if (userB.nickname && clean === userB.nickname) return true;
+    if (userB.isPendingBinding && (clean === '待' || clean === '待確認' || clean === '待確認伴侶' || clean === '伴侶')) return true;
+    if (currentUser?.isDevSandbox && (clean.includes('測試伴侶') || clean === '周沛緹' || clean === '周')) return true;
+    return false;
+  }, [userA, userB, currentUser?.isDevSandbox]);
 
   const calculateLocalSplitSummary = useCallback((currentItems: SplitRecordItem[]) => {
     let liaoOwesZhou = 0;
@@ -1957,6 +1949,7 @@ export default function App() {
   };
 
   const handleReturnToLoginPortal = () => {
+    const emailToClean = currentUser?.email;
     signOutGoogle().catch(() => {});
     setCurrentUser(null);
     setPartnerBindingInfo(null);
@@ -1979,6 +1972,7 @@ export default function App() {
     });
     setShoppingItems([]);
     try {
+      hardResetUserLocalState(emailToClean);
       clearAllSessionLedgerCache();
       window.dispatchEvent(new CustomEvent('travel-data-updated', {
         detail: { trips: [], expenses: [], wishlist: [] }
@@ -1988,6 +1982,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    const emailToClean = currentUser?.email;
     signOutGoogle().catch(() => {});
     setCurrentUser(null);
     setPartnerBindingInfo(null);
@@ -2010,6 +2005,7 @@ export default function App() {
     });
     setShoppingItems([]);
     try {
+      hardResetUserLocalState(emailToClean);
       clearAllSessionLedgerCache();
       window.dispatchEvent(new CustomEvent('travel-data-updated', {
         detail: { trips: [], expenses: [], wishlist: [] }
@@ -2978,30 +2974,14 @@ export default function App() {
       }
 
       // 1. 若雲端尚未有設定，但此裝置本地存有該使用者專屬有效網址，才上傳同步至伺服器
-      const localGas = (cleanEmail ? localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) : null) ||
-        (!cleanEmail ? (localStorage.getItem('muji_gas_web_url') || 
-        localStorage.getItem('banban_permanent_gas_url') || 
-        localStorage.getItem('banban_device_master_gas')) : null);
-      const localSheet = (cleanEmail ? localStorage.getItem(`muji_sheet_url_${cleanEmail}`) : null) ||
-        (!cleanEmail ? (localStorage.getItem('muji_sheet_url') || 
-        localStorage.getItem('banban_permanent_sheet_url') || 
-        localStorage.getItem('banban_device_master_sheet')) : null);
+      const localGas = cleanEmail ? localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) : null;
+      const localSheet = cleanEmail ? localStorage.getItem(`muji_sheet_url_${cleanEmail}`) : null;
       
       if (localGas && localGas.trim().startsWith('http')) {
         const safeGas = localGas.trim();
         const safeSheet = (localSheet || '').trim();
         if (hasBackendServer()) {
           try {
-            fetch('/api/system-database', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                gasWebUrl: safeGas,
-                deploySheetUrl: safeSheet,
-                email: cleanEmail
-              })
-            }).catch(() => {});
-
             if (cleanEmail) {
               fetch('/api/user-config', {
                 method: 'POST',
@@ -3014,36 +2994,6 @@ export default function App() {
                   inviteCode: currentInviteCode
                 })
               }).catch(() => {});
-            }
-          } catch (e) {}
-        }
-      } else {
-        // 2. 若此裝置本地無網址，向伺服器系統資料庫拉取
-        if (hasBackendServer()) {
-          try {
-            const res = await fetch('/api/system-database');
-            if (res.ok) {
-              const data = await res.json();
-              if (data && data.success && data.database && data.database.gasWebUrl) {
-                const sysGas = data.database.gasWebUrl.trim();
-                const sysSheet = (data.database.deploySheetUrl || '').trim();
-                setGasWebUrl(sysGas);
-                if (sysSheet) setDeploySheetUrl(sysSheet);
-                try {
-                  localStorage.setItem('muji_gas_web_url', sysGas);
-                  localStorage.setItem('banban_permanent_gas_url', sysGas);
-                  localStorage.setItem('banban_device_master_gas', sysGas);
-                  if (sysSheet) {
-                    localStorage.setItem('muji_sheet_url', sysSheet);
-                    localStorage.setItem('banban_permanent_sheet_url', sysSheet);
-                  }
-                } catch (e) {}
-                // 🚀 關鍵修復：立即自動拉取試算表最新帳本明細
-                fetchDashboardData(false, true, sysGas);
-                fetchShoppingData(true, sysGas);
-                fetchSplitData(true, sysGas);
-                fetchTravelData(true, sysGas);
-              }
             }
           } catch (e) {}
         }

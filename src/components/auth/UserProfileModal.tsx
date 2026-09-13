@@ -393,221 +393,27 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </div>
               )}
 
-              {/* 💌 伴侶邀請與情侶帳本綁定區 (僅限登入 Google 帳號用戶，訪客模式不顯示) */}
+              {/* 💌 伴侶配對模式（暫停舊版，準備全新設計） */}
               {currentUser && (
-                isAdmin ? (
-                  /* 管理員專屬：派發伴侶邀請碼卡片 */
-                  <div className="bg-gradient-to-br from-[#FFFDF9] to-[#FDF8EE] rounded-2xl p-4 border border-amber-300/80 shadow-2xs space-y-3.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold">
-                          <Heart className="w-4 h-4 text-rose-600 fill-rose-500" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1">
-                            <span>💌 派發伴侶專屬邀請碼</span>
-                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${hasDatabaseBound ? 'bg-rose-100 text-rose-800' : 'bg-amber-200 text-amber-900'}`}>
-                              {hasDatabaseBound ? '已解鎖' : '未解鎖'}
-                            </span>
-                          </h4>
-                          <p className="text-[10px] text-[#8C8475]">
-                            {hasDatabaseBound ? '伴侶登入輸入此碼即可自動綁定並同步資料庫' : '需先完成 Google 試算表與 API 資料庫綁定'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                  {!hasDatabaseBound ? (
-                    /* 🔒 未完成資料庫綁定時的鎖定提示卡 */
-                    <div className="bg-amber-50/80 rounded-xl p-3.5 border border-amber-300 space-y-2.5">
-                      <div className="flex items-start gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-amber-200 text-amber-900 flex items-center justify-center shrink-0 mt-0.5">
-                          <Lock className="w-4 h-4 text-amber-900" />
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-xs font-bold text-amber-950">尚未完成資料庫與 API 綁定</div>
-                          <p className="text-[11px] text-amber-900/80 leading-relaxed">
-                            主帳號需先將 Google 試算表與 Apps Script API 綁定至此 Google 帳號，系統建立好私有雲端資料庫後，才能為伴侶派發專屬邀請代碼。
-                          </p>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          if (onOpenDatabaseOnboarding) {
-                            onOpenDatabaseOnboarding();
-                          } else {
-                            onOpenGasDeploy();
-                          }
-                        }}
-                        className="w-full py-2 px-3 bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-98"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-amber-200" />
-                        <span>🚀 立即綁定資料庫與 API (解鎖邀請碼)</span>
-                      </button>
-                    </div>
-                  ) : (
-                    /* ✅ 已完成資料庫綁定：展示邀請代碼 */
-                    <>
-                      {/* 邀請碼展示卡片 */}
-                      <div className="bg-white rounded-xl p-3 border-2 border-amber-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs">
-                        <div>
-                          <div className="text-[10px] text-emerald-700 font-bold flex flex-wrap items-center gap-1.5">
-                            <span className="flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              <span>專屬伴侶邀請代碼</span>
-                            </span>
-                            <div className="inline-flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-rose-500" />
-                              {inviteRemainingSecs > 0 ? (
-                                <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
-                                  時效剩餘 {formatRemainingTime(inviteRemainingSecs)}
-                                </span>
-                              ) : (
-                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                                  已逾期 (請重新生成)
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="font-mono text-xl sm:text-2xl font-black text-amber-900 tracking-wider mt-0.5">
-                            {currentInviteCode}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {onGenerateNewInviteCode && (
-                            <button
-                              type="button"
-                              onClick={onGenerateNewInviteCode}
-                              className="p-2 rounded-xl bg-[#FAF8F3] hover:bg-amber-100 text-amber-900 border border-amber-200 transition-all cursor-pointer shadow-2xs"
-                              title="重新隨機派發 15 分鐘新邀請碼"
-                            >
-                              <RefreshCw className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={handleCopyCodeOnly}
-                            className="px-3 py-2 rounded-xl bg-amber-800 hover:bg-amber-900 text-white font-bold text-xs flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
-                          >
-                            {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                            <span>{copiedCode ? '已複製！' : '複製代碼'}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* 一鍵複製專屬邀請卡與連結 */}
-                      <button
-                        type="button"
-                        onClick={handleCopyShareClick}
-                        className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-98"
-                      >
-                        {copiedShare ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>已複製邀請函與專屬加入連結！</span>
-                          </>
-                        ) : (
-                          <>
-                            <Share2 className="w-3.5 h-3.5" />
-                            <span>一鍵複製伴侶專屬邀請卡與連結 📲</span>
-                          </>
-                        )}
-                      </button>
-
-                      {/* 伴侶綁定狀態 */}
-                      <div className="bg-white/80 p-2.5 rounded-xl border border-amber-100 text-xs space-y-1">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-[#8C8475] font-bold">{isPartner ? '管理者連線狀態：' : '伴侶綁定狀態：'}</span>
-                          {hasValidPartner ? (
-                            <span className="text-emerald-700 font-bold flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>{isPartner ? `已連線 (${partnerDisplayName})` : `已綁定 (${partnerDisplayName})`}</span>
-                            </span>
-                          ) : (
-                            <span className="text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                              ⏳ 等待伴侶輸入邀請碼加入
-                            </span>
-                          )}
-                        </div>
-                        {hasValidPartner && partnerBindingInfo?.partnerEmail && (
-                          <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#F4EFE6]">
-                            <span className="text-[#8C8475] font-mono">{partnerBindingInfo.partnerEmail}</span>
-                            {onUnbindPartner && (
-                              <button
-                                type="button"
-                                onClick={onUnbindPartner}
-                                className="text-[10px] text-rose-600 hover:text-rose-800 underline font-bold cursor-pointer"
-                              >
-                                解除伴侶綁定
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                /* 伴侶專屬：帳本綁定資訊卡片 */
-                <div className="bg-gradient-to-br from-rose-50/70 to-[#FFF9F9] rounded-2xl p-4 border border-rose-200 shadow-2xs space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
-                      <Heart className="w-4 h-4 fill-rose-600 text-rose-600" />
+                <div className="bg-gradient-to-br from-[#FFFDF9] to-[#FDF8EE] rounded-2xl p-4 border border-amber-200 shadow-2xs space-y-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0">
+                      <Heart className="w-4 h-4 text-rose-600 fill-rose-500" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-extrabold text-rose-900">
-                        💖 已加入情侶共同帳本
+                      <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5">
+                        <span>💖 伴侶配對模式</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          重新設計中 🛠️
+                        </span>
                       </h4>
-                      <p className="text-[10px] text-rose-700">記帳資料已雙向即時同步</p>
+                      <p className="text-[11px] text-[#8C8475] mt-0.5">
+                        目前帳本採用獨立隔離與個人化雲端資料庫同步，伴侶互聯配對功能正在進行全新架構規劃與重構。
+                      </p>
                     </div>
                   </div>
-
-                  <div className="bg-white rounded-xl p-3 border border-rose-100 space-y-2 text-xs">
-                    <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
-                      <span>👑 帳本主管理者：</span>
-                      <span className="font-bold text-[#3E3A36]">
-                        {currentUser?.adminName || '主管理員'}{currentUser?.adminEmail ? ` (${currentUser.adminEmail})` : ''}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
-                      <span>🔑 使用邀請碼：</span>
-                      <span className="font-mono font-bold text-rose-800 bg-rose-50 px-2 py-0.5 rounded">
-                        {currentUser?.inviteCode || currentInviteCode}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-[#7A7366]">
-                      <span>🟢 資料庫狀態：</span>
-                      <span className="font-bold text-emerald-700">即時雙向連動中</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-rose-100/60 p-2.5 rounded-xl border border-rose-200 text-[11px] text-rose-900 flex items-start gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    <span>
-                      API 與試算表連線設定由主管理員統一維護，伴侶端可無憂進行日常記帳、借還代墊與採購清單！
-                    </span>
-                  </div>
-
-                  {onUnbindPartner && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onUnbindPartner();
-                        onClose();
-                      }}
-                      className="w-full py-2 px-3 rounded-xl bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs border border-rose-300 flex items-center justify-center gap-1 transition-all cursor-pointer shadow-2xs"
-                    >
-                      <Unlink className="w-3.5 h-3.5" />
-                      <span>更換邀請碼或解除綁定</span>
-                    </button>
-                  )}
                 </div>
-              ))}
+              )}
 
               {/* 🔑 試算表連線金鑰與同步中心 */}
               {!currentUser ? (

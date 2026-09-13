@@ -58,55 +58,19 @@ async function startServer() {
       const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
       let config = configs[email] || null;
 
-      // 若此帳號尚無有效獨立資料庫設定，自動進行全端多層級反查推導
+      // 🛡️ 嚴格帳號隔離：僅從該帳號自身歷史專屬備份檢索，絕不可跨帳號借用或回退至全域資料庫！
       if (!config || !isValidGasUrl(config.gasWebUrl)) {
-        const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
         const ledgers = readJsonFile<Record<string, any>>(USER_LEDGER_DATA_FILE, {});
         const userLedger = ledgers[email];
-        const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
-        const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
 
-        let candidateGas = '';
-        let candidateSheet = '';
-
-        // 1. 優先從該帳號歷史備份帳本中檢索
         if (userLedger && isValidGasUrl(userLedger.gasWebUrl)) {
-          candidateGas = userLedger.gasWebUrl.trim();
-          candidateSheet = userLedger.deploySheetUrl || '';
-        }
-
-        // 2. 檢索情侶綁定中該使用者或對方的資料庫
-        if (!candidateGas && bindings[email] && isValidGasUrl(bindings[email].gasWebUrl)) {
-          candidateGas = bindings[email].gasWebUrl.trim();
-          candidateSheet = bindings[email].deploySheetUrl || '';
-        }
-
-        // 3. 檢索該使用者建立過的任何有效邀請
-        if (!candidateGas) {
-          const matchedInvite = Object.values(invites).find((inv: any) => 
-            inv && (inv.adminEmail?.toLowerCase() === email || inv.partnerEmail?.toLowerCase() === email) && isValidGasUrl(inv.gasWebUrl)
-          );
-          if (matchedInvite) {
-            candidateGas = matchedInvite.gasWebUrl.trim();
-            candidateSheet = matchedInvite.deploySheetUrl || '';
-          }
-        }
-
-        // 4. 檢索全系統資料庫
-        if (!candidateGas && sysDb && isValidGasUrl(sysDb.gasWebUrl)) {
-          candidateGas = sysDb.gasWebUrl.trim();
-          candidateSheet = sysDb.deploySheetUrl || '';
-        }
-
-        if (candidateGas) {
           config = {
             ...(config || {}),
             email,
-            gasWebUrl: candidateGas,
-            deploySheetUrl: candidateSheet,
+            gasWebUrl: userLedger.gasWebUrl.trim(),
+            deploySheetUrl: userLedger.deploySheetUrl || '',
             updatedAt: new Date().toISOString(),
           };
-          // 自動補全寫回，確保下次即刻命中
           configs[email] = config;
           writeJsonFile(USER_CONFIGS_FILE, configs);
         }
@@ -128,7 +92,6 @@ async function startServer() {
       const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
       const existing = configs[email] || {};
 
-      // 🛡️ 嚴格防止現有有效網址被空字串或測試網址覆蓋
       const safeGas = isValidGasUrl(payload.gasWebUrl)
         ? payload.gasWebUrl.trim()
         : (payload.forceClear ? '' : (isValidGasUrl(existing.gasWebUrl) ? existing.gasWebUrl : ''));
@@ -147,42 +110,18 @@ async function startServer() {
       };
       writeJsonFile(USER_CONFIGS_FILE, configs);
 
-      // 當有有效 GAS 網址時，同步至全系統資料庫
-      if (isValidGasUrl(safeGas)) {
-        const sysDb = {
-          gasWebUrl: safeGas,
-          deploySheetUrl: safeSheet,
-          configuredBy: email,
-          updatedAt: new Date().toISOString(),
-        };
-        writeJsonFile(SYSTEM_DATABASE_FILE, sysDb);
-      }
-
       return res.json({ success: true, config: configs[email] });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
   });
 
-  // 1.5 System Database API
+  // 1.5 System Database API (Strictly isolated, no cross-user fallback)
   app.get('/api/system-database', (_req, res) => {
     try {
       const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
       if (sysDb && isValidGasUrl(sysDb.gasWebUrl)) {
         return res.json({ success: true, database: sysDb });
-      }
-      // 搜尋是否有任一使用者已儲存真實有效網址
-      const configs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
-      const anyWithGas = Object.values(configs).find((c: any) => c && isValidGasUrl(c.gasWebUrl));
-      if (anyWithGas) {
-        const derived = {
-          gasWebUrl: anyWithGas.gasWebUrl,
-          deploySheetUrl: anyWithGas.deploySheetUrl || '',
-          configuredBy: anyWithGas.email || '',
-          updatedAt: anyWithGas.updatedAt || new Date().toISOString(),
-        };
-        writeJsonFile(SYSTEM_DATABASE_FILE, derived);
-        return res.json({ success: true, database: derived });
       }
       return res.json({ success: false, database: null });
     } catch (err: any) {

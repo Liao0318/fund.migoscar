@@ -123,7 +123,7 @@ export function isIncomingFromPartner(n: AppNotification, currentUser?: AuthUser
   }
 
   // 2. 如果有明確的 actorRole / targetRole
-  const currentRole = currentUser?.role || (currentUser?.email?.toLowerCase().includes('oscar') ? '廖' : undefined);
+  const currentRole = currentUser?.role;
   if (currentRole) {
     if (n.actorRole && n.actorRole === currentRole) return false;
     if (n.targetRole && n.targetRole === currentRole) return true;
@@ -133,12 +133,9 @@ export function isIncomingFromPartner(n: AppNotification, currentUser?: AuthUser
   const myNames: string[] = [];
   if (currentUser?.name) myNames.push(currentUser.name);
   if (currentUser?.nickname) myNames.push(currentUser.nickname);
+  if (currentUser?.nickname1Char) myNames.push(currentUser.nickname1Char);
+  if (currentUser?.nickname2Char) myNames.push(currentUser.nickname2Char);
   if (currentUser?.role) myNames.push(currentUser.role);
-  if (currentRole === '廖' || currentUser?.email?.toLowerCase().includes('oscar')) {
-    myNames.push('廖尹丞', '廖', '尹丞');
-  } else if (currentRole === '周') {
-    myNames.push('周沛緹', '周', '沛緹');
-  }
 
   const titleAndDesc = `${n.title || ''} ${n.desc || ''} ${n.actorName || ''}`;
   const isSelfAction = myNames.some(name => name && titleAndDesc.includes(name));
@@ -150,11 +147,7 @@ export function isIncomingFromPartner(n: AppNotification, currentUser?: AuthUser
   const partnerNames: string[] = [];
   if (currentUser?.partnerName) partnerNames.push(currentUser.partnerName);
   if (currentUser?.adminName) partnerNames.push(currentUser.adminName);
-  if (currentRole === '廖' || currentUser?.email?.toLowerCase().includes('oscar')) {
-    partnerNames.push('周沛緹', '周', '沛緹');
-  } else if (currentRole === '周') {
-    partnerNames.push('廖尹丞', '廖', '尹丞');
-  }
+  if (currentUser?.partnerEmail) partnerNames.push(currentUser.partnerEmail);
   const isPartnerAction = partnerNames.some(name => name && titleAndDesc.includes(name));
   if (isPartnerAction) {
     return true;

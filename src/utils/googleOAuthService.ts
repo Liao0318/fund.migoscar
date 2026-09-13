@@ -101,7 +101,7 @@ export async function signInWithGooglePopup(): Promise<{ user: AuthUser; accessT
     const userEmail = (fbUser.email || '').trim().toLowerCase();
     const user: AuthUser = {
       id: userEmail || fbUser.uid,
-      name: cleanFbName || fbUser.email?.split('@')[0] || (role === '廖' ? '廖尹丞' : '周沛緹'),
+      name: cleanFbName || fbUser.displayName || fbUser.email?.split('@')[0] || '使用者',
       email: fbUser.email || '',
       avatar: fbUser.photoURL || undefined,
       role,
@@ -194,7 +194,7 @@ export async function requestGoogleOAuthToken(): Promise<{ user: AuthUser; acces
           const role = determineUserRole(cleanName, cleanEmail);
           const user: AuthUser = {
             id: cleanEmail,
-            name: cleanName || (role === '廖' ? '廖尹丞' : '周沛緹'),
+            name: cleanName || userInfo.name || cleanEmail.split('@')[0] || '使用者',
             email: userInfo.email,
             avatar: userInfo.picture,
             role,

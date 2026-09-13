@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.8.0';
+export const APP_VERSION = 'v2.8.1';
 export const APP_BUILD_DATE = '2026.09.13';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.8.1',
+    date: '2026.09.13',
+    title: '帳戶切換快取徹底隔離、移除硬編碼姓名與伴侶配對模組架構重構',
+    highlights: [
+      '徹底清除帳戶殘留快取：實作 hardResetUserLocalState 機制，於切換帳號或登出時全面清空前一使用者的本機記帳、搜尋與過濾快取，杜絕跨帳戶資料殘留',
+      '跨裝置資料庫嚴格隔離：在雲端資料庫設定同步邏輯中加入嚴格的帳號 Email 匹配校驗（configuredBy），防止不同帳號之間設定混淆',
+      '動態付款人與角色推導：全面移除底層硬編碼姓名，付款人與記帳者全面由目前登入帳號與自訂暱稱動態推導，未綁定前標準化為待確認伴侶',
+      '下架舊版伴侶配對模組：暫停舊版配對流程並將模組獨立隔離，為後續更流暢、穩定的新版伴侶雙向同步架構做好準備'
+    ]
+  },
   {
     version: 'v2.8.0',
     date: '2026.09.13',
