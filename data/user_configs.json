@@ -1,0 +1,23 @@
+{
+  "oscargh3359@gmail.com": {
+    "email": "oscargh3359@gmail.com",
+    "gasWebUrl": "",
+    "deploySheetUrl": "",
+    "updatedAt": "2026-09-12T15:36:52.378Z",
+    "inviteCode": "BB-EMVC"
+  },
+  "developer.admin@banbanji.internal": {
+    "email": "developer.admin@banbanji.internal",
+    "name": "系統架構師 (開發模式)",
+    "gasWebUrl": "",
+    "deploySheetUrl": "https://docs.google.com/spreadsheets/d/test",
+    "inviteCode": "BB-4JX9",
+    "updatedAt": "2026-09-12T16:36:46.222Z"
+  },
+  "test@example.com": {
+    "email": "test@example.com",
+    "gasWebUrl": "https://script.google.com/macros/s/test12345/exec",
+    "deploySheetUrl": "https://docs.google.com/spreadsheets/d/test123",
+    "updatedAt": "2026-09-12T16:49:08.158Z"
+  }
+}

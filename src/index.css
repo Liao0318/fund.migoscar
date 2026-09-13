@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans TC", sans-serif;
+  --font-mono: "Noto Sans TC", sans-serif;
+}
+
+@layer base {
+  *, ::before, ::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: 15px;
+    -webkit-text-size-adjust: 100%;
+    font-family: "Noto Sans TC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-optical-sizing: auto;
+    letter-spacing: 0.012em;
+    line-height: 1.58;
+  }
+
+  body {
+    font-family: "Noto Sans TC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-optical-sizing: auto;
+    letter-spacing: 0.012em;
+    line-height: 1.58;
+  }
+
+  @media (min-width: 640px) {
+    html {
+      font-size: 15.5px;
+    }
+  }
+
+  /* 數字等寬對齊設定，利於財務與分帳金額列表 */
+  .font-tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  input, select, textarea, button {
+    max-width: 100%;
+    font-family: "Noto Sans TC", sans-serif;
+  }
+}
+
+

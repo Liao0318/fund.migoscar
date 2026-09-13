@@ -1,0 +1,507 @@
+import React from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { FileCode, Settings, BellRing, Save, Globe, Check, Copy, Sparkles, Info, X, Sliders, Heart, Crown, Share2, Cloud, Database, AlertCircle, Download, FileSpreadsheet, ExternalLink } from 'lucide-react';
+import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
+import { AuthUser } from '../../types';
+import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
+
+interface GasDeployModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  deploySheetUrl: string;
+  setDeploySheetUrl: (v: string) => void;
+  gasWebUrl: string;
+  setGasWebUrl: (v: string) => void;
+  onOpenNotifySettings: () => void;
+  saveDeployConfig: () => void;
+  activeDeployCodeTab: 'codeGs' | 'indexHtml' | 'splitHtml';
+  setActiveDeployCodeTab: (tab: 'codeGs' | 'indexHtml' | 'splitHtml') => void;
+  copiedCodeType: string | null;
+  copyDeployCode: (type: 'codeGs' | 'indexHtml' | 'splitHtml') => void;
+  customizedCodeGs: string;
+  isSandboxMode?: boolean;
+  onToggleSandboxMode?: (enabled: boolean) => void;
+  currentUser?: AuthUser | null;
+  isGuestMode?: boolean;
+  onSwitchAccount?: () => void;
+  onOpenInviteManager?: () => void;
+  inviteCode?: string;
+}
+
+export const GasDeployModal: React.FC<GasDeployModalProps> = ({
+  isOpen,
+  onClose,
+  deploySheetUrl,
+  setDeploySheetUrl,
+  gasWebUrl,
+  setGasWebUrl,
+  onOpenNotifySettings,
+  saveDeployConfig,
+  activeDeployCodeTab,
+  setActiveDeployCodeTab,
+  copiedCodeType,
+  copyDeployCode,
+  customizedCodeGs,
+  isSandboxMode = false,
+  onToggleSandboxMode,
+  currentUser,
+  isGuestMode = false,
+  onSwitchAccount,
+  onOpenInviteManager,
+  inviteCode
+}) => {
+  const isPartner = currentUser?.userRole === 'partner' || Boolean(currentUser?.adminEmail);
+  const isAdmin = !isPartner && (currentUser?.userRole === 'admin' || !currentUser?.adminEmail);
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            className="bg-[#FAF9F5] rounded-2xl sm:rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl border border-[#E5E0D2] max-h-[90vh] flex flex-col my-auto"
+          >
+            {/* Modal 標題區 */}
+            <div className="p-4 sm:p-5 border-b border-[#E8E4D9] flex items-center justify-between bg-white shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold">
+                  <FileCode className="w-5 h-5 text-amber-800" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-[#3E3A36] text-sm sm:text-base flex items-center gap-2">
+                    <span>Google 試算表連線與部署代碼</span>
+                    <span className="text-[10px] text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-full font-bold border border-amber-200">
+                      資料庫同步
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-[#8C8475] font-medium">
+                    輸入 Google 試算表連線網址或 Web App API 網址，一鍵複製 Code.gs 與 HTML 進行部署
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-[#EFECE3] hover:bg-[#E5E1D5] flex items-center justify-center text-[#8C8475] transition-all cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal 內容區 */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1 text-left">
+              {/* 輸入設定區卡片 */}
+              {(!currentUser || isGuestMode) ? (
+                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-[#F2EDE1] pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Settings className="w-4 h-4 text-stone-500" />
+                      <span className="text-xs font-extrabold text-[#3E3A36]">試算表與 Web App 連線設定</span>
+                    </div>
+                    <span className="text-[10px] bg-stone-100 text-stone-700 font-bold px-2 py-0.5 rounded-full border border-stone-200">
+                      本機單機體驗模式
+                    </span>
+                  </div>
+
+                  <div className="bg-[#FAF8F5] p-4 rounded-2xl border border-[#EDE7D9] space-y-2.5 text-xs">
+                    <div className="flex items-center gap-2 font-bold text-amber-900">
+                      <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span>本機模式體驗中，不可登入或設定試算表金鑰</span>
+                    </div>
+                    <p className="text-[11px] text-[#7A7366] leading-relaxed">
+                      您目前正以「本機體驗模式」使用系統，所有日常記帳、代墊與旅遊紀錄均直接保存在本機手機/瀏覽器中。在未登入 Google 帳號的情況下，系統不開放輸入、登入或掛接 Google 試算表金鑰。
+                    </p>
+                    <p className="text-[11px] text-[#7A7366] leading-relaxed">
+                      若您想要使用 Google 試算表作為後端資料庫並享有雙向即時對帳與情侶共同記帳，請先登入 Google 帳號以解鎖設定！
+                    </p>
+                  </div>
+
+                  {onSwitchAccount && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onSwitchAccount();
+                      }}
+                      className="w-full py-2.5 px-3 bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-[0.99]"
+                    >
+                      <Cloud className="w-3.5 h-3.5 text-amber-200" />
+                      <span>登入 Google 帳號以解鎖試算表金鑰連線</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-4 shadow-2xs">
+                  <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5 border-b border-[#F2EDE1] pb-2">
+                    <Settings className="w-4 h-4 text-amber-800" />
+                    <span>試算表與 Web App 連線設定</span>
+                  </h4>
+
+                <div className="space-y-3">
+                  {/* Google Sheet URL */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#3E3A36] mb-1">
+                      Google 試算表連線網址 (Spreadsheet URL)
+                    </label>
+                    <input
+                      type="text"
+                      value={deploySheetUrl}
+                      onChange={(e) => setDeploySheetUrl(e.target.value)}
+                      placeholder="例如：https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKbB.../edit"
+                      className="w-full px-3.5 py-2.5 text-xs bg-[#FAF9F5] border border-[#E5E0D2] rounded-xl focus:outline-none focus:border-amber-800 focus:bg-white transition-all font-mono"
+                    />
+                    <p className="text-[10px] text-[#8C8475] mt-1">
+                      貼上您的 Google 試算表完整網址或 ID，Code.gs 將會自動綁定此資料庫。
+                    </p>
+                  </div>
+
+                  {/* Google Apps Script Web App API URL */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-[#3E3A36]">
+                        ⚡ Google Apps Script Web App API 網址 (雙向即時同步)
+                      </label>
+                      {gasWebUrl ? (
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
+                          🟢 Web App API 已連線
+                        </span>
+                      ) : (
+                        <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">
+                          {isSandboxMode ? '🧪 開發者沙盒測試' : '🟡 尚未設定金鑰'}
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="url"
+                      value={gasWebUrl}
+                      onChange={(e) => setGasWebUrl(e.target.value)}
+                      placeholder="例如：https://script.google.com/macros/s/AKfycbx.../exec"
+                      className="w-full px-3.5 py-2.5 text-xs bg-[#FAF9F5] border border-[#E5E0D2] rounded-xl focus:outline-none focus:border-amber-800 focus:bg-white transition-all font-mono"
+                    />
+                    <p className="text-[10px] text-[#8C8475] mt-1 leading-relaxed">
+                      在 Google Apps Script 點選「發布 ➔ 部署為網路應用程式」，執行身分選「我 (Me)」，存取權限選「所有人 (Anyone)」，貼上發布網址，即可讓伴伴記與 Google Sheet 100% 雙向即時資料抓取與對帳！
+                    </p>
+                  </div>
+
+                  {/* 📊 試算表 8 大工作頁對照表 (確保所有功能皆已連線) */}
+                  <div className="bg-[#FAF8F3] rounded-2xl p-4 border border-[#E5E0D2] space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-xs font-black text-[#3E3A36] flex items-center gap-1.5">
+                        <Database className="w-4 h-4 text-emerald-700" />
+                        <span>Google 試算表已連線之 8 大工作頁 (自動建立與雙向同步)</span>
+                      </h5>
+                      <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                        全功能 100% 串接
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px]">
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🌸</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">1. 流水帳資料庫</strong>
+                          <span className="text-[#8C8475] text-[10px]">公積金存入充值、日常支出與出錢人記帳</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🗓️</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">2. 月度核銷狀態</strong>
+                          <span className="text-[#8C8475] text-[10px]">公積金每月月底對帳與核銷撥款歷史標記</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">💳</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">3. 代墊明細</strong>
+                          <span className="text-[#8C8475] text-[10px]">日常私人代墊、AA制/自訂比例分帳與結清記錄</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🛒</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">4. 購物清單</strong>
+                          <span className="text-[#8C8475] text-[10px]">雙人生活用品採購清單、勾選完成與備註細項</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🏪</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">5. 常用商店</strong>
+                          <span className="text-[#8C8475] text-[10px]">全聯、好市多、菜市場等採購地點快速推薦庫</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">✈️</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">6. 旅遊行程</strong>
+                          <span className="text-[#8C8475] text-[10px]">國內外旅遊行程、幣別、預設匯率、成員與預算</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">🧾</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">7. 旅遊支出明細</strong>
+                          <span className="text-[#8C8475] text-[10px]">出國多幣別消費、單筆分帳、代墊與轉入日常</span>
+                        </div>
+                      </div>
+
+                      <div className="bg-white p-2.5 rounded-xl border border-[#EAE6DC] flex items-start gap-2">
+                        <span className="text-base">💡</span>
+                        <div>
+                          <strong className="text-[#3E3A36] font-bold block">8. 旅遊心願清單</strong>
+                          <span className="text-[#8C8475] text-[10px]">出國必吃必玩心願踩點清單與代買事項追蹤</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 快速下載官方空白 Excel 範本捷徑 */}
+                    <div className="pt-2 border-t border-[#EAE4D6] flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-[11px] text-[#7A7366] flex items-center gap-1">
+                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>初次部署需要標準 Google 試算表範本？</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => downloadDatabaseExcelTemplate()}
+                          className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-2xs transition-all cursor-pointer active:scale-95"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>下載 Excel 範本 (.xlsx)</span>
+                        </button>
+                        <a
+                          href={GOOGLE_SHEETS_NEW_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2.5 py-1 bg-white hover:bg-[#FAF8F3] text-[#3E3A36] border border-[#DDD6C8] rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                        >
+                          <ExternalLink className="w-3 h-3 text-amber-800" />
+                          <span>建立新 Google 試算表</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 🧪 開發者沙盒測試開關 */}
+                  {onToggleSandboxMode && (
+                    <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-200 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-slate-800">🧪 開發人員沙盒測試模式</span>
+                          {isSandboxMode && (
+                            <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.5 rounded">
+                              已啟用
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-600">啟用時所有記帳僅在瀏覽器本機模擬，供開發除錯測試使用</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onToggleSandboxMode(!isSandboxMode)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer shrink-0 ${
+                          isSandboxMode ? 'bg-amber-600' : 'bg-slate-300'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                            isSandboxMode ? 'translate-x-4.5' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* App 內建通知開關快速入口 */}
+                  <div className="bg-[#FAF8F3] rounded-2xl p-3.5 border border-rose-200/80 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center font-bold shrink-0">
+                        <BellRing className="w-4 h-4 text-rose-600" />
+                      </div>
+                      <div>
+                        <h5 className="text-xs font-bold text-[#3E3A36]">App 內建通知提醒設定 (共 9 項)</h5>
+                        <p className="text-[10px] text-[#8C8475]">可個別開啟或關閉支出代墊、充值、採購清單、月度結算等 App 即時通知</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onOpenNotifySettings}
+                      className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-800 border border-rose-300 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
+                    >
+                      前往自訂開關
+                    </button>
+                  </div>
+
+                  <div className="pt-1 flex items-center justify-between gap-2 flex-wrap">
+                    {onOpenInviteManager && currentUser && !isGuestMode && isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenInviteManager();
+                        }}
+                        className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                      >
+                        <Heart className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
+                        <span>派發伴侶邀請碼 {inviteCode ? `(${inviteCode})` : ''}</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={saveDeployConfig}
+                      className="ml-auto px-4 py-2 bg-gradient-to-r from-amber-800 to-amber-900 hover:from-amber-900 hover:to-amber-950 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95"
+                    >
+                      <Cloud className="w-3.5 h-3.5 text-amber-200" />
+                      <span>儲存並同步至雲端帳號</span>
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-[#8C8475] text-right">
+                    ☁️ 儲存後將自動永久綁定至 Google 帳號，日後換手機登入免重填
+                  </div>
+
+                </div>
+              </div>
+              )}
+
+              {/* 代碼複製與預覽區 */}
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-[#E8E4D9] space-y-3 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F2EDE1] pb-3">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setActiveDeployCodeTab('codeGs')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        activeDeployCodeTab === 'codeGs'
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                          : 'bg-[#FAF9F5] text-[#8C8475] hover:text-[#3E3A36]'
+                      }`}
+                    >
+                      <FileCode className="w-3.5 h-3.5" />
+                      <span>Code.gs (後端)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveDeployCodeTab('indexHtml')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        activeDeployCodeTab === 'indexHtml'
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                          : 'bg-[#FAF9F5] text-[#8C8475] hover:text-[#3E3A36]'
+                      }`}
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>index.html (公積金首頁)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveDeployCodeTab('splitHtml')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        activeDeployCodeTab === 'splitHtml'
+                          ? 'bg-rose-100 text-rose-900 border border-rose-300'
+                          : 'bg-[#FAF9F5] text-[#8C8475] hover:text-[#3E3A36]'
+                      }`}
+                    >
+                      <span>💳</span>
+                      <span>split/index.html (代墊子頁面)</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => copyDeployCode(activeDeployCodeTab)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 ${
+                      copiedCodeType === activeDeployCodeTab
+                        ? 'bg-emerald-700 text-white'
+                        : activeDeployCodeTab === 'splitHtml'
+                          ? 'bg-gradient-to-r from-rose-700 to-rose-800 text-white hover:from-rose-800 hover:to-rose-900'
+                          : 'bg-gradient-to-r from-amber-800 to-amber-900 text-white hover:from-amber-900 hover:to-amber-950'
+                    }`}
+                  >
+                    {copiedCodeType === activeDeployCodeTab ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>已複製 {activeDeployCodeTab === 'codeGs' ? 'Code.gs' : activeDeployCodeTab === 'indexHtml' ? 'index.html' : 'split/index.html'}！</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>一鍵複製 {activeDeployCodeTab === 'codeGs' ? 'Code.gs' : activeDeployCodeTab === 'indexHtml' ? 'index.html' : 'split/index.html'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* 提示訊息 */}
+                {activeDeployCodeTab === 'codeGs' && (
+                  <div className="bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/80 text-[11px] text-amber-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>
+                      代碼已為您自動注入：
+                      {deploySheetUrl ? ' ✅ 試算表 ID' : ' ⚠️ 自動感應綁定試算表'} ｜ App 內建原生即時同步
+                    </span>
+                  </div>
+                )}
+
+                {activeDeployCodeTab === 'splitHtml' && (
+                  <div className="bg-rose-50/80 p-2.5 rounded-xl border border-rose-200/80 text-[11px] text-rose-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-rose-700 shrink-0" />
+                    <span>
+                      💡 GitHub 設定方法：在您的倉庫中建立資料夾 <code>split</code> 並新增 <code>index.html</code>，貼上此代碼即可透過 <code>https://liao0318.github.io/migoscar.fund/split/</code> 瀏覽獨立代墊頁面！
+                    </span>
+                  </div>
+                )}
+
+                {/* Code Box */}
+                <div className="relative rounded-xl overflow-hidden border border-[#2d333b]">
+                  <pre className="p-4 bg-[#22272e] text-[#adbac7] font-mono text-[11px] max-h-64 overflow-y-auto overflow-x-auto whitespace-pre selection:bg-amber-500 selection:text-black">
+                    {activeDeployCodeTab === 'codeGs' 
+                      ? customizedCodeGs 
+                      : activeDeployCodeTab === 'indexHtml' 
+                        ? INDEX_HTML_TEMPLATE 
+                        : SPLIT_INDEX_HTML_TEMPLATE}
+                  </pre>
+                </div>
+              </div>
+
+              {/* 快速部署步驟說明 */}
+              <div className="bg-[#FAF8F3] rounded-2xl p-4 border border-[#E5E0D2] space-y-2">
+                <h4 className="text-xs font-extrabold text-[#3E3A36] flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-amber-800" />
+                  <span>GitHub Pages 部署與獨立子頁面 (/split/) 設定步驟</span>
+                </h4>
+                <ol className="text-xs text-[#6C675F] space-y-2 list-decimal list-inside font-medium leading-relaxed">
+                  <li><strong>Google Apps Script 後端</strong>：複製 <code>Code.gs</code> 貼入 GAS 編輯器，點擊「部署」➔「管理部署作業」➔「編輯」並建立<strong>新版本</strong>發布。</li>
+                  <li><strong>主頁面 (公積金)</strong>：複製 <code>index.html</code> 更新到 GitHub 根目錄的 <code>index.html</code>。</li>
+                  <li><strong>代墊子頁面 (/split/)</strong>：在 GitHub 倉庫中點選「Add file」➔「Create new file」，檔名輸入 <code>split/index.html</code>，貼上 <code>split/index.html</code> 代碼並 Commit！</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* Modal 頁尾 */}
+            <div className="p-4 bg-white border-t border-[#E8E4D9] flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-2.5 bg-[#4D4942] hover:bg-[#322F2A] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95"
+              >
+                完成並關閉
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
+
