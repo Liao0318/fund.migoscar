@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.8.6';
+export const APP_VERSION = 'v2.8.7';
 export const APP_BUILD_DATE = '2026.09.13';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,16 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.8.7',
+    date: '2026.09.13',
+    title: '資料庫連線診斷助手與 Google Apps Script 權限排錯指南全面升級',
+    highlights: [
+      '新增連線排錯 4 大關鍵檢查卡：針對常見的 Google Apps Script 權限未開放（存取權限非所有人）、初次授權未執行 setupDatabase、網址結尾非 /exec 與新版本未發布問題提供圖文診斷指南',
+      '彈性連線綁定機制：在連線驗證步驟新增「略過測試直接儲存」備援按鈕，允許使用者在離線或排錯過程中先行固化設定至雲端',
+      '強化跨來源通訊容錯：升級 callGasApi 與即時連線探針，提供更友善且精確的錯誤提示'
+    ]
+  },
   {
     version: 'v2.8.6',
     date: '2026.09.13',

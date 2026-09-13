@@ -1160,13 +1160,75 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                           </div>
 
                           {adminValidationError && (
-                            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2">
-                              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                              <span>{adminValidationError}</span>
+                            <div className="space-y-3">
+                              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2">
+                                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                                <div className="space-y-1">
+                                  <div className="font-bold">{adminValidationError}</div>
+                                  <div className="text-[11px] text-rose-700 leading-relaxed">
+                                    請檢查下方「排錯檢查清單」，99% 的連線問題都是因為 Google Apps Script 尚未核准存取權限或部署存取權限未設為「所有人」。
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between pt-2">
+                          {/* 🔍 Google Apps Script 連線必備排錯 4 大關鍵 */}
+                          <div className="bg-[#FAF8F3] p-3.5 rounded-2xl border border-[#E8E2D2] space-y-2.5">
+                            <div className="flex items-center justify-between text-xs font-black text-[#3E3A36]">
+                              <span className="flex items-center gap-1.5">
+                                <Sparkles className="w-4 h-4 text-amber-700" />
+                                <span>Google Apps Script 連線 4 大檢查關鍵（排錯指南）</span>
+                              </span>
+                              <span className="text-[10px] text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded-full">
+                                必看檢查
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-[#5C564E]">
+                              <div className="p-2.5 rounded-xl bg-white border border-[#EAE4D6] space-y-1">
+                                <div className="font-bold text-[#3E3A36] flex items-center gap-1">
+                                  <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-[10px] font-bold">1</span>
+                                  <span>存取權必須為「所有人」</span>
+                                </div>
+                                <p className="text-[10px] text-[#7A7366] leading-relaxed">
+                                  部署設定中「<strong>誰可以存取 (Who has access)</strong>」必須選「<strong>所有人 (Anyone)</strong>」，否則瀏覽器會被 Google 阻擋。
+                                </p>
+                              </div>
+
+                              <div className="p-2.5 rounded-xl bg-white border border-[#EAE4D6] space-y-1">
+                                <div className="font-bold text-[#3E3A36] flex items-center gap-1">
+                                  <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-[10px] font-bold">2</span>
+                                  <span>必須執行一次核准授權</span>
+                                </div>
+                                <p className="text-[10px] text-[#7A7366] leading-relaxed">
+                                  在 Apps Script 編輯器上方函式選 <code className="font-mono text-amber-900 bg-amber-50 px-1 py-0.5 rounded">setupDatabase</code> 點擊「<strong>執行</strong>」，完成「審查權限 ➜ 進階 ➜ 前往伴伴記 (允許)」。
+                                </p>
+                              </div>
+
+                              <div className="p-2.5 rounded-xl bg-white border border-[#EAE4D6] space-y-1">
+                                <div className="font-bold text-[#3E3A36] flex items-center gap-1">
+                                  <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-[10px] font-bold">3</span>
+                                  <span>網址結尾必須為 /exec</span>
+                                </div>
+                                <p className="text-[10px] text-[#7A7366] leading-relaxed">
+                                  必須以 <code className="font-mono text-amber-900 bg-amber-50 px-1 py-0.5 rounded">/exec</code> 結尾，不能是 <code className="font-mono">/edit</code>（編輯器）或 <code className="font-mono">/dev</code>（測試版）。
+                                </p>
+                              </div>
+
+                              <div className="p-2.5 rounded-xl bg-white border border-[#EAE4D6] space-y-1">
+                                <div className="font-bold text-[#3E3A36] flex items-center gap-1">
+                                  <span className="w-4 h-4 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-[10px] font-bold">4</span>
+                                  <span>修改代碼後需發布「新版本」</span>
+                                </div>
+                                <p className="text-[10px] text-[#7A7366] leading-relaxed">
+                                  若曾修改過 Code.gs，點「管理部署作業」➜ 鉛筆編輯 ➜ 版本選「<strong>新版本 (New Version)</strong>」➜ 儲存。
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
                             <button
                               type="button"
                               onClick={() => setAdminWizardStep(1)}
@@ -1175,24 +1237,35 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                               上一步
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={handleVerifyAndBindAdmin}
-                              disabled={isAdminBindingLoading}
-                              className="px-5 py-2.5 bg-gradient-to-r from-amber-800 to-amber-900 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-50"
-                            >
-                              {isAdminBindingLoading ? (
-                                <>
-                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                  <span>正在驗證連線並綁定帳號...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  <span>驗證連線並完成帳號綁定</span>
-                                </>
-                              )}
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleDirectSave}
+                                className="px-3.5 py-2 rounded-xl border border-[#D5CFBF] bg-white hover:bg-[#FAF8F3] text-xs font-bold text-[#5C564E] cursor-pointer shadow-2xs"
+                                title="直接將目前輸入的網址儲存至系統與雲端"
+                              >
+                                略過測試直接儲存
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={handleVerifyAndBindAdmin}
+                                disabled={isAdminBindingLoading}
+                                className="px-5 py-2.5 bg-gradient-to-r from-amber-800 to-amber-900 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-2xs active:scale-95 cursor-pointer disabled:opacity-50"
+                              >
+                                {isAdminBindingLoading ? (
+                                  <>
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    <span>正在驗證連線並綁定帳號...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>驗證連線並完成帳號綁定</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
