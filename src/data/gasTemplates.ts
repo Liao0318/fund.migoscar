@@ -164,9 +164,11 @@ function getDbSpreadsheet() {
   if (typeof HARDCODED_SPREADSHEET_ID !== 'undefined' && HARDCODED_SPREADSHEET_ID && HARDCODED_SPREADSHEET_ID.trim()) {
     var raw = HARDCODED_SPREADSHEET_ID.trim();
     var id = raw;
-    if (raw.indexOf("docs.google.com/spreadsheets") !== -1) {
-      var m = raw.match(/\/d\/([a-zA-Z0-9_\-]+)/);
-      if (m && m[1]) id = m[1];
+    if (raw.indexOf("/d/") !== -1) {
+      var parts = raw.split("/d/")[1];
+      if (parts) {
+        id = parts.split("/")[0].split("?")[0].split("#")[0];
+      }
     }
     try {
       var ss = SpreadsheetApp.openById(id);
@@ -194,9 +196,11 @@ function saveSpreadsheetId(idOrUrl) {
       return { success: true, message: "已重置試算表綁定" };
     }
     var id = idOrUrl;
-    if (idOrUrl.indexOf("docs.google.com/spreadsheets") !== -1) {
-      var matches = idOrUrl.match(/\/d\/([a-zA-Z0-9_\-]+)/);
-      if (matches && matches[1]) id = matches[1];
+    if (idOrUrl.indexOf("/d/") !== -1) {
+      var urlParts = idOrUrl.split("/d/")[1];
+      if (urlParts) {
+        id = urlParts.split("/")[0].split("?")[0].split("#")[0];
+      }
     }
     var ss = SpreadsheetApp.openById(id);
     PropertiesService.getScriptProperties().setProperty("SPREADSHEET_ID", id);
