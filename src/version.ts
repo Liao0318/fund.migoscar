@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.7.7';
+export const APP_VERSION = 'v2.8.0';
 export const APP_BUILD_DATE = '2026.09.13';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,18 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.8.0',
+    date: '2026.09.13',
+    title: '選項 B 全新通用架構：情侶 0 成本 Google 試算表資料庫與一鍵極速配對',
+    highlights: [
+      '全面支援大眾情侶使用：徹底移除特定預設姓名綁定，採用全新動態 Persona 引擎，任意情侶皆可透過 Google 登入建立或加入專屬帳本',
+      '三步驟管理者開帳導引（Onboarding Wizard）：提供 8 大工作表範本下載、一鍵直達 Google Sheets 與專屬 Code.gs 生成，貼上 Web App 網址 1 秒自動驗證連線',
+      '伴侶端 0 設定一鍵加入：伴侶無須建立試算表或接觸任何程式碼，只需透過 6 碼配對邀請碼或專屬浪漫邀請連結，登入即刻秒入共同帳本',
+      '動態網址與靈活配對機制：伴侶邀請連結自動適配當前網域與路徑（GitHub Pages、自訂域名或預覽環境皆能無縫運作）',
+      '100% 永久零伺服器成本：維持使用者自有 Google Drive 空間，保障資料隱私權益與無限歷史記錄擴充性'
+    ]
+  },
   {
     version: 'v2.7.7',
     date: '2026.09.13',

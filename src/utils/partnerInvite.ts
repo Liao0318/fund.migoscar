@@ -747,14 +747,15 @@ export const CUSTOM_PORTAL_BASE_URL = 'https://liao0318.github.io/fund.migoscar/
  * 取得當前應用程式的標準分享基底網址
  */
 export function getAppShareBaseUrl(): string {
-  // 優先使用自訂短網址/入口網址
-  if (CUSTOM_PORTAL_BASE_URL) {
-    return CUSTOM_PORTAL_BASE_URL.endsWith('/') ? CUSTOM_PORTAL_BASE_URL : `${CUSTOM_PORTAL_BASE_URL}/`;
-  }
   if (typeof window !== 'undefined' && window.location.origin) {
     const origin = window.location.origin;
     const pathname = window.location.pathname || '';
-    return `${origin}${pathname}`;
+    // 移除結尾的 hash 或 query
+    const cleanPath = pathname.replace(/\/index\.html$/i, '/');
+    return `${origin}${cleanPath.endsWith('/') ? cleanPath : `${cleanPath}/`}`;
+  }
+  if (CUSTOM_PORTAL_BASE_URL) {
+    return CUSTOM_PORTAL_BASE_URL.endsWith('/') ? CUSTOM_PORTAL_BASE_URL : `${CUSTOM_PORTAL_BASE_URL}/`;
   }
   return 'https://liao0318.github.io/fund.migoscar/';
 }

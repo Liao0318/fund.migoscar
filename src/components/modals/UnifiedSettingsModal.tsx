@@ -636,7 +636,7 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                             className="w-16 text-center font-bold text-base py-1.5 bg-[#FAF8F3] border border-[#DDD6C8] rounded-xl focus:border-amber-600 focus:bg-white focus:outline-none"
                           />
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {[userFirstChar, '廖', '周', '寶'].filter(Boolean).map((char) => (
+                            {[userFirstChar, '我', '寶'].filter(Boolean).map((char) => (
                               <button
                                 key={char}
                                 type="button"
