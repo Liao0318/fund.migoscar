@@ -384,9 +384,9 @@ function getDashboardData() {
         if (cell === null || cell === undefined || cell === "") continue;
         var cellStr = String(cell).trim();
         if (cellStr.indexOf("rec_") === 0 || (cellStr.length > 20 && cellStr.indexOf("-") !== -1)) colDataTypes[colIdx].hasId++;
-        if (cell instanceof Date || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(cellStr) || cellStr.indexOf("GMT") !== -1) colDataTypes[colIdx].hasDate++;
-        if (/^\d{4}[-/]\d{1,2}$/.test(cellStr)) colDataTypes[colIdx].hasMonth++;
-        if (typeof cell === "number" || (/^\$?\s*\d+(\.\d+)?$/.test(cellStr) && !/^\d{4}/.test(cellStr))) colDataTypes[colIdx].hasAmount++;
+        if (cell instanceof Date || /^\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}/.test(cellStr) || cellStr.indexOf("GMT") !== -1) colDataTypes[colIdx].hasDate++;
+        if (/^\\d{4}[-/]\\d{1,2}$/.test(cellStr)) colDataTypes[colIdx].hasMonth++;
+        if (typeof cell === "number" || (/^\\$?\\s*\\d+(\\.\\d+)?$/.test(cellStr) && !/^\\d{4}/.test(cellStr))) colDataTypes[colIdx].hasAmount++;
         if (cellStr.indexOf(DEFAULT_USER_A_NAME) !== -1 || cellStr.indexOf(DEFAULT_USER_B_NAME) !== -1 || cellStr.indexOf("廖") !== -1 || cellStr.indexOf("周") !== -1 || cellStr.indexOf("共同") !== -1 || cellStr === "待確認" || cellStr === "伴侶") colDataTypes[colIdx].hasPayer++;
         if (cellStr.indexOf("支出") !== -1 || cellStr.indexOf("收入") !== -1 || cellStr.indexOf("公積金") !== -1 || cellStr.indexOf("日常生活") !== -1 || cellStr.indexOf("代墊") !== -1) colDataTypes[colIdx].hasCategory++;
         if (cellStr.indexOf("上午") !== -1 || cellStr.indexOf("下午") !== -1 || cellStr.indexOf(":") !== -1) colDataTypes[colIdx].hasTimestamp++;
@@ -476,7 +476,7 @@ function getDashboardData() {
       }
 
       // 情境 2: item 是 Date 物件（整列推移）
-      var isDateLikeItem = item instanceof Date || String(item).indexOf("GMT") !== -1 || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(String(item).trim());
+      var isDateLikeItem = item instanceof Date || String(item).indexOf("GMT") !== -1 || /^\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}/.test(String(item).trim());
       if (isDateLikeItem) {
         dateVal = item;
         var realItem = (payer && payer !== DEFAULT_USER_A_NAME && payer !== DEFAULT_USER_B_NAME && payer !== "共同帳戶") ? payer : "日常生活支出";
