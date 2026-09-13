@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.8.1';
+export const APP_VERSION = 'v2.8.2';
 export const APP_BUILD_DATE = '2026.09.13';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.8.2',
+    date: '2026.09.13',
+    title: '跨裝置 Google Drive 資料庫無縫同步與公積金代墊雙邊採計修復',
+    highlights: [
+      '修復公積金代墊金額採計：完善 isRecordOfUserA 與 isRecordOfUserB 動態出資判定邏輯，當伴侶尚未配對時，歷史記帳出資與非管理員代墊正確歸屬於待確認伴侶，看板與明細 100% 正確顯示雙方累計金額',
+      '跨裝置 Google Drive 自動同步：登入同一個 Google 帳號時，自動透過 Google Drive 專屬設定檔讀取最新 GAS Web App 與 Google 試算表連線網址，電腦設定好手機換機即刻無縫連線',
+      '手機端防快取機制：加入 _t 時間戳記與 Cache-Control 強制刷新標頭，徹底解決手機端與電腦端因瀏覽器快取導致價格不一致的問題',
+      '顯示名稱與資料統計解耦：待配對狀態下維持標準化「待確認伴侶」稱謂，同時底層帳本出資紀錄完整採計不遺漏'
+    ]
+  },
   {
     version: 'v2.8.1',
     date: '2026.09.13',

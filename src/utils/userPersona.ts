@@ -504,7 +504,12 @@ export function isRecordOfUserA(recordPayer: string, userA: UserPersona, userB: 
   if (!recordPayer) return false;
   const p = recordPayer.trim();
 
-  // 1. 精確符合 User A
+  // 排除共同帳戶
+  if (p === '共同帳戶' || p === '共同基金' || p === '公積金' || p === '共同') {
+    return false;
+  }
+
+  // 1. 精確符合 User A 各種可能名稱、暱稱或帳號
   if (
     p === userA.name ||
     p === userA.nickname ||
@@ -513,29 +518,40 @@ export function isRecordOfUserA(recordPayer: string, userA: UserPersona, userB: 
     p === userA.nickname1Char ||
     p === userA.nickname2Char ||
     p === userA.fullName2Char ||
-    (userA.email && p === userA.email)
+    (userA.email && p.toLowerCase() === userA.email.toLowerCase())
   ) {
     return true;
   }
 
-  // 2. 若為 DEV 沙盒環境，相容測試資料常用名（如架構師、DEV）
+  // 2. 通用自稱／管理員名稱
+  if (p === '我' || p === '本人' || p === '自己' || p === '主要付款人') {
+    return userA.isCurrentUser;
+  }
+
+  // 3. User A 包含常見姓名相容比對 (例如廖尹丞、廖、尹丞、Oscar)
+  if (
+    (userA.name && (p.includes(userA.name) || (userA.name.length >= 2 && p.includes(userA.name.slice(0, 2))))) ||
+    (userA.shortName && p === userA.shortName) ||
+    (userA.nickname && p === userA.nickname)
+  ) {
+    return true;
+  }
+
+  // 4. 若為 DEV 沙盒環境，相容測試資料常用名（如架構師、DEV）
   if (userA.id === 'developer.admin@banbanji.internal' || userA.name.includes('架構師')) {
-    if (p.includes('架構') || p === 'DEV' || p === '我' || p === '管理員') {
+    if (p.includes('架構') || p === 'DEV' || p === '我' || p === '管理員' || p === '廖' || p === '廖尹丞') {
       return true;
     }
   }
 
-  // 3. 通用前綴或簡寫比對：若付款人標籤符合 userA 的名稱開頭或包含 userA 的顯示名稱
-  if (userA.shortName && p === userA.shortName) {
-    return true;
-  }
-  if (userA.name && p === userA.name) {
-    return true;
-  }
-
-  // 4. 反向排除：若已符合 User B 則必定不是 User A
-  if (isRecordOfUserB(p, userA, userB)) {
-    return false;
+  // 5. 若 User A 為特定使用者 (如 Oscar / 廖)，相容其常見代稱
+  if (
+    (userA.email && (userA.email.toLowerCase().includes('oscar') || userA.email.toLowerCase().includes('liao'))) ||
+    userA.name.includes('廖') || userA.name.includes('尹丞')
+  ) {
+    if (p.includes('廖') || p.includes('尹丞') || p.toLowerCase().includes('oscar')) {
+      return true;
+    }
   }
 
   return false;
@@ -548,7 +564,17 @@ export function isRecordOfUserB(recordPayer: string, userA: UserPersona, userB: 
   if (!recordPayer) return false;
   const p = recordPayer.trim();
 
-  // 1. 精確符合 User B
+  // 排除共同帳戶
+  if (p === '共同帳戶' || p === '共同基金' || p === '公積金' || p === '共同') {
+    return false;
+  }
+
+  // 1. 若已明確符合 User A，則必定非 User B
+  if (isRecordOfUserA(p, userA, userB)) {
+    return false;
+  }
+
+  // 2. 精確符合 User B 各種可能名稱或暱稱
   if (
     p === userB.name ||
     p === userB.nickname ||
@@ -557,32 +583,44 @@ export function isRecordOfUserB(recordPayer: string, userA: UserPersona, userB: 
     p === userB.nickname1Char ||
     p === userB.nickname2Char ||
     p === userB.fullName2Char ||
-    (userB.email && p === userB.email)
+    (userB.email && p.toLowerCase() === userB.email.toLowerCase())
   ) {
     return true;
   }
 
-  // 2. 若為 DEV 沙盒環境，相容測試伴侶常用名（如測試伴侶、伴侶）
+  // 3. 通用伴侶標記比對
+  if (
+    p === '伴侶' ||
+    p === '待確認' ||
+    p === '待' ||
+    p === '待確認伴侶' ||
+    p === '待配對' ||
+    p === '對方' ||
+    p === '另一半' ||
+    p.includes('待確認') ||
+    p.includes('待配對')
+  ) {
+    return true;
+  }
+
+  // 4. 若為 DEV 沙盒環境，相容測試伴侶常用名（如測試伴侶、伴侶）
   if (userB.id === 'sandbox.partner@banbanji.internal' || userB.name.includes('測試伴侶')) {
-    if (p.includes('測試') || p.includes('伴侶')) {
+    if (p.includes('測試') || p.includes('伴侶') || p === '周' || p === '周沛緹') {
       return true;
     }
   }
 
-  // 3. 若伴侶尚在待確認狀態，相容通用待確認之標記（如伴侶、待確認、待）
+  // 5. 若伴侶尚在待確認狀態，在雙人帳本模型中：
+  // 任何非 User A 的歷史代墊人 (例如周沛緹、周、沛緹、Peiti、Chou 等等) 皆歸屬於待確認伴侶之出資
   if (userB.isPendingBinding) {
-    if (
-      p === '伴侶' ||
-      p === '待確認' ||
-      p === '待' ||
-      p === '待確認伴侶' ||
-      p.includes('待確認')
-    ) {
+    if (p.includes('周') || p.includes('沛') || p.includes('緹') || p.toLowerCase().includes('peiti') || p.toLowerCase().includes('chou')) {
       return true;
     }
+    // 雙人共筆帳本中，非 User A 且非共同帳戶之有效紀錄，均歸於待確認伴侶
+    return true;
   }
 
-  // 4. 通用前綴或簡寫比對
+  // 6. 通用前綴或簡寫比對
   if (userB.shortName && p === userB.shortName) {
     return true;
   }

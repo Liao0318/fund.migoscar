@@ -908,7 +908,7 @@ export default function App() {
     if (userB.displayName && clean === userB.displayName) return true;
     if (userB.shortName && clean === userB.shortName) return true;
     if (userB.nickname && clean === userB.nickname) return true;
-    if (userB.isPendingBinding && (clean === '待' || clean === '待確認' || clean === '待確認伴侶' || clean === '伴侶')) return true;
+    if (userB.isPendingBinding && (clean === '待' || clean === '待確認' || clean === '待確認伴侶' || clean === '伴侶' || clean === '周沛緹' || clean === '周' || clean === '沛緹')) return true;
     if (currentUser?.isDevSandbox && (clean.includes('測試伴侶') || clean === '周沛緹' || clean === '周')) return true;
     return false;
   }, [userA, userB, currentUser?.isDevSandbox]);
@@ -2383,19 +2383,25 @@ export default function App() {
     // 2. AI Studio 預覽版或獨立 Web 網頁環境，透過 HTTP fetch 呼叫 GAS Web App
     const targetUrl = (
       overrideGasUrl ||
-      localStorage.getItem('muji_gas_web_url') ||
-      gasWebUrl ||
-      localStorage.getItem('banban_permanent_gas_url') ||
       (currentUser?.email ? localStorage.getItem(`muji_gas_web_url_${currentUser.email.toLowerCase()}`) : '') ||
+      gasWebUrl ||
+      localStorage.getItem('muji_gas_web_url') ||
+      localStorage.getItem('banban_permanent_gas_url') ||
       partnerBindingInfo?.gasWebUrl ||
       ''
     ).trim();
 
     if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/test/')) {
       try {
-        const res = await fetch(targetUrl, {
+        const querySep = targetUrl.includes('?') ? '&' : '?';
+        const cacheBusterUrl = `${targetUrl}${querySep}_t=${Date.now()}`;
+        const res = await fetch(cacheBusterUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          headers: { 
+            'Content-Type': 'text/plain;charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          },
           body: JSON.stringify({ action, ...payload })
         });
         const data = await res.json();
