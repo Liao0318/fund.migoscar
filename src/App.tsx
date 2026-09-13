@@ -52,7 +52,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Plane,
-  Palmtree,
   Download,
   Database,
   Key,
@@ -64,7 +63,6 @@ import { formatAmPmTime, isTodayNotification, isIncomingFromPartner, getShopping
 import { sendNativeNotification } from './utils/nativeNotify';
 import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from './utils/userPersona';
 import { CODE_GS_TEMPLATE, INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from './data/gasTemplates';
-import { SplitDebtView } from './components/SplitDebtView';
 import { SplitHomeTab } from './components/split/SplitHomeTab';
 import { SplitHistoryTab } from './components/split/SplitHistoryTab';
 import { SplitTravelTab } from './components/split/SplitTravelTab';
@@ -158,15 +156,15 @@ export interface ShoppingItem {
   note?: string;
 }
 
-const INITIAL_SHOPPING_ITEMS: ShoppingItem[] = [
+// 🛠️ 開發沙盒展示專用之測試數據（僅在手動點擊沙盒演示時載入，預設一般使用者狀態為純淨空清單）
+const SANDBOX_DEMO_SHOPPING_ITEMS: ShoppingItem[] = [
   { id: 'shop-1', category: '需要買', item: '高麗菜', store: '菜市場', deadline: '8/13前', status: '待購買', creator: '廖尹丞', createdTime: '2026-08-10 上午 10:00', note: '挑選高麗菜葉片緊實、無蟲蛀者，打算炒培根！' },
   { id: 'shop-2', category: '需要買', item: '衛生紙 1 串', store: '全聯福利中心', deadline: '本週內', status: '待購買', creator: '周沛緹', createdTime: '2026-08-09 下午 06:30', note: '買三層柔柔牌，若有特價大包裝優先。' },
   { id: 'shop-3', category: '想要買', item: '雞塊', store: '日日加', deadline: '8/15前', status: '待購買', creator: '廖尹丞', createdTime: '2026-08-10 上午 11:15', note: '宵夜想用氣炸鍋炸來吃，買 1 斤裝。' },
   { id: 'shop-4', category: '需要買', item: '鮮乳 1 瓶', store: '家樂福', deadline: '8/11前', status: '已買到', creator: '周沛緹', createdTime: '2026-08-08 上午 09:20', note: '瑞穗或初鹿，保存期限選最久者。' }
 ];
 
-// 🛠️ 開發沙盒展示專用之代墊數據（徹底杜絕真實用戶帳號資料滲漏）
-const INITIAL_SPLIT_ITEMS: SplitRecordItem[] = [
+const SANDBOX_DEMO_SPLIT_ITEMS: SplitRecordItem[] = [
   {
     id: 'split-dev-1',
     time: '上午 10:30',
@@ -685,7 +683,7 @@ export default function App() {
             if (Array.isArray(parsed) && parsed.length > 0) return parsed;
           } catch (e) {}
         }
-        return INITIAL_SPLIT_ITEMS;
+        return SANDBOX_DEMO_SPLIT_ITEMS;
       }
       const saved = localStorage.getItem('banban_split_records');
       return saved ? JSON.parse(saved) : [];
@@ -767,7 +765,7 @@ export default function App() {
           }
         } catch (e) {}
       }
-      return INITIAL_SHOPPING_ITEMS;
+      return SANDBOX_DEMO_SHOPPING_ITEMS;
     }
     const local = localStorage.getItem('muji_shopping_items');
     if (local) {
@@ -1655,7 +1653,7 @@ export default function App() {
 
       if (!activeGas && resolved.adminEmail) {
         try {
-          const adminConfig = await getUserCloudConfig(resolved.adminEmail);
+          const adminConfig = await getUserCloudConfig(resolved.adminEmail, { forceRefresh: true });
           if (adminConfig && adminConfig.gasWebUrl) {
             activeGas = adminConfig.gasWebUrl;
             activeSheet = adminConfig.deploySheetUrl || activeSheet;
@@ -1712,7 +1710,7 @@ export default function App() {
     // 🛡️ 雙重保險備援 1：若邀請物件中缺少 gasWebUrl，向管理者的 user_configs 自動檢索補齊
     if (!activeGas && resolved.adminEmail) {
       try {
-        const adminConfig = await getUserCloudConfig(resolved.adminEmail);
+        const adminConfig = await getUserCloudConfig(resolved.adminEmail, { forceRefresh: true });
         if (adminConfig && adminConfig.gasWebUrl && adminConfig.gasWebUrl.startsWith('http')) {
           activeGas = adminConfig.gasWebUrl;
           activeSheet = adminConfig.deploySheetUrl || activeSheet;
@@ -1861,7 +1859,7 @@ export default function App() {
           if (Array.isArray(p) && p.length > 0) return p;
         }
       } catch (e) {}
-      return INITIAL_SPLIT_ITEMS;
+      return SANDBOX_DEMO_SPLIT_ITEMS;
     })();
     setSplitItems(sandboxSplit);
     calculateLocalSplitSummary(sandboxSplit);
@@ -1874,7 +1872,7 @@ export default function App() {
           if (Array.isArray(p) && p.length > 0) return p;
         }
       } catch (e) {}
-      return INITIAL_SHOPPING_ITEMS;
+      return SANDBOX_DEMO_SHOPPING_ITEMS;
     })();
     setShoppingItems(sandboxShopping);
 
@@ -1909,13 +1907,13 @@ export default function App() {
 
   const handleSeedSampleData = () => {
     setRecords(INITIAL_RECORDS);
-    setSplitItems(INITIAL_SPLIT_ITEMS);
-    setShoppingItems(INITIAL_SHOPPING_ITEMS);
-    calculateLocalSplitSummary(INITIAL_SPLIT_ITEMS);
+    setSplitItems(SANDBOX_DEMO_SPLIT_ITEMS);
+    setShoppingItems(SANDBOX_DEMO_SHOPPING_ITEMS);
+    calculateLocalSplitSummary(SANDBOX_DEMO_SPLIT_ITEMS);
     try {
       localStorage.setItem('banban_dev_sandbox_records', JSON.stringify(INITIAL_RECORDS));
-      localStorage.setItem('banban_dev_sandbox_split_records', JSON.stringify(INITIAL_SPLIT_ITEMS));
-      localStorage.setItem('banban_dev_sandbox_shopping_items', JSON.stringify(INITIAL_SHOPPING_ITEMS));
+      localStorage.setItem('banban_dev_sandbox_split_records', JSON.stringify(SANDBOX_DEMO_SPLIT_ITEMS));
+      localStorage.setItem('banban_dev_sandbox_shopping_items', JSON.stringify(SANDBOX_DEMO_SHOPPING_ITEMS));
     } catch (e) {}
     showToast('✨ 已注入全套展示測試數據', 'success');
   };
@@ -2321,7 +2319,7 @@ export default function App() {
               let foundSheet = '';
               if (cleanEmail) {
                 try {
-                  const cfg = await getUserCloudConfig(cleanEmail);
+                  const cfg = await getUserCloudConfig(cleanEmail, { forceRefresh: true });
                   if (cfg?.gasWebUrl) {
                     foundGas = cfg.gasWebUrl;
                     foundSheet = cfg.deploySheetUrl || '';
@@ -2411,9 +2409,7 @@ export default function App() {
         const res = await fetch(cacheBusterUrl, {
           method: 'POST',
           headers: { 
-            'Content-Type': 'text/plain;charset=utf-8',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache'
+            'Content-Type': 'text/plain;charset=utf-8'
           },
           body: JSON.stringify({ action, ...payload })
         });
@@ -2950,10 +2946,10 @@ export default function App() {
     }
 
     showToast('連線設定與 Web App API 已同步至 Google 雲端帳號！換機免重填。', 'success');
-    fetchDashboardData(true);
-    fetchShoppingData();
-    fetchSplitData(true);
-    fetchTravelData(true);
+    fetchDashboardData(true, false, cleanGas);
+    fetchShoppingData(false, cleanGas);
+    fetchSplitData(false, cleanGas);
+    fetchTravelData(false, cleanGas);
   };
 
   // ☁️ 全域跨裝置就緒：開機時無論登入與否，主動雙向同步本機與伺服器系統資料庫
@@ -3128,7 +3124,7 @@ export default function App() {
 
         // 2. 從個人 UserCloudConfig 雲端設定同步（換機或無快取時自動載入）
         try {
-          const cloudConfig = await getUserCloudConfig(cleanEmail);
+          const cloudConfig = await getUserCloudConfig(cleanEmail, { forceRefresh: true });
           if (cloudConfig) {
             if (cloudConfig.gasWebUrl && (!activeGas || activeGas !== cloudConfig.gasWebUrl)) {
               setGasWebUrl(cloudConfig.gasWebUrl);
@@ -6781,10 +6777,11 @@ export default function App() {
 
                     {/* 搜尋框與清空按鈕 */}
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                      {shoppingFilter === 'done' && shoppingItems.some(i => i.status === '已買到') && (
+                      {shoppingItems.some(i => i.status === '已買到') && (
                         <button
                           onClick={() => setIsClearDoneConfirmOpen(true)}
                           className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95 whitespace-nowrap shrink-0"
+                          title="一次性清空所有已買到的採購項目"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           <span>清空已購 ({shoppingItems.filter(i => i.status === '已買到').length})</span>

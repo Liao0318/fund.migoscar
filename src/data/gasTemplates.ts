@@ -165,7 +165,7 @@ function getDbSpreadsheet() {
     var raw = HARDCODED_SPREADSHEET_ID.trim();
     var id = raw;
     if (raw.indexOf("docs.google.com/spreadsheets") !== -1) {
-      var m = raw.match(/\\/d\\/([a-zA-Z0-9_\\-]+)/);
+      var m = raw.match(/\/d\/([a-zA-Z0-9_\-]+)/);
       if (m && m[1]) id = m[1];
     }
     try {
@@ -195,7 +195,7 @@ function saveSpreadsheetId(idOrUrl) {
     }
     var id = idOrUrl;
     if (idOrUrl.indexOf("docs.google.com/spreadsheets") !== -1) {
-      var matches = idOrUrl.match(/\\/d\\/([a-zA-Z0-9_\\-]+)/);
+      var matches = idOrUrl.match(/\/d\/([a-zA-Z0-9_\-]+)/);
       if (matches && matches[1]) id = matches[1];
     }
     var ss = SpreadsheetApp.openById(id);

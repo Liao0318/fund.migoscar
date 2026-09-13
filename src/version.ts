@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.8.3';
+export const APP_VERSION = 'v2.8.6';
 export const APP_BUILD_DATE = '2026.09.13';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,37 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.8.6',
+    date: '2026.09.13',
+    title: '跨裝置 Google Drive 帳本設定與多端即時資料庫雙向同步全面強化',
+    highlights: [
+      '強制雲端即時刷新：全面將跨裝置設定查詢升級為 forceRefresh 模式，換手機、平板或登入不同裝置時，直接向個人 Google Drive、Firestore 與後端 API 同步最新試算表連線設定',
+      '一鍵同步深度強化：主畫面未連線提醒區塊中的「從 Google 帳號一鍵同步」全面整合 Google Drive 設定檔與情侶綁定反查，換機零手動輸入秒級復原',
+      '跨端防呆與版本一致性校驗：確保離線佇列、公積金帳本、生活採購與代墊分帳在雲端連線更新後自動拉取最新資料庫內容'
+    ]
+  },
+  {
+    version: 'v2.8.5',
+    date: '2026.09.13',
+    title: '系統冗餘代碼大掃除與乾淨狀態初始化全面優化',
+    highlights: [
+      '徹底移除廢棄舊版檔案：安全刪除已由拆分模組或整合精靈全面取代的 SplitDebtView.tsx、DatabaseOnboardingModal.tsx、GasDeployModal.tsx 與 googleAuthValidator.ts，共精簡 1,660+ 行冗餘死碼',
+      '純淨無殘留狀態初始化：將預設採購與代墊測試項目完全隔離至 DEV 沙盒演示專用常數，一般使用者離線或重置時不再出現舊版測試殘留項目',
+      '清理未使用的模組引用與圖示：優化 App.tsx 入口與打包結構，降低生產環境 Bundle 體積與記憶體佔用'
+    ]
+  },
+  {
+    version: 'v2.8.4',
+    date: '2026.09.13',
+    title: 'Google Apps Script 跨網域通訊與靜態託管連線機制全面升級',
+    highlights: [
+      '解決跨來源 CORS 預檢限制：全面重構 Web App API 通訊標頭，符合標準 CORS Simple Request 規範，徹底消除因非標準 Cache-Control/Pragma 標頭導致 Google Apps Script 阻擋 OPTIONS 預檢之網路連線異常',
+      '強化即時連線健康診斷：在資料庫設定彈窗中加入即時握手測試與智慧防呆校驗（自動識別並提示試算表網址 vs 編輯器網址 vs /exec 網頁應用程式網址）',
+      '修正 Code.gs 試算表 URL 正則解析：優化 Spreadsheet ID 抽取邏輯，支援直接貼入完整 Google 試算表 URL 進行綁定',
+      '採購清單一鍵清空已購項目：生活採購模組無論在全部或已完成篩選模式下，皆可一鍵清除過往已購快取項目'
+    ]
+  },
   {
     version: 'v2.8.3',
     date: '2026.09.13',

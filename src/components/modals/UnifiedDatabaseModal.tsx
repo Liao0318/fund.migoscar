@@ -399,12 +399,40 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
       return;
     }
 
-    if (!cleanGas.startsWith('http')) {
-      setAdminValidationError('API 網址格式錯誤，必須以 https://script.google.com/ 開頭');
+    if (cleanGas.includes('docs.google.com/spreadsheets')) {
+      setAdminValidationError('⚠️ 您填入的是 Google 試算表網址，而非 Web App API 網址！請至 Apps Script 點擊右上角「部署」➔「管理部署作業」複製結尾為 /exec 的網頁應用程式網址。');
+      return;
+    }
+
+    if (cleanGas.includes('/edit') || cleanGas.includes('/home/projects') || cleanGas.includes('/macros/d/')) {
+      setAdminValidationError('⚠️ 您填入的是 Apps Script 編輯器網址！請至右上角點擊「部署」➔「管理部署作業」複製「網頁應用程式 (Web App)」網址（結尾為 /exec）。');
+      return;
+    }
+
+    if (!cleanGas.startsWith('https://script.google.com/macros/s/')) {
+      setAdminValidationError('API 網址格式錯誤，必須以 https://script.google.com/macros/s/ 開頭並以 /exec 結尾');
       return;
     }
 
     setIsAdminBindingLoading(true);
+
+    // 🚀 即時進行 API 連線測試
+    try {
+      const testRes = await fetch(`${cleanGas}${cleanGas.includes('?') ? '&' : '?'}_t=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'getDashboardData' })
+      });
+      const testData = await testRes.json();
+      if (!testData || !testData.success) {
+        console.warn('GAS Test Connection response:', testData);
+      }
+    } catch (testErr) {
+      console.warn('GAS Test Connection failed:', testErr);
+      setAdminValidationError('⚠️ 連線測試失敗！請確認 Google Apps Script 部署作業中的「誰可以存取 (Who has access)」已選擇「任何人 (Anyone)」而非「僅限自己」。');
+      setIsAdminBindingLoading(false);
+      return;
+    }
 
     setGasWebUrl(cleanGas);
     setDeploySheetUrl(cleanSheet);
