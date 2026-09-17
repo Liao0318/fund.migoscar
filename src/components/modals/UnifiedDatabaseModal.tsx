@@ -35,7 +35,7 @@ import { AuthUser, PartnerInviteData, CoupleBindingInfo } from '../../types';
 import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline, encodeInvitePayload, createShareableInviteCard, getAppShareBaseUrl, getActiveInviteCode, getInviteRemainingSeconds, formatRemainingTime } from '../../utils/partnerInvite';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
-import { scanAndRecoverGasUrl, getUserCloudConfig, saveUserCloudConfig } from '../../utils/userConfigService';
+import { scanAndRecoverGasUrl, getUserCloudConfig, saveUserCloudConfig, isValidProductionGasUrl, isValidProductionSheetUrl } from '../../utils/userConfigService';
 import { hasBackendServer } from '../../utils/environment';
 import { APP_VERSION } from '../../version';
 
@@ -604,14 +604,15 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
       const cleanEmail = currentUser.email.trim().toLowerCase();
       // 1. 優先查詢使用者個人雲端設定 (後端 API / Google Drive / Firestore)
       const cloudConfig = await getUserCloudConfig(cleanEmail, { forceRefresh: true });
-      if (cloudConfig?.gasWebUrl && cloudConfig.gasWebUrl.startsWith('http')) {
+      if (cloudConfig?.gasWebUrl && isValidProductionGasUrl(cloudConfig.gasWebUrl)) {
         setDetectedGasUrl(cloudConfig.gasWebUrl);
-        if (cloudConfig.deploySheetUrl) setDetectedSheetUrl(cloudConfig.deploySheetUrl);
+        const validSheet = isValidProductionSheetUrl(cloudConfig.deploySheetUrl) ? cloudConfig.deploySheetUrl : '';
+        if (validSheet) setDetectedSheetUrl(validSheet);
         setInputGasUrl(cloudConfig.gasWebUrl);
-        if (cloudConfig.deploySheetUrl) setInputSheetUrl(cloudConfig.deploySheetUrl);
+        if (validSheet) setInputSheetUrl(validSheet);
         setGasWebUrl(cloudConfig.gasWebUrl);
-        if (cloudConfig.deploySheetUrl) setDeploySheetUrl(cloudConfig.deploySheetUrl);
-        saveDeployConfig(cloudConfig.gasWebUrl, cloudConfig.deploySheetUrl);
+        if (validSheet) setDeploySheetUrl(validSheet);
+        saveDeployConfig(cloudConfig.gasWebUrl, validSheet);
         setCloudSearchStatus('🎉 已成功從雲端同步電腦設定的資料庫！即將進入帳本...');
         setTimeout(() => {
           if (onCompleteOnboarding) onCompleteOnboarding();
@@ -622,14 +623,15 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
 
       // 2. 查詢情侶綁定紀錄
       const binding = await fetchPartnerBindingInfoOnline(cleanEmail);
-      if (binding?.gasWebUrl && binding.gasWebUrl.startsWith('http')) {
+      if (binding?.gasWebUrl && isValidProductionGasUrl(binding.gasWebUrl)) {
         setDetectedGasUrl(binding.gasWebUrl);
-        if (binding.deploySheetUrl) setDetectedSheetUrl(binding.deploySheetUrl);
+        const validSheet = isValidProductionSheetUrl(binding.deploySheetUrl) ? binding.deploySheetUrl : '';
+        if (validSheet) setDetectedSheetUrl(validSheet);
         setInputGasUrl(binding.gasWebUrl);
-        if (binding.deploySheetUrl) setInputSheetUrl(binding.deploySheetUrl);
+        if (validSheet) setInputSheetUrl(validSheet);
         setGasWebUrl(binding.gasWebUrl);
-        if (binding.deploySheetUrl) setDeploySheetUrl(binding.deploySheetUrl);
-        saveDeployConfig(binding.gasWebUrl, binding.deploySheetUrl);
+        if (validSheet) setDeploySheetUrl(validSheet);
+        saveDeployConfig(binding.gasWebUrl, validSheet);
         setCloudSearchStatus('🎉 已成功從雲端同步伴侶綁定的資料庫！即將進入帳本...');
         setTimeout(() => {
           if (onCompleteOnboarding) onCompleteOnboarding();
@@ -644,9 +646,9 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
           const sysRes = await fetch('/api/system-database');
           if (sysRes.ok) {
             const sysData = await sysRes.json();
-            if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
+            if (sysData && sysData.success && sysData.database && isValidProductionGasUrl(sysData.database.gasWebUrl)) {
               const sysGas = sysData.database.gasWebUrl;
-              const sysSheet = sysData.database.deploySheetUrl || '';
+              const sysSheet = isValidProductionSheetUrl(sysData.database.deploySheetUrl) ? sysData.database.deploySheetUrl : '';
               setDetectedGasUrl(sysGas);
               if (sysSheet) setDetectedSheetUrl(sysSheet);
               setInputGasUrl(sysGas);

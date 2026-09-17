@@ -2535,12 +2535,12 @@ export default function App() {
           const cleanEmail = currentUser.email.trim().toLowerCase();
           const cloudConfig = await getUserCloudConfig(cleanEmail, { forceRefresh: true });
           if (cloudConfig && cloudConfig.gasWebUrl && isValidProductionGasUrl(cloudConfig.gasWebUrl)) {
-            if (cloudConfig.gasWebUrl !== gasWebUrl) {
+            const validSheet = isValidProductionSheetUrl(cloudConfig.deploySheetUrl) ? cloudConfig.deploySheetUrl : '';
+            if (cloudConfig.gasWebUrl !== gasWebUrl || validSheet !== deploySheetUrl) {
               setGasWebUrl(cloudConfig.gasWebUrl);
+              if (validSheet) setDeploySheetUrl(validSheet);
+              saveDeployConfig(cloudConfig.gasWebUrl, validSheet);
               activeGasToUse = cloudConfig.gasWebUrl;
-            }
-            if (cloudConfig.deploySheetUrl && cloudConfig.deploySheetUrl !== deploySheetUrl && isValidProductionSheetUrl(cloudConfig.deploySheetUrl)) {
-              setDeploySheetUrl(cloudConfig.deploySheetUrl);
             }
           }
         } catch (e) {}
@@ -2548,9 +2548,9 @@ export default function App() {
 
       await Promise.all([
         fetchDashboardData(false, false, activeGasToUse),
-        fetchShoppingData(false),
+        fetchShoppingData(false, activeGasToUse),
         fetchSplitData(false, activeGasToUse),
-        fetchTravelData(true)
+        fetchTravelData(true, activeGasToUse)
       ]);
       showToast('🎉 所有資料庫（流水帳、採購、代墊、旅遊分帳）已與 Google 試算表完成即時對帳！', 'success');
     } finally {
@@ -3233,7 +3233,7 @@ export default function App() {
         try {
           const cloudConfig = await getUserCloudConfig(cleanEmail, { forceRefresh: true });
           if (cloudConfig) {
-            if (cloudConfig.gasWebUrl && (!activeGas || activeGas !== cloudConfig.gasWebUrl)) {
+            if (cloudConfig.gasWebUrl && isValidProductionGasUrl(cloudConfig.gasWebUrl) && (!activeGas || activeGas !== cloudConfig.gasWebUrl)) {
               setGasWebUrl(cloudConfig.gasWebUrl);
               try { 
                 localStorage.setItem('muji_gas_web_url', cloudConfig.gasWebUrl);
@@ -3242,13 +3242,14 @@ export default function App() {
               activeGas = cloudConfig.gasWebUrl;
               updated = true;
             }
-            if (cloudConfig.deploySheetUrl && (!activeSheet || activeSheet !== cloudConfig.deploySheetUrl)) {
-              setDeploySheetUrl(cloudConfig.deploySheetUrl);
+            const validSheet = isValidProductionSheetUrl(cloudConfig.deploySheetUrl) ? cloudConfig.deploySheetUrl : '';
+            if (validSheet && (!activeSheet || activeSheet !== validSheet)) {
+              setDeploySheetUrl(validSheet);
               try { 
-                localStorage.setItem('muji_sheet_url', cloudConfig.deploySheetUrl);
-                localStorage.setItem(`muji_sheet_url_${cleanEmail}`, cloudConfig.deploySheetUrl);
+                localStorage.setItem('muji_sheet_url', validSheet);
+                localStorage.setItem(`muji_sheet_url_${cleanEmail}`, validSheet);
               } catch (e) {}
-              activeSheet = cloudConfig.deploySheetUrl;
+              activeSheet = validSheet;
               updated = true;
             }
           }
