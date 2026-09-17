@@ -651,7 +651,8 @@ export function hardResetUserLocalState(email?: string): void {
       `banban_user_nickname_${cleanEmail}`,
       `muji_ledger_data_${cleanEmail}`,
       `banban_sync_version_${cleanEmail}`,
-      `muji_notification_settings_${cleanEmail}`
+      `muji_notification_settings_${cleanEmail}`,
+      `banban_user_has_logged_in_${cleanEmail}`
     ];
     userSpecificKeys.forEach(k => {
       try {

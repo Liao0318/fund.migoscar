@@ -1097,28 +1097,19 @@ export default function App() {
 
     try {
       const cleanEmail = (user.email || '').trim().toLowerCase();
-      const previousEmail = (currentUser?.email || '').trim().toLowerCase();
+      // 🛡️ 取得前次登入帳號（包含目前狀態與本機記錄的前次已登入帳號）
+      let previousEmail = (currentUser?.email || '').trim().toLowerCase();
+      if (!previousEmail) {
+        try {
+          previousEmail = (localStorage.getItem('banban_last_logged_in_email') || '').trim().toLowerCase();
+        } catch (e) {}
+      }
 
-      // 🛡️ 登入前保護：先擷取此裝置目前現存的所有可能資料庫設定與數據備援，避免被清除抹除
-      const cachedDeviceGas = (localStorage.getItem('muji_gas_web_url') || '').trim();
-      const cachedDeviceSheet = (localStorage.getItem('muji_sheet_url') || '').trim();
-      const cachedPerUserGas = cleanEmail ? (localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) || '').trim() : '';
-      const cachedPerUserSheet = cleanEmail ? (localStorage.getItem(`muji_sheet_url_${cleanEmail}`) || '').trim() : '';
-
-      // 備援當前記憶體與本地儲存的業務數據（若同帳號重新登入或首次連結 Google 帳號，可平滑繼承）
-      const localRecordsBackup = (records && records.length > 0) ? records : (() => {
-        try { const r = localStorage.getItem('muji_ledger_data'); return r ? JSON.parse(r) : []; } catch (e) { return []; }
-      })();
-      const localSplitBackup = (splitItems && splitItems.length > 0) ? splitItems : (() => {
-        try { const s = localStorage.getItem('banban_split_records'); return s ? JSON.parse(s) : []; } catch (e) { return []; }
-      })();
-      const localShoppingBackup = (shoppingItems && shoppingItems.length > 0) ? shoppingItems : (() => {
-        try { const sh = localStorage.getItem('banban_shopping_items'); return sh ? JSON.parse(sh) : []; } catch (e) { return []; }
-      })();
-
-      // 🛡️ 僅在確為不同帳號切換時才清理跨帳號暫存
+      // 🛡️ 帳號隔離保護：若此帳號為不同帳號，或是本機從未見過的全新 Google 帳號，立即強制徹底清除上一位的殘留暫存！
       const isSwitchingDifferentAccount = Boolean(previousEmail && cleanEmail && previousEmail !== cleanEmail);
-      if (isSwitchingDifferentAccount) {
+      const isKnownUserOnDevice = cleanEmail ? (localStorage.getItem(`banban_user_has_logged_in_${cleanEmail}`) === 'true') : false;
+
+      if (isSwitchingDifferentAccount || !isKnownUserOnDevice) {
         setRecords([]);
         setSplitItems([]);
         setShoppingItems([]);
@@ -1126,18 +1117,42 @@ export default function App() {
         setDeploySheetUrl('');
         setPartnerBindingInfo(null);
         try {
-          localStorage.removeItem('muji_ledger_data');
-          localStorage.removeItem('banban_split_records');
-          localStorage.removeItem('banban_shopping_items');
-          localStorage.removeItem('banban_partner_binding');
-          localStorage.removeItem('banban_sync_version');
-          if (cleanEmail) localStorage.removeItem(`banban_sync_version_${cleanEmail}`);
-          if (previousEmail) localStorage.removeItem(`banban_sync_version_${previousEmail}`);
+          clearAllSessionLedgerCache();
+          if (previousEmail && previousEmail !== cleanEmail) {
+            hardResetUserLocalState(previousEmail);
+          }
           window.dispatchEvent(new CustomEvent('travel-data-updated', {
             detail: { trips: [], expenses: [], wishlist: [] }
           }));
         } catch (e) {}
       }
+
+      // 紀錄當前登入之帳號為最後登入者
+      try {
+        localStorage.setItem('banban_last_logged_in_email', cleanEmail);
+        localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
+      } catch (e) {}
+
+      // 登入時先讀取此使用者專屬的本地資料庫網址快取
+      const cachedPerUserGas = cleanEmail ? (localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) || '').trim() : '';
+      const cachedPerUserSheet = cleanEmail ? (localStorage.getItem(`muji_sheet_url_${cleanEmail}`) || '').trim() : '';
+
+      // 備援當前記憶體與本地儲存的業務數據（⚠️ 僅在確為同帳號重新登入時，方可平滑繼承！）
+      const localRecordsBackup = (!isSwitchingDifferentAccount && isKnownUserOnDevice && records && records.length > 0) ? records : (() => {
+        if (isSwitchingDifferentAccount || !isKnownUserOnDevice) return [];
+        try { 
+          const r = cleanEmail ? localStorage.getItem(`muji_ledger_data_${cleanEmail}`) : localStorage.getItem('muji_ledger_data'); 
+          return r ? JSON.parse(r) : []; 
+        } catch (e) { return []; }
+      })();
+      const localSplitBackup = (!isSwitchingDifferentAccount && isKnownUserOnDevice && splitItems && splitItems.length > 0) ? splitItems : (() => {
+        if (isSwitchingDifferentAccount || !isKnownUserOnDevice) return [];
+        try { const s = localStorage.getItem('banban_split_records'); return s ? JSON.parse(s) : []; } catch (e) { return []; }
+      })();
+      const localShoppingBackup = (!isSwitchingDifferentAccount && isKnownUserOnDevice && shoppingItems && shoppingItems.length > 0) ? shoppingItems : (() => {
+        if (isSwitchingDifferentAccount || !isKnownUserOnDevice) return [];
+        try { const sh = localStorage.getItem('banban_shopping_items'); return sh ? JSON.parse(sh) : []; } catch (e) { return []; }
+      })();
 
       let boundNickname = user.nickname || '';
       if (!boundNickname && cleanEmail) {
@@ -1440,16 +1455,19 @@ export default function App() {
         } catch (e) {}
       }
 
-      // 🛡️ 雙重保險備援 3：直接向伺服器全域資料庫或關聯資料庫查詢
-      if (!activeGas && hasBackendServer()) {
+      // 🛡️ 雙重保險備援 3：向伺服器查詢備援（嚴格限制僅在該資料庫由目前登入者設定時方可繼承）
+      if (!activeGas && hasBackendServer() && cleanEmail) {
         try {
           const sysRes = await fetch('/api/system-database');
           if (sysRes.ok) {
             const sysData = await sysRes.json();
             if (sysData && sysData.success && sysData.database?.gasWebUrl) {
-              activeGas = sysData.database.gasWebUrl.trim();
-              if (sysData.database.deploySheetUrl && !activeSheet) {
-                activeSheet = sysData.database.deploySheetUrl.trim();
+              const configuredBy = (sysData.database.configuredBy || '').trim().toLowerCase();
+              if (configuredBy && configuredBy === cleanEmail) {
+                activeGas = sysData.database.gasWebUrl.trim();
+                if (sysData.database.deploySheetUrl && !activeSheet) {
+                  activeSheet = sysData.database.deploySheetUrl.trim();
+                }
               }
             }
           }
@@ -3255,22 +3273,25 @@ export default function App() {
           }
         } catch (e) {}
 
-        // 2.5 向伺服器全域系統資料庫查詢備援 (換手機時自動繼承電腦已設定之資料庫，僅在伺服器環境下調用)
-        if ((!activeGas || !activeGas.startsWith('http')) && hasBackendServer()) {
+        // 2.5 向伺服器系統資料庫查詢備援 (僅在該資料庫由目前使用者設定時，方可在換機時自動繼承)
+        if ((!activeGas || !activeGas.startsWith('http')) && hasBackendServer() && cleanEmail) {
           try {
             const sysRes = await fetch('/api/system-database');
             if (sysRes.ok) {
               const sysData = await sysRes.json();
               if (sysData && sysData.success && sysData.database && sysData.database.gasWebUrl) {
-                const sysGas = sysData.database.gasWebUrl;
-                const sysSheet = sysData.database.deploySheetUrl || '';
-                activeGas = sysGas;
-                setGasWebUrl(sysGas);
-                if (sysSheet && !activeSheet) {
-                  activeSheet = sysSheet;
-                  setDeploySheetUrl(sysSheet);
+                const configuredBy = (sysData.database.configuredBy || '').trim().toLowerCase();
+                if (configuredBy && configuredBy === cleanEmail) {
+                  const sysGas = sysData.database.gasWebUrl;
+                  const sysSheet = sysData.database.deploySheetUrl || '';
+                  activeGas = sysGas;
+                  setGasWebUrl(sysGas);
+                  if (sysSheet && !activeSheet) {
+                    activeSheet = sysSheet;
+                    setDeploySheetUrl(sysSheet);
+                  }
+                  updated = true;
                 }
-                updated = true;
               }
             }
           } catch (e) {}

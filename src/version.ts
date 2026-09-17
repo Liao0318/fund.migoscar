@@ -3,8 +3,8 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.8.9';
-export const APP_BUILD_DATE = '2026.09.16';
+export const APP_VERSION = 'v2.9.0';
+export const APP_BUILD_DATE = '2026.09.17';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
 
@@ -16,6 +16,16 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.9.0',
+    date: '2026.09.17',
+    title: 'Google 帳號切換徹底隔離與新帳戶資料庫安全防護',
+    highlights: [
+      '新帳號安全隔離與即時初始化：登入非本人或新帳戶時，自動檢測帳號歸屬，杜絕本機既有帳本與資料庫設定洩漏至新帳號，新帳號皆為全新獨立初始狀態',
+      '全域資料庫比對防護：伺服器系統資料庫與備援連線全面實施 configuredBy 帳號歸屬比對，禁止非設定者之帳號讀取他人的資料庫或帳本',
+      '情侶邀請與綁定嚴格驗證：伴侶邀請碼與情侶綁定資訊加入雙向帳號驗證，未受邀請之第三方帳號登入時自動重設為全新引導模式'
+    ]
+  },
   {
     version: 'v2.8.9',
     date: '2026.09.16',

@@ -348,12 +348,22 @@ export async function savePartnerBindingInfo(info: CoupleBindingInfo): Promise<v
 /**
  * 讀取伴侶綁定資訊 (本地快取)
  */
-export function getPartnerBindingInfo(): CoupleBindingInfo | null {
+export function getPartnerBindingInfo(email?: string): CoupleBindingInfo | null {
   try {
     const data = localStorage.getItem(PARTNER_BINDING_STORAGE_KEY);
     if (data) {
       const parsed = JSON.parse(data);
-      return sanitizeBindingInfo(parsed);
+      const sanitized = sanitizeBindingInfo(parsed);
+      if (email && sanitized) {
+        const cleanEmail = email.trim().toLowerCase();
+        const a = (sanitized.adminEmail || '').trim().toLowerCase();
+        const p = (sanitized.partnerEmail || '').trim().toLowerCase();
+        // 嚴格隔離：此伴侶綁定必須包含該帳號（作為 admin 或 partner）
+        if (a !== cleanEmail && p !== cleanEmail) {
+          return null;
+        }
+      }
+      return sanitized;
     }
   } catch (e) {}
   return null;
@@ -363,7 +373,7 @@ export function getPartnerBindingInfo(): CoupleBindingInfo | null {
  * 從伺服器 API、Firestore 或本地讀取最新伴侶綁定資訊（具備跨裝置即時同步）
  */
 export async function fetchPartnerBindingInfoOnline(email?: string): Promise<CoupleBindingInfo | null> {
-  const local = getPartnerBindingInfo();
+  const local = getPartnerBindingInfo(email);
   const cleanEmail = (email || '').trim().toLowerCase();
 
   // 1. 優先從伺服器持久 API 抓取（僅在有後端伺服器環境下調用）
@@ -426,9 +436,9 @@ export async function fetchPartnerBindingInfoOnline(email?: string): Promise<Cou
         }
       }
 
-      // C. 檢查當前 active invite code 是否已被伴侶綁定
+      // C. 檢查當前 active invite code 是否已被伴侶綁定（嚴格限制該邀請碼必須屬於 cleanEmail 本人）
       const activeInvite = getActiveInviteCode();
-      if (activeInvite && activeInvite.inviteCode) {
+      if (activeInvite && activeInvite.inviteCode && cleanEmail && activeInvite.adminEmail?.trim().toLowerCase() === cleanEmail) {
         const codeKey = activeInvite.inviteCode.toUpperCase();
         const inviteRef = doc(db, 'partner_invites', codeKey);
         const invSnap = await asyncWithTimeout(getDoc(inviteRef), 2500, null as any);

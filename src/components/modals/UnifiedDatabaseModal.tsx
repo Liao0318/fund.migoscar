@@ -640,28 +640,31 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
         return;
       }
 
-      // 3. 查詢全系統伺服器資料庫（僅在伺服器環境下調用）
+      // 3. 查詢全系統伺服器資料庫（僅在伺服器環境下調用，且嚴格比對是否由該使用者所設定）
       if (hasBackendServer()) {
         try {
           const sysRes = await fetch('/api/system-database');
           if (sysRes.ok) {
             const sysData = await sysRes.json();
             if (sysData && sysData.success && sysData.database && isValidProductionGasUrl(sysData.database.gasWebUrl)) {
-              const sysGas = sysData.database.gasWebUrl;
-              const sysSheet = isValidProductionSheetUrl(sysData.database.deploySheetUrl) ? sysData.database.deploySheetUrl : '';
-              setDetectedGasUrl(sysGas);
-              if (sysSheet) setDetectedSheetUrl(sysSheet);
-              setInputGasUrl(sysGas);
-              if (sysSheet) setInputSheetUrl(sysSheet);
-              setGasWebUrl(sysGas);
-              if (sysSheet) setDeploySheetUrl(sysSheet);
-              saveDeployConfig(sysGas, sysSheet);
-              setCloudSearchStatus('🎉 已成功從系統伺服器同步電腦設定的資料庫！即將進入帳本...');
-              setTimeout(() => {
-                if (onCompleteOnboarding) onCompleteOnboarding();
-                onClose();
-              }, 500);
-              return;
+              const configuredBy = (sysData.database.configuredBy || '').trim().toLowerCase();
+              if (configuredBy && configuredBy === cleanEmail) {
+                const sysGas = sysData.database.gasWebUrl;
+                const sysSheet = isValidProductionSheetUrl(sysData.database.deploySheetUrl) ? sysData.database.deploySheetUrl : '';
+                setDetectedGasUrl(sysGas);
+                if (sysSheet) setDetectedSheetUrl(sysSheet);
+                setInputGasUrl(sysGas);
+                if (sysSheet) setInputSheetUrl(sysSheet);
+                setGasWebUrl(sysGas);
+                if (sysSheet) setDeploySheetUrl(sysSheet);
+                saveDeployConfig(sysGas, sysSheet);
+                setCloudSearchStatus('🎉 已成功從系統伺服器同步電腦設定的資料庫！即將進入帳本...');
+                setTimeout(() => {
+                  if (onCompleteOnboarding) onCompleteOnboarding();
+                  onClose();
+                }, 500);
+                return;
+              }
             }
           }
         } catch (e) {}
