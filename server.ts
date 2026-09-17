@@ -39,7 +39,11 @@ function writeJsonFile<T>(filePath: string, data: T): void {
 function isValidGasUrl(url: any): boolean {
   if (!url || typeof url !== 'string') return false;
   const lower = url.trim().toLowerCase();
-  return lower.startsWith('http') && !lower.includes('/test/') && !lower.endsWith('/test') && !lower.includes('example.com');
+  if (!lower.startsWith('http')) return false;
+  if (lower.includes('test12345') || lower.includes('test123') || lower.includes('/test/') || lower.endsWith('/test') || lower.includes('example.com') || lower.includes('placeholder')) {
+    return false;
+  }
+  return true;
 }
 
 async function startServer() {

@@ -35,7 +35,12 @@ import {
   fetchInviteCodeOnline,
   clearPendingInvite
 } from '../../utils/partnerInvite';
-import { getUserCloudConfig, scanAndRecoverGasUrl } from '../../utils/userConfigService';
+import { 
+  getUserCloudConfig, 
+  scanAndRecoverGasUrl,
+  isValidProductionGasUrl,
+  isValidProductionSheetUrl 
+} from '../../utils/userConfigService';
 import { hasBackendServer } from '../../utils/environment';
 
 interface GoogleAuthPortalProps {
@@ -136,18 +141,18 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
       // 若尚未取得，自動查詢情侶配對紀錄（伴侶或管理者換機同步）
       if (!cloudGas && cleanEmail) {
         const partnerBinding = await fetchPartnerBindingInfoOnline(cleanEmail);
-        if (partnerBinding && partnerBinding.gasWebUrl && partnerBinding.gasWebUrl.trim().startsWith('http')) {
+        if (partnerBinding && isValidProductionGasUrl(partnerBinding.gasWebUrl)) {
           cloudGas = partnerBinding.gasWebUrl.trim();
-          cloudSheet = partnerBinding.deploySheetUrl || '';
+          cloudSheet = isValidProductionSheetUrl(partnerBinding.deploySheetUrl) ? partnerBinding.deploySheetUrl.trim() : '';
         }
       }
 
       // 若尚未取得，反查本機或註冊表中的管理員邀請碼
       if (!cloudGas && cleanEmail) {
         const activeInvite = getActiveInviteCode();
-        if (activeInvite && activeInvite.adminEmail?.toLowerCase() === cleanEmail && activeInvite.gasWebUrl) {
+        if (activeInvite && activeInvite.adminEmail?.toLowerCase() === cleanEmail && isValidProductionGasUrl(activeInvite.gasWebUrl)) {
           cloudGas = activeInvite.gasWebUrl.trim();
-          cloudSheet = activeInvite.deploySheetUrl || '';
+          cloudSheet = isValidProductionSheetUrl(activeInvite.deploySheetUrl) ? activeInvite.deploySheetUrl.trim() : '';
         }
       }
 
@@ -157,9 +162,9 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
           const lRes = await fetch(`/api/user-ledger-data?email=${encodeURIComponent(cleanEmail)}`);
           if (lRes.ok) {
             const lData = await lRes.json();
-            if (lData?.success && lData?.data?.gasWebUrl) {
+            if (lData?.success && isValidProductionGasUrl(lData?.data?.gasWebUrl)) {
               cloudGas = lData.data.gasWebUrl.trim();
-              if (lData.data.deploySheetUrl && !cloudSheet) {
+              if (isValidProductionSheetUrl(lData.data.deploySheetUrl) && !cloudSheet) {
                 cloudSheet = lData.data.deploySheetUrl.trim();
               }
             }
@@ -179,19 +184,23 @@ export const GoogleAuthPortal: React.FC<GoogleAuthPortalProps> = ({
           }
           const userGas = localStorage.getItem(`muji_gas_web_url_${cleanEmail}`);
           const userSheet = localStorage.getItem(`muji_sheet_url_${cleanEmail}`);
-          if (userGas && userGas.trim().startsWith('http')) {
+          if (userGas && isValidProductionGasUrl(userGas)) {
             cloudGas = userGas.trim();
+          } else if (userGas && !isValidProductionGasUrl(userGas)) {
+            localStorage.removeItem(`muji_gas_web_url_${cleanEmail}`);
           }
-          if (userSheet) {
+          if (userSheet && isValidProductionSheetUrl(userSheet)) {
             cloudSheet = userSheet.trim();
+          } else if (userSheet && !isValidProductionSheetUrl(userSheet)) {
+            localStorage.removeItem(`muji_sheet_url_${cleanEmail}`);
           }
         }
         // 深度全域與本機多層級掃描復原
         if (!cloudGas) {
           const recovered = scanAndRecoverGasUrl(cleanEmail);
-          if (recovered.gasWebUrl) {
+          if (recovered.gasWebUrl && isValidProductionGasUrl(recovered.gasWebUrl)) {
             cloudGas = recovered.gasWebUrl;
-            if (recovered.deploySheetUrl && !cloudSheet) {
+            if (recovered.deploySheetUrl && isValidProductionSheetUrl(recovered.deploySheetUrl) && !cloudSheet) {
               cloudSheet = recovered.deploySheetUrl;
             }
           }

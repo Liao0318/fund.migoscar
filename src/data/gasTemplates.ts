@@ -792,36 +792,124 @@ function setMonthReconciled(month, isReconciled) {
 function getSplitData() {
   try {
     var ss = getDbSpreadsheet();
-    if (!ss) return { success: false, items: [] };
+    if (!ss) return { success: false, items: [], splitItems: [] };
     var sheet = ss.getSheetByName("代墊明細");
     if (!sheet) {
       setupDatabase();
       sheet = ss.getSheetByName("代墊明細");
     }
     var lastRow = sheet.getLastRow();
-    if (lastRow <= 1) return { success: true, items: [] };
+    if (lastRow <= 1) return { success: true, items: [], splitItems: [] };
 
-    var values = sheet.getRange(2, 1, lastRow - 1, 10).getValues();
+    var maxCols = Math.max(sheet.getLastColumn(), 10);
+    var headerRow = sheet.getRange(1, 1, 1, maxCols).getValues()[0];
+    var values = sheet.getRange(2, 1, lastRow - 1, maxCols).getValues();
+
+    // 智能標題解析（相容任意順序、有無 ID 欄位）
+    var colMap = {
+      id: -1,
+      date: -1,
+      payer: -1,
+      splitMode: -1,
+      description: -1,
+      amount: -1,
+      splitResult: -1,
+      status: -1,
+      settledAt: -1,
+      note: -1
+    };
+
+    for (var c = 0; c < headerRow.length; c++) {
+      var h = String(headerRow[c] || "").trim().toLowerCase();
+      if (!h) continue;
+      if (colMap.id === -1 && (h === "id" || h.indexOf("編號") !== -1 || h.indexOf("序號") !== -1 || h.indexOf("流水號") !== -1)) {
+        colMap.id = c;
+      } else if (colMap.date === -1 && (h.indexOf("時間") !== -1 || h.indexOf("日期") !== -1 || h.indexOf("建立") !== -1 || h.indexOf("date") !== -1 || h.indexOf("time") !== -1)) {
+        colMap.date = c;
+      } else if (colMap.payer === -1 && (h.indexOf("代墊人") !== -1 || h.indexOf("代墊者") !== -1 || h.indexOf("付款人") !== -1 || h.indexOf("出錢人") !== -1 || h.indexOf("誰付") !== -1 || h.indexOf("付款") !== -1 || h.indexOf("payer") !== -1 || h.indexOf("who") !== -1)) {
+        colMap.payer = c;
+      } else if (colMap.splitMode === -1 && (h.indexOf("分帳模式") !== -1 || h.indexOf("模式") !== -1 || h.indexOf("方式") !== -1 || h.indexOf("分攤") !== -1 || h.indexOf("mode") !== -1)) {
+        colMap.splitMode = c;
+      } else if (colMap.description === -1 && (h.indexOf("項目描述") !== -1 || h.indexOf("項目") !== -1 || h.indexOf("品項") !== -1 || h.indexOf("描述") !== -1 || h.indexOf("內容") !== -1 || h.indexOf("說明") !== -1 || h.indexOf("消費") !== -1 || h.indexOf("item") !== -1 || h.indexOf("desc") !== -1)) {
+        colMap.description = c;
+      } else if (colMap.amount === -1 && (h.indexOf("總金額") !== -1 || h.indexOf("金額") !== -1 || h.indexOf("費用") !== -1 || h.indexOf("花費") !== -1 || h.indexOf("台幣") !== -1 || h.indexOf("amount") !== -1 || h.indexOf("cost") !== -1 || h.indexOf("元") !== -1)) {
+        colMap.amount = c;
+      } else if (colMap.splitResult === -1 && (h.indexOf("結果") !== -1 || h.indexOf("分帳結果") !== -1 || h.indexOf("應付") !== -1 || h.indexOf("需付") !== -1 || h.indexOf("result") !== -1)) {
+        colMap.splitResult = c;
+      } else if (colMap.status === -1 && (h.indexOf("狀態") !== -1 || h.indexOf("結清狀態") !== -1 || h.indexOf("status") !== -1)) {
+        colMap.status = c;
+      } else if (colMap.settledAt === -1 && (h.indexOf("結清時間") !== -1 || h.indexOf("結清日") !== -1 || h.indexOf("settled") !== -1)) {
+        colMap.settledAt = c;
+      } else if (colMap.note === -1 && (h.indexOf("備註") !== -1 || h.indexOf("附註") !== -1 || h.indexOf("note") !== -1)) {
+        colMap.note = c;
+      }
+    }
+
+    var hasIdCol = (colMap.id !== -1);
+    if (colMap.date === -1) colMap.date = hasIdCol ? 1 : 0;
+    if (colMap.payer === -1) colMap.payer = hasIdCol ? 2 : 1;
+    if (colMap.splitMode === -1) colMap.splitMode = hasIdCol ? 3 : 2;
+    if (colMap.description === -1) colMap.description = hasIdCol ? 4 : 3;
+    if (colMap.amount === -1) colMap.amount = hasIdCol ? 5 : 4;
+    if (colMap.splitResult === -1) colMap.splitResult = hasIdCol ? 6 : 5;
+    if (colMap.status === -1) colMap.status = hasIdCol ? 7 : 6;
+    if (colMap.settledAt === -1) colMap.settledAt = hasIdCol ? 8 : 7;
+    if (colMap.note === -1) colMap.note = hasIdCol ? 9 : 8;
+
     var items = [];
     for (var i = values.length - 1; i >= 0; i--) {
       var row = values[i];
-      if (!row[0]) continue;
-      items.push({
-        id: String(row[0]),
-        date: row[1] instanceof Date ? Utilities.formatDate(row[1], "GMT+8", "yyyy-MM-dd HH:mm") : String(row[1] || ""),
-        payer: String(row[2] || DEFAULT_USER_A_NAME),
-        splitMode: String(row[3] || "equal"),
-        description: String(row[4] || ""),
-        amount: parseFloat(row[5]) || 0,
-        splitResult: String(row[6] || ""),
-        status: String(row[7] || "unsettled"),
-        settledAt: row[8] instanceof Date ? Utilities.formatDate(row[8], "GMT+8", "yyyy-MM-dd HH:mm") : String(row[8] || ""),
-        note: String(row[9] || "")
-      });
+      var rawId = colMap.id >= 0 ? row[colMap.id] : "";
+      var rawDate = colMap.date >= 0 ? row[colMap.date] : "";
+      var rawPayer = colMap.payer >= 0 ? String(row[colMap.payer] || "").trim() : "";
+      var rawMode = colMap.splitMode >= 0 ? String(row[colMap.splitMode] || "").trim() : "equal";
+      var rawDesc = colMap.description >= 0 ? String(row[colMap.description] || "").trim() : "";
+      var rawAmount = colMap.amount >= 0 ? parseFloat(String(row[colMap.amount] || "").replace(/[^0-9.]/g, '')) || 0 : 0;
+      var rawResult = colMap.splitResult >= 0 ? String(row[colMap.splitResult] || "").trim() : "";
+      var rawStatus = colMap.status >= 0 ? String(row[colMap.status] || "").trim() : "unsettled";
+      var rawSettledAt = colMap.settledAt >= 0 ? row[colMap.settledAt] : null;
+      var rawNote = colMap.note >= 0 ? String(row[colMap.note] || "").trim() : "";
+
+      // 🛡️ 關鍵防錯：代墊人與項目顛倒辨識 (「代墊者變成晚餐、大全聯」的終極防護)
+      var itemKeywords = /晚餐|早餐|午餐|全聯|超市|好市多|家樂福|飯|麵|飲料|咖啡|水費|電費|房租|門票|高鐵|計程車|uber|加油|機票|買|吃|點心|下午茶|生活/i;
+      var personKeywords = /^(廖|周|尹丞|沛緹|廖尹丞|周沛緹|admin|使用者)$/i;
+      if (itemKeywords.test(rawPayer) && (personKeywords.test(rawDesc) || rawDesc.length < rawPayer.length)) {
+        var temp = rawPayer;
+        rawPayer = rawDesc || DEFAULT_USER_A_NAME;
+        rawDesc = temp;
+      }
+
+      if (!rawId && !rawDesc && !rawAmount) continue;
+
+      var dateStr = rawDate instanceof Date 
+        ? Utilities.formatDate(rawDate, "GMT+8", "yyyy-MM-dd HH:mm") 
+        : String(rawDate || "");
+      var settledStr = rawSettledAt 
+        ? (rawSettledAt instanceof Date ? Utilities.formatDate(rawSettledAt, "GMT+8", "yyyy-MM-dd HH:mm") : String(rawSettledAt)) 
+        : "";
+
+      var obj = {
+        id: String(rawId || "split-" + (i + 2)),
+        date: dateStr,
+        timestamp: dateStr,
+        payer: rawPayer || DEFAULT_USER_A_NAME,
+        splitMode: rawMode || "equal",
+        mode: rawMode || "equal",
+        description: rawDesc || "",
+        desc: rawDesc || "",
+        item: rawDesc || "",
+        amount: rawAmount,
+        splitResult: rawResult || "",
+        result: rawResult || "",
+        status: rawStatus || "unsettled",
+        settledAt: settledStr,
+        note: rawNote || ""
+      };
+      items.push(obj);
     }
-    return { success: true, items: items };
+    return { success: true, items: items, splitItems: items };
   } catch (e) {
-    return { success: false, message: e.toString(), items: [] };
+    return { success: false, message: e.toString(), items: [], splitItems: [] };
   }
 }
 

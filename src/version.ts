@@ -3,8 +3,8 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.8.8';
-export const APP_BUILD_DATE = '2026.09.13';
+export const APP_VERSION = 'v2.8.9';
+export const APP_BUILD_DATE = '2026.09.16';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
 
@@ -16,6 +16,16 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.8.9',
+    date: '2026.09.16',
+    title: '跨裝置試算表連線自動校驗自癒與代墊資料智慧對齊',
+    highlights: [
+      '嚴格網址驗證與過期快取自癒：新增 isValidProductionGasUrl 與 isValidProductionSheetUrl 驗證防護，手機端與跨裝置掃描本地快取時，自動排查並清理無效、佔位或舊版網址，防止手機端載入過期連線設定',
+      '跨裝置雲端優先對齊：登入或手動點擊同步時，強制向使用者雲端配置拉取電腦端綁定之最新 Google Apps Script Web App 與試算表網址，確保手機與電腦端連線 100% 同步一致',
+      '代墊明細與品項錯位雙軌校正：前後端雙重升級，試算表解析引擎自動辨識出資人與消費項目反轉情形（如誤將晚餐、大全聯判斷為付款人），前端同時自動實施反轉自癒與人名常態化，確保最新差額與明細代墊人即時正確呈現'
+    ]
+  },
   {
     version: 'v2.8.8',
     date: '2026.09.13',

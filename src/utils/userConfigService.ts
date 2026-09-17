@@ -57,6 +57,44 @@ export interface PersistentDbResult {
 }
 
 /**
+ * 嚴格驗證是否為有效的真實 Google Apps Script Web App URL（排除任何測試、範例或佔位字串）
+ */
+export function isValidProductionGasUrl(url?: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('https://script.google.com/macros/s/')) return false;
+  if (!trimmed.includes('/exec')) return false;
+  if (
+    trimmed.includes('test12345') ||
+    trimmed.includes('test123') ||
+    trimmed.includes('placeholder') ||
+    trimmed.includes('example.com') ||
+    trimmed.includes('YOUR_GAS_URL')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * 嚴格驗證是否為有效的真實 Google Sheet URL（排除任何測試、範例或佔位字串）
+ */
+export function isValidProductionSheetUrl(url?: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('https://docs.google.com/spreadsheets/d/')) return false;
+  if (
+    trimmed.includes('test123') ||
+    trimmed.includes('placeholder') ||
+    trimmed.includes('example.com') ||
+    trimmed.includes('YOUR_SHEET_URL')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * 🛡️ 全域多層級智慧掃描與復原引擎
  * 搜尋本機所有儲存位置（使用者專屬鍵、裝置永久鍵、邀請碼、伴侶設定、全域快取，以及 LocalStorage 深度字串掃描）
  * 確保只要本機曾設定過任何 Google Apps Script API，登入或重新載入時絕對不丟失！
@@ -68,28 +106,36 @@ export function scanAndRecoverGasUrl(email?: string): PersistentDbResult {
   if (cleanEmail) {
     try {
       const u1 = localStorage.getItem(`muji_gas_web_url_${cleanEmail}`)?.trim();
-      if (u1 && u1.startsWith('http')) {
+      if (u1 && isValidProductionGasUrl(u1)) {
+        const s1 = localStorage.getItem(`muji_sheet_url_${cleanEmail}`)?.trim() || '';
         return {
           gasWebUrl: u1,
-          deploySheetUrl: localStorage.getItem(`muji_sheet_url_${cleanEmail}`)?.trim() || '',
+          deploySheetUrl: isValidProductionSheetUrl(s1) ? s1 : '',
           source: 'user_storage'
         };
+      } else if (u1 && !isValidProductionGasUrl(u1)) {
+        localStorage.removeItem(`muji_gas_web_url_${cleanEmail}`);
       }
+
       const u2 = localStorage.getItem(`banban_permanent_gas_url_${cleanEmail}`)?.trim();
-      if (u2 && u2.startsWith('http')) {
+      if (u2 && isValidProductionGasUrl(u2)) {
+        const s2 = localStorage.getItem(`banban_permanent_sheet_url_${cleanEmail}`)?.trim() || '';
         return {
           gasWebUrl: u2,
-          deploySheetUrl: localStorage.getItem(`banban_permanent_sheet_url_${cleanEmail}`)?.trim() || '',
+          deploySheetUrl: isValidProductionSheetUrl(s2) ? s2 : '',
           source: 'user_permanent'
         };
+      } else if (u2 && !isValidProductionGasUrl(u2)) {
+        localStorage.removeItem(`banban_permanent_gas_url_${cleanEmail}`);
       }
+
       const cfgRaw = localStorage.getItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`);
       if (cfgRaw) {
         const parsed = JSON.parse(cfgRaw);
-        if (parsed.gasWebUrl && parsed.gasWebUrl.startsWith('http')) {
+        if (parsed.gasWebUrl && isValidProductionGasUrl(parsed.gasWebUrl)) {
           return {
             gasWebUrl: parsed.gasWebUrl.trim(),
-            deploySheetUrl: parsed.deploySheetUrl?.trim() || '',
+            deploySheetUrl: isValidProductionSheetUrl(parsed.deploySheetUrl) ? parsed.deploySheetUrl.trim() : '',
             source: 'user_cached_config'
           };
         }
@@ -103,30 +149,39 @@ export function scanAndRecoverGasUrl(email?: string): PersistentDbResult {
   // 2. 本機全域專屬金鑰 (僅在完全未指定 email 的單機無帳號模式下)
   try {
     const g1 = localStorage.getItem('muji_gas_web_url')?.trim();
-    if (g1 && g1.startsWith('http')) {
+    if (g1 && isValidProductionGasUrl(g1)) {
+      const s1 = localStorage.getItem('muji_sheet_url')?.trim() || '';
       return {
         gasWebUrl: g1,
-        deploySheetUrl: localStorage.getItem('muji_sheet_url')?.trim() || '',
+        deploySheetUrl: isValidProductionSheetUrl(s1) ? s1 : '',
         source: 'device_storage'
       };
+    } else if (g1 && !isValidProductionGasUrl(g1)) {
+      localStorage.removeItem('muji_gas_web_url');
     }
 
     const g2 = localStorage.getItem('banban_permanent_gas_url')?.trim();
-    if (g2 && g2.startsWith('http')) {
+    if (g2 && isValidProductionGasUrl(g2)) {
+      const s2 = localStorage.getItem('banban_permanent_sheet_url')?.trim() || '';
       return {
         gasWebUrl: g2,
-        deploySheetUrl: localStorage.getItem('banban_permanent_sheet_url')?.trim() || '',
+        deploySheetUrl: isValidProductionSheetUrl(s2) ? s2 : '',
         source: 'device_permanent'
       };
+    } else if (g2 && !isValidProductionGasUrl(g2)) {
+      localStorage.removeItem('banban_permanent_gas_url');
     }
 
     const g3 = localStorage.getItem('banban_device_master_gas')?.trim();
-    if (g3 && g3.startsWith('http')) {
+    if (g3 && isValidProductionGasUrl(g3)) {
+      const s3 = localStorage.getItem('banban_device_master_sheet')?.trim() || '';
       return {
         gasWebUrl: g3,
-        deploySheetUrl: localStorage.getItem('banban_device_master_sheet')?.trim() || '',
+        deploySheetUrl: isValidProductionSheetUrl(s3) ? s3 : '',
         source: 'device_master'
       };
+    } else if (g3 && !isValidProductionGasUrl(g3)) {
+      localStorage.removeItem('banban_device_master_gas');
     }
   } catch (e) {}
 
@@ -135,10 +190,10 @@ export function scanAndRecoverGasUrl(email?: string): PersistentDbResult {
     const invRaw = localStorage.getItem('banban_active_invite');
     if (invRaw) {
       const parsed = JSON.parse(invRaw);
-      if (parsed.gasWebUrl && parsed.gasWebUrl.startsWith('http')) {
+      if (parsed.gasWebUrl && isValidProductionGasUrl(parsed.gasWebUrl)) {
         return {
           gasWebUrl: parsed.gasWebUrl.trim(),
-          deploySheetUrl: parsed.deploySheetUrl?.trim() || '',
+          deploySheetUrl: isValidProductionSheetUrl(parsed.deploySheetUrl) ? parsed.deploySheetUrl.trim() : '',
           source: 'active_invite'
         };
       }
@@ -149,10 +204,10 @@ export function scanAndRecoverGasUrl(email?: string): PersistentDbResult {
     const bindRaw = localStorage.getItem('banban_partner_binding');
     if (bindRaw) {
       const parsed = JSON.parse(bindRaw);
-      if (parsed.gasWebUrl && parsed.gasWebUrl.startsWith('http')) {
+      if (parsed.gasWebUrl && isValidProductionGasUrl(parsed.gasWebUrl)) {
         return {
           gasWebUrl: parsed.gasWebUrl.trim(),
-          deploySheetUrl: parsed.deploySheetUrl?.trim() || '',
+          deploySheetUrl: isValidProductionSheetUrl(parsed.deploySheetUrl) ? parsed.deploySheetUrl.trim() : '',
           source: 'partner_binding'
         };
       }
@@ -175,15 +230,18 @@ export function scanAndRecoverGasUrl(email?: string): PersistentDbResult {
       if (!foundGas) {
         const m = val.match(gasRegex);
         if (m && m[0]) {
-          foundGas = m[0];
-          if (!foundGas.endsWith('/exec') && val.includes(foundGas + '/exec')) {
-            foundGas = foundGas + '/exec';
+          let candidate = m[0];
+          if (!candidate.endsWith('/exec') && val.includes(candidate + '/exec')) {
+            candidate = candidate + '/exec';
+          }
+          if (isValidProductionGasUrl(candidate)) {
+            foundGas = candidate;
           }
         }
       }
       if (!foundSheet) {
         const m = val.match(sheetRegex);
-        if (m && m[0]) {
+        if (m && m[0] && isValidProductionSheetUrl(m[0])) {
           foundSheet = m[0];
         }
       }
@@ -341,7 +399,7 @@ export async function getUserCloudConfig(
         const data = await res.json();
         if (data && data.success && data.config) {
           const serverConfig = data.config as UserCloudConfig;
-          if (serverConfig.gasWebUrl && serverConfig.gasWebUrl.startsWith('http')) {
+          if (serverConfig.gasWebUrl && isValidProductionGasUrl(serverConfig.gasWebUrl)) {
             // 同步快取至本地以加速後續載入
             try {
               localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(serverConfig));
@@ -351,7 +409,7 @@ export async function getUserCloudConfig(
               localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, serverConfig.gasWebUrl);
               localStorage.setItem('banban_device_master_gas', serverConfig.gasWebUrl);
               localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
-              if (serverConfig.deploySheetUrl) {
+              if (serverConfig.deploySheetUrl && isValidProductionSheetUrl(serverConfig.deploySheetUrl)) {
                 localStorage.setItem('muji_sheet_url', serverConfig.deploySheetUrl);
                 localStorage.setItem(`muji_sheet_url_${cleanEmail}`, serverConfig.deploySheetUrl);
                 localStorage.setItem('banban_permanent_sheet_url', serverConfig.deploySheetUrl);
@@ -369,12 +427,12 @@ export async function getUserCloudConfig(
   if (driveToken) {
     try {
       const driveConfig = await asyncWithTimeout(loadConfigFromGoogleDrive(driveToken), 3000, null as any);
-      if (driveConfig && driveConfig.gasWebUrl && driveConfig.gasWebUrl.startsWith('http')) {
+      if (driveConfig && driveConfig.gasWebUrl && isValidProductionGasUrl(driveConfig.gasWebUrl)) {
         const mergedDriveConfig: UserCloudConfig = {
           email: cleanEmail,
           name: '',
           gasWebUrl: driveConfig.gasWebUrl,
-          deploySheetUrl: driveConfig.deploySheetUrl || '',
+          deploySheetUrl: isValidProductionSheetUrl(driveConfig.deploySheetUrl) ? driveConfig.deploySheetUrl : '',
           inviteCode: driveConfig.inviteCode || '',
           updatedAt: driveConfig.updatedAt || new Date().toISOString()
         };
@@ -386,9 +444,9 @@ export async function getUserCloudConfig(
           localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, driveConfig.gasWebUrl);
           localStorage.setItem('banban_device_master_gas', driveConfig.gasWebUrl);
           localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
-          if (driveConfig.deploySheetUrl) {
-            localStorage.setItem('muji_sheet_url', driveConfig.deploySheetUrl);
-            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, driveConfig.deploySheetUrl);
+          if (mergedDriveConfig.deploySheetUrl) {
+            localStorage.setItem('muji_sheet_url', mergedDriveConfig.deploySheetUrl);
+            localStorage.setItem(`muji_sheet_url_${cleanEmail}`, mergedDriveConfig.deploySheetUrl);
           }
         } catch (e) {}
         return mergedDriveConfig;
@@ -405,7 +463,7 @@ export async function getUserCloudConfig(
       const snapshot = await asyncWithTimeout(getDoc(userRef), 3500, null as any);
       if (snapshot && snapshot.exists && snapshot.exists()) {
         const cloudData = snapshot.data() as UserCloudConfig;
-        if (cloudData && cloudData.gasWebUrl && cloudData.gasWebUrl.startsWith('http')) {
+        if (cloudData && cloudData.gasWebUrl && isValidProductionGasUrl(cloudData.gasWebUrl)) {
           try {
             localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(cloudData));
             localStorage.setItem('muji_gas_web_url', cloudData.gasWebUrl);
@@ -414,7 +472,7 @@ export async function getUserCloudConfig(
             localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, cloudData.gasWebUrl);
             localStorage.setItem('banban_device_master_gas', cloudData.gasWebUrl);
             localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
-            if (cloudData.deploySheetUrl) {
+            if (cloudData.deploySheetUrl && isValidProductionSheetUrl(cloudData.deploySheetUrl)) {
               localStorage.setItem('muji_sheet_url', cloudData.deploySheetUrl);
               localStorage.setItem(`muji_sheet_url_${cleanEmail}`, cloudData.deploySheetUrl);
             }

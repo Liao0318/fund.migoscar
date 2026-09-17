@@ -135,7 +135,9 @@ import {
   getUserNotifySettings,
   clearAllSessionLedgerCache,
   hardResetUserLocalState,
-  scanAndRecoverGasUrl
+  scanAndRecoverGasUrl,
+  isValidProductionGasUrl,
+  isValidProductionSheetUrl
 } from './utils/userConfigService';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { syncGoogleUserProfile, signOutGoogle, db } from './utils/googleOAuthService';
@@ -2268,10 +2270,17 @@ export default function App() {
   const [editingRecord, setEditingRecord] = useState<RecordItem | null>(null);
   const [gasWebUrl, setGasWebUrl] = useState(() => {
     try {
-      const rec = scanAndRecoverGasUrl();
-      return rec.gasWebUrl || localStorage.getItem('muji_gas_web_url') || '';
+      let savedEmail = '';
+      try {
+        const u = localStorage.getItem('banban_auth_user');
+        if (u) savedEmail = JSON.parse(u)?.email || '';
+      } catch (e) {}
+      const rec = scanAndRecoverGasUrl(savedEmail);
+      if (rec.gasWebUrl && isValidProductionGasUrl(rec.gasWebUrl)) return rec.gasWebUrl;
+      const direct = localStorage.getItem('muji_gas_web_url') || '';
+      return isValidProductionGasUrl(direct) ? direct : '';
     } catch (e) {
-      return localStorage.getItem('muji_gas_web_url') || '';
+      return '';
     }
   });
   const [isSyncingGas, setIsSyncingGas] = useState(false);
@@ -2520,10 +2529,27 @@ export default function App() {
   const handleSyncAll = async () => {
     setIsSyncingGas(true);
     try {
+      let activeGasToUse = gasWebUrl;
+      if (currentUser?.email && !isSandboxMode) {
+        try {
+          const cleanEmail = currentUser.email.trim().toLowerCase();
+          const cloudConfig = await getUserCloudConfig(cleanEmail, { forceRefresh: true });
+          if (cloudConfig && cloudConfig.gasWebUrl && isValidProductionGasUrl(cloudConfig.gasWebUrl)) {
+            if (cloudConfig.gasWebUrl !== gasWebUrl) {
+              setGasWebUrl(cloudConfig.gasWebUrl);
+              activeGasToUse = cloudConfig.gasWebUrl;
+            }
+            if (cloudConfig.deploySheetUrl && cloudConfig.deploySheetUrl !== deploySheetUrl && isValidProductionSheetUrl(cloudConfig.deploySheetUrl)) {
+              setDeploySheetUrl(cloudConfig.deploySheetUrl);
+            }
+          }
+        } catch (e) {}
+      }
+
       await Promise.all([
-        fetchDashboardData(false, false),
+        fetchDashboardData(false, false, activeGasToUse),
         fetchShoppingData(false),
-        fetchSplitData(false),
+        fetchSplitData(false, activeGasToUse),
         fetchTravelData(true)
       ]);
       showToast('🎉 所有資料庫（流水帳、採購、代墊、旅遊分帳）已與 Google 試算表完成即時對帳！', 'success');
@@ -2656,15 +2682,65 @@ export default function App() {
     try {
       const res = await callGasApi('getSplitData', undefined, overrideGasUrl);
       if (res && res.success) {
-        if (Array.isArray(res.items)) {
-          setSplitItems(res.items);
-          localStorage.setItem('banban_split_records', JSON.stringify(res.items));
-        }
-        if (res.summary) {
-          setSplitSummary(res.summary);
-          localStorage.setItem('banban_split_summary', JSON.stringify(res.summary));
-        } else {
-          calculateLocalSplitSummary(res.items || []);
+        const rawList = Array.isArray(res.items) ? res.items : (Array.isArray(res.splitItems) ? res.splitItems : []);
+        if (rawList.length > 0 || res.items || res.splitItems) {
+          const itemKeywords = /晚餐|早餐|午餐|全聯|超市|好市多|家樂福|飯|麵|飲料|咖啡|水費|電費|房租|門票|高鐵|計程車|uber|加油|機票|買|吃|點心|下午茶|生活|用品/i;
+          const personKeywords = /^(廖|周|尹丞|沛緹|廖尹丞|周沛緹|admin|使用者)$/i;
+
+          const normalizedList: SplitRecordItem[] = rawList.map((it: any, idx: number) => {
+            let payer = String(it.payer || it.who || userA.shortName).trim();
+            let itemName = String(it.itemName || it.description || it.desc || it.item || '').trim();
+            let amount = typeof it.totalAmount === 'number' ? it.totalAmount : (typeof it.amount === 'number' ? it.amount : (parseFloat(String(it.totalAmount || it.amount || '').replace(/[^0-9.]/g, '')) || 0));
+
+            // 防護：若代墊者誤填/被抓取為項目名稱（如「晚餐」、「大全聯」），自動矯正對調
+            if (itemKeywords.test(payer) && (personKeywords.test(itemName) || itemName.length < payer.length || !itemName)) {
+              const temp = payer;
+              payer = itemName && personKeywords.test(itemName) ? itemName : userA.shortName;
+              itemName = temp;
+            }
+            if (payer.includes('廖') || payer.includes('尹丞')) payer = '廖';
+            else if (payer.includes('周') || payer.includes('沛緹')) payer = '周';
+            else if (!personKeywords.test(payer)) payer = userA.shortName;
+
+            const splitMode = (it.splitMode || it.mode || 'AA平分') as any;
+            const debtor = (it.debtor || (payer === '廖' ? '周' : '廖')) as '廖' | '周';
+            let debtorAmount = typeof it.debtorAmount === 'number' ? it.debtorAmount : (splitMode === '全額代付' ? amount : Math.round(amount / 2));
+            if (isNaN(debtorAmount)) debtorAmount = 0;
+
+            const status = (it.status === '已結清' || it.status === 'settled') ? '已結清' : '未結清';
+            const time = it.time || it.date || it.timestamp || '';
+            const settledTime = it.settledTime || it.settledAt || undefined;
+
+            return {
+              id: String(it.id || `split-${idx + 1}`),
+              rowNumber: it.rowNumber || (idx + 2),
+              time: time,
+              payer: payer as '廖' | '周',
+              splitMode: splitMode,
+              itemName: itemName || '未命名項目',
+              totalAmount: amount,
+              splitResult: it.splitResult || it.result || `${debtor} 需還 $${debtorAmount}`,
+              debtor: debtor,
+              debtorAmount: debtorAmount,
+              status: status,
+              settledTime: settledTime,
+              note: it.note || ''
+            };
+          });
+
+          setSplitItems(normalizedList);
+          try {
+            localStorage.setItem('banban_split_records', JSON.stringify(normalizedList));
+          } catch (e) {}
+
+          if (res.summary) {
+            setSplitSummary(res.summary);
+            try {
+              localStorage.setItem('banban_split_summary', JSON.stringify(res.summary));
+            } catch (e) {}
+          } else {
+            calculateLocalSplitSummary(normalizedList);
+          }
         }
         if (!silent) showToast('代墊明細已同步更新！', 'success');
       } else {
@@ -2871,10 +2947,17 @@ export default function App() {
   const [isDatabaseOnboardingOpen, setIsDatabaseOnboardingOpen] = useState(false);
   const [deploySheetUrl, setDeploySheetUrl] = useState(() => {
     try {
-      const rec = scanAndRecoverGasUrl();
-      return rec.deploySheetUrl || localStorage.getItem('muji_sheet_url') || '';
+      let savedEmail = '';
+      try {
+        const u = localStorage.getItem('banban_auth_user');
+        if (u) savedEmail = JSON.parse(u)?.email || '';
+      } catch (e) {}
+      const rec = scanAndRecoverGasUrl(savedEmail);
+      if (rec.deploySheetUrl && isValidProductionSheetUrl(rec.deploySheetUrl)) return rec.deploySheetUrl;
+      const direct = localStorage.getItem('muji_sheet_url') || '';
+      return isValidProductionSheetUrl(direct) ? direct : '';
     } catch (e) {
-      return localStorage.getItem('muji_sheet_url') || '';
+      return '';
     }
   });
   const [activeDeployCodeTab, setActiveDeployCodeTab] = useState<'codeGs' | 'indexHtml' | 'splitHtml'>('codeGs');
