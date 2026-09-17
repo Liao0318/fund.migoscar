@@ -3,7 +3,7 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.9.0';
+export const APP_VERSION = 'v2.9.1';
 export const APP_BUILD_DATE = '2026.09.17';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
@@ -16,6 +16,16 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.9.1',
+    date: '2026.09.17',
+    title: '元件生命週期狀態嚴格隔離與多帳號乾淨初始化防護',
+    highlights: [
+      '根除初次渲染狀態污染：修正 React 元件初次掛載時 useState 預先讀取前一帳號全域暫存的時序漏洞，所有狀態初始化一律嚴格遵循專屬帳號金鑰隔離',
+      '跨帳號備援防護全面封鎖：全面停用未隔離的全域備援鍵值，全新帳號或切換帳號時保證 100% 乾淨空白初始化，徹底杜絕帳本、代墊與購物清單跨帳號殘留',
+      '後端系統資料庫權限審計：伺服器系統資料庫與邀請查詢全面強制帳號所有權比對，防止非擁有者繼承未授權的 Google Apps Script 資料庫配置'
+    ]
+  },
   {
     version: 'v2.9.0',
     date: '2026.09.17',

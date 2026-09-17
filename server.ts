@@ -292,7 +292,7 @@ async function startServer() {
             sheet = cfg.deploySheetUrl || sheet;
           }
         }
-        if (!gas && isValidGasUrl(sysDb?.gasWebUrl)) {
+        if (!gas && isValidGasUrl(sysDb?.gasWebUrl) && sysDb.configuredBy && inv.adminEmail && sysDb.configuredBy.toLowerCase() === inv.adminEmail.toLowerCase()) {
           gas = sysDb.gasWebUrl;
           sheet = sysDb.deploySheetUrl || sheet;
         }
@@ -402,12 +402,13 @@ async function startServer() {
           userCfg.updatedAt = new Date().toISOString();
           writeJsonFile(USER_CONFIGS_FILE, userConfigs);
 
+          const isSysDbOwner = sysDb && sysDb.configuredBy && sysDb.configuredBy.toLowerCase() === email;
           const synInvite = {
             inviteCode,
             adminEmail: userCfg.email || email,
             adminName: userCfg.name || '主管理員',
-            gasWebUrl: userCfg.gasWebUrl || (sysDb && sysDb.gasWebUrl) || '',
-            deploySheetUrl: userCfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
+            gasWebUrl: userCfg.gasWebUrl || (isSysDbOwner && sysDb && sysDb.gasWebUrl) || '',
+            deploySheetUrl: userCfg.deploySheetUrl || (isSysDbOwner && sysDb && sysDb.deploySheetUrl) || '',
             createdAt: new Date().toISOString(),
             expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
             validMinutes: 15
@@ -734,10 +735,11 @@ async function startServer() {
         }
       }
 
-      // 補齊資料庫網址配置
+      // 補齊資料庫網址配置（僅限於該帳號自身、或所綁定之伴侶/管理者，嚴格禁止向未授權第三方或全域 sysDb 洩漏）
       const userCfg = userConfigs[email];
-      const gasWebUrl = data?.gasWebUrl || userCfg?.gasWebUrl || (sysDb && isValidGasUrl(sysDb.gasWebUrl) ? sysDb.gasWebUrl : '');
-      const deploySheetUrl = data?.deploySheetUrl || userCfg?.deploySheetUrl || (sysDb ? sysDb.deploySheetUrl : '') || '';
+      const isSysDbOwner = sysDb && sysDb.configuredBy && sysDb.configuredBy.toLowerCase() === email;
+      const gasWebUrl = data?.gasWebUrl || userCfg?.gasWebUrl || (isSysDbOwner && isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : '');
+      const deploySheetUrl = data?.deploySheetUrl || userCfg?.deploySheetUrl || (isSysDbOwner && sysDb ? sysDb.deploySheetUrl : '') || '';
 
       return res.json({
         success: true,

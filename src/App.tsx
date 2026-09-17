@@ -592,15 +592,17 @@ export default function App() {
         try {
           const parsedUser = JSON.parse(authUser);
           const cleanEmail = (parsedUser.email || '').trim().toLowerCase();
-          const hasUserGas = cleanEmail ? localStorage.getItem(`muji_gas_web_url_${cleanEmail}`) : null;
+          if (!cleanEmail) return [];
+
+          const hasUserGas = localStorage.getItem(`muji_gas_web_url_${cleanEmail}`);
           const isPartner = parsedUser.userRole === 'partner';
-          // 若無資料庫連線，一律為全新乾淨空帳本
+          // 若無專屬資料庫連線且非伴侶，一律為全新乾淨空帳本
           if (!hasUserGas && !isPartner) {
             return [];
           }
 
           // 🚀 關鍵版本檢查：在讀取 localStorage 前先檢查 banban_sync_version 版本號
-          const userSyncVersion = cleanEmail ? localStorage.getItem(`banban_sync_version_${cleanEmail}`) : null;
+          const userSyncVersion = localStorage.getItem(`banban_sync_version_${cleanEmail}`);
           const syncVersion = userSyncVersion || localStorage.getItem('banban_sync_version');
           const isOutdated = isSyncVersionOutdated(syncVersion, APP_VERSION);
 
@@ -619,10 +621,10 @@ export default function App() {
             return [];
           }
 
-          const userSaved = cleanEmail ? localStorage.getItem(`muji_ledger_data_${cleanEmail}`) : null;
-          const saved = cleanEmail ? userSaved : localStorage.getItem('muji_ledger_data');
-          if (saved) {
-            const parsed = JSON.parse(saved);
+          // 嚴格隔離：僅讀取該 cleanEmail 專屬帳本快取，絕不讀取未隔離的全域 muji_ledger_data
+          const userSaved = localStorage.getItem(`muji_ledger_data_${cleanEmail}`);
+          if (userSaved) {
+            const parsed = JSON.parse(userSaved);
             if (Array.isArray(parsed) && parsed.length > 0) {
               return sanitizeAndHealRecords(parsed);
             }
@@ -711,8 +713,19 @@ export default function App() {
         }
         return SANDBOX_DEMO_SPLIT_ITEMS;
       }
-      const saved = localStorage.getItem('banban_split_records');
-      return saved ? JSON.parse(saved) : [];
+      if (authUser) {
+        try {
+          const parsedUser = JSON.parse(authUser);
+          const cleanEmail = (parsedUser.email || '').trim().toLowerCase();
+          if (!cleanEmail) return [];
+          const userSaved = localStorage.getItem(`banban_split_records_${cleanEmail}`);
+          if (userSaved) {
+            const parsed = JSON.parse(userSaved);
+            if (Array.isArray(parsed)) return parsed;
+          }
+        } catch (e) {}
+      }
+      return [];
     } catch (e) {
       return [];
     }
@@ -753,8 +766,19 @@ export default function App() {
           settledCount: 1
         };
       }
-      const saved = localStorage.getItem('banban_split_summary');
-      return saved ? JSON.parse(saved) : emptySummary;
+      if (authUser) {
+        try {
+          const parsedUser = JSON.parse(authUser);
+          const cleanEmail = (parsedUser.email || '').trim().toLowerCase();
+          if (!cleanEmail) return emptySummary;
+          const userSaved = localStorage.getItem(`banban_split_summary_${cleanEmail}`);
+          if (userSaved) {
+            const parsed = JSON.parse(userSaved);
+            if (parsed) return parsed;
+          }
+        } catch (e) {}
+      }
+      return emptySummary;
     } catch (e) {
       return emptySummary;
     }
@@ -793,15 +817,20 @@ export default function App() {
       }
       return SANDBOX_DEMO_SHOPPING_ITEMS;
     }
-    const local = localStorage.getItem('muji_shopping_items');
-    if (local) {
+    if (authUser) {
       try {
-        const parsed = JSON.parse(local);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((it: any) => ({
-            ...it,
-            createdTime: getShoppingItemDisplayTime(it) || it.createdTime || formatAmPmTime(new Date())
-          }));
+        const parsedUser = JSON.parse(authUser);
+        const cleanEmail = (parsedUser.email || '').trim().toLowerCase();
+        if (!cleanEmail) return [];
+        const userSaved = localStorage.getItem(`muji_shopping_items_${cleanEmail}`);
+        if (userSaved) {
+          const parsed = JSON.parse(userSaved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map((it: any) => ({
+              ...it,
+              createdTime: getShoppingItemDisplayTime(it) || it.createdTime || formatAmPmTime(new Date())
+            }));
+          }
         }
       } catch (e) {}
     }
@@ -1139,19 +1168,25 @@ export default function App() {
 
       // 備援當前記憶體與本地儲存的業務數據（⚠️ 僅在確為同帳號重新登入時，方可平滑繼承！）
       const localRecordsBackup = (!isSwitchingDifferentAccount && isKnownUserOnDevice && records && records.length > 0) ? records : (() => {
-        if (isSwitchingDifferentAccount || !isKnownUserOnDevice) return [];
+        if (isSwitchingDifferentAccount || !isKnownUserOnDevice || !cleanEmail) return [];
         try { 
-          const r = cleanEmail ? localStorage.getItem(`muji_ledger_data_${cleanEmail}`) : localStorage.getItem('muji_ledger_data'); 
+          const r = localStorage.getItem(`muji_ledger_data_${cleanEmail}`); 
           return r ? JSON.parse(r) : []; 
         } catch (e) { return []; }
       })();
       const localSplitBackup = (!isSwitchingDifferentAccount && isKnownUserOnDevice && splitItems && splitItems.length > 0) ? splitItems : (() => {
-        if (isSwitchingDifferentAccount || !isKnownUserOnDevice) return [];
-        try { const s = localStorage.getItem('banban_split_records'); return s ? JSON.parse(s) : []; } catch (e) { return []; }
+        if (isSwitchingDifferentAccount || !isKnownUserOnDevice || !cleanEmail) return [];
+        try { 
+          const s = localStorage.getItem(`banban_split_records_${cleanEmail}`); 
+          return s ? JSON.parse(s) : []; 
+        } catch (e) { return []; }
       })();
       const localShoppingBackup = (!isSwitchingDifferentAccount && isKnownUserOnDevice && shoppingItems && shoppingItems.length > 0) ? shoppingItems : (() => {
-        if (isSwitchingDifferentAccount || !isKnownUserOnDevice) return [];
-        try { const sh = localStorage.getItem('banban_shopping_items'); return sh ? JSON.parse(sh) : []; } catch (e) { return []; }
+        if (isSwitchingDifferentAccount || !isKnownUserOnDevice || !cleanEmail) return [];
+        try { 
+          const sh = localStorage.getItem(`muji_shopping_items_${cleanEmail}`); 
+          return sh ? JSON.parse(sh) : []; 
+        } catch (e) { return []; }
       })();
 
       let boundNickname = user.nickname || '';
@@ -1525,17 +1560,28 @@ export default function App() {
           }
           if (Array.isArray(serverLedgerData.splitItems) && serverLedgerData.splitItems.length > 0) {
             setSplitItems(serverLedgerData.splitItems);
-            try { localStorage.setItem('banban_split_records', JSON.stringify(serverLedgerData.splitItems)); } catch (e) {}
+            try { 
+              localStorage.setItem('banban_split_records', JSON.stringify(serverLedgerData.splitItems)); 
+              if (cleanEmail) localStorage.setItem(`banban_split_records_${cleanEmail}`, JSON.stringify(serverLedgerData.splitItems));
+            } catch (e) {}
           }
           if (Array.isArray(serverLedgerData.shoppingItems) && serverLedgerData.shoppingItems.length > 0) {
             setShoppingItems(serverLedgerData.shoppingItems);
-            try { localStorage.setItem('banban_shopping_items', JSON.stringify(serverLedgerData.shoppingItems)); } catch (e) {}
+            try { 
+              localStorage.setItem('banban_shopping_items', JSON.stringify(serverLedgerData.shoppingItems)); 
+              if (cleanEmail) localStorage.setItem(`muji_shopping_items_${cleanEmail}`, JSON.stringify(serverLedgerData.shoppingItems));
+            } catch (e) {}
           }
           if (Array.isArray(serverLedgerData.travelTrips) && serverLedgerData.travelTrips.length > 0) {
             try {
               localStorage.setItem('banban_travel_trips', JSON.stringify(serverLedgerData.travelTrips));
               localStorage.setItem('banban_travel_expenses', JSON.stringify(serverLedgerData.travelExpenses || []));
               localStorage.setItem('banban_travel_wishlist', JSON.stringify(serverLedgerData.travelWishlist || []));
+              if (cleanEmail) {
+                localStorage.setItem(`banban_travel_trips_${cleanEmail}`, JSON.stringify(serverLedgerData.travelTrips));
+                localStorage.setItem(`banban_travel_expenses_${cleanEmail}`, JSON.stringify(serverLedgerData.travelExpenses || []));
+                localStorage.setItem(`banban_travel_wishlist_${cleanEmail}`, JSON.stringify(serverLedgerData.travelWishlist || []));
+              }
               window.dispatchEvent(new CustomEvent('travel-data-updated', {
                 detail: {
                   trips: serverLedgerData.travelTrips,
@@ -1547,7 +1593,10 @@ export default function App() {
           }
           if (serverLedgerData.splitSummary) {
             setSplitSummary(serverLedgerData.splitSummary);
-            try { localStorage.setItem('banban_split_summary', JSON.stringify(serverLedgerData.splitSummary)); } catch (e) {}
+            try { 
+              localStorage.setItem('banban_split_summary', JSON.stringify(serverLedgerData.splitSummary)); 
+              if (cleanEmail) localStorage.setItem(`banban_split_summary_${cleanEmail}`, JSON.stringify(serverLedgerData.splitSummary));
+            } catch (e) {}
           }
         } else if (hasLocalBackupData) {
           if (localRecordsBackup.length > 0) setRecords(sanitizeAndHealRecords(localRecordsBackup));
