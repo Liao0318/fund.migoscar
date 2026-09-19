@@ -1,7 +1,7 @@
 import React from 'react';
-import { Bell, LogIn, Menu } from 'lucide-react';
+import { Bell, LogIn, Menu, Heart } from 'lucide-react';
 import { BrandLogo } from './BrandLogo.tsx';
-import { AuthUser } from '../../types';
+import { AuthUser, CoupleBindingInfo } from '../../types';
 import { APP_VERSION } from '../../version';
 
 interface HeaderProps {
@@ -26,6 +26,8 @@ interface HeaderProps {
   unreadNotificationCount?: number;
   onOpenDevSettings?: () => void;
   onOpenVersionInfo?: () => void;
+  onOpenPartnerPairing?: () => void;
+  partnerBindingInfo?: CoupleBindingInfo | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -42,7 +44,9 @@ export const Header: React.FC<HeaderProps> = ({
   isSandboxMode = false,
   gasWebUrl = '',
   onOpenDevSettings,
-  onOpenVersionInfo
+  onOpenVersionInfo,
+  onOpenPartnerPairing,
+  partnerBindingInfo
 }) => {
   return (
     <header className="fixed top-0 left-0 right-0 z-40 w-full font-sans bg-[#FAF9F5]/95 backdrop-blur-xl border-b border-[#EAE6DC] shadow-[0_2px_12px_rgba(62,58,54,0.04)]">
@@ -144,8 +148,33 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* 右側按鈕群：極簡化（僅保留匯率、通知與個人頭像） */}
+          {/* 右側按鈕群：極簡化（伴侶配對、匯率、通知與個人頭像） */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* ❤️ 伴侶配對中心快捷鈕 */}
+            {onOpenPartnerPairing && (
+              <button
+                id="header-partner-pairing-btn"
+                type="button"
+                onClick={onOpenPartnerPairing}
+                className={`h-8.5 px-2 sm:px-2.5 rounded-xl border flex items-center justify-center gap-1 sm:gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 text-xs font-bold ${
+                  partnerBindingInfo?.partnerEmail
+                    ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200/80'
+                    : 'bg-gradient-to-r from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white border-transparent'
+                }`}
+                title={
+                  partnerBindingInfo?.partnerEmail 
+                    ? `伴侶共同記帳連線中 (${partnerBindingInfo.partnerName || partnerBindingInfo.partnerEmail})`
+                    : '伴侶配對中心 (指定信箱 / QR Code / 專屬連結)'
+                }
+                aria-label="伴侶配對中心"
+              >
+                <Heart className={`w-3.5 h-3.5 ${partnerBindingInfo?.partnerEmail ? 'fill-rose-500 text-rose-500' : 'fill-white text-white animate-pulse'}`} />
+                <span className="hidden min-[480px]:inline text-[11px]">
+                  {partnerBindingInfo?.partnerEmail ? '伴侶已連線' : '伴侶配對'}
+                </span>
+              </button>
+            )}
+
             {/* ✈️ 💱 即時匯率按鈕 */}
             <button
               type="button"

@@ -26,10 +26,10 @@ const REGISTRY_STORAGE_KEY = 'banban_invite_registry';
 const ACTIVE_INVITE_STORAGE_KEY = 'banban_active_invite';
 const PARTNER_BINDING_STORAGE_KEY = 'banban_partner_binding';
 
-export const DEFAULT_INVITE_VALID_MINUTES = 15;
+export const DEFAULT_INVITE_VALID_MINUTES = 30 * 24 * 60; // 預設 30 天超長有效期，杜絕短時效失效問題
 
 /**
- * 檢查邀請碼是否已過期（預設 15 分鐘時效）
+ * 檢查邀請碼是否已過期
  */
 export function isInviteExpired(invite?: PartnerInviteData | null): boolean {
   if (!invite) return true;
@@ -39,7 +39,8 @@ export function isInviteExpired(invite?: PartnerInviteData | null): boolean {
   if (invite.createdAt) {
     const createdTime = new Date(invite.createdAt).getTime();
     if (!isNaN(createdTime)) {
-      return Date.now() > (createdTime + DEFAULT_INVITE_VALID_MINUTES * 60 * 1000);
+      const validMins = invite.validMinutes && invite.validMinutes > 0 ? invite.validMinutes : DEFAULT_INVITE_VALID_MINUTES;
+      return Date.now() > (createdTime + validMins * 60 * 1000);
     }
   }
   return false;
@@ -500,16 +501,16 @@ export function extractInviteCode(input: string): string | null {
   if (!input) return null;
   const str = input.trim();
 
-  // 1. 若含有 token= 或 invite= (Base64 Token)
-  const matchToken = str.match(/(?:#|\?|&)(?:token|invite)=([A-Za-z0-9_-]+)/i);
+  // 1. 若含有 partner_invite=, token= 或 invite= 或 pairing= (Base64 Token 或 代碼)
+  const matchToken = str.match(/(?:#|\?|&)(?:token|partner_invite|invite|pairing)=([A-Za-z0-9_-]+)/i);
   if (matchToken && matchToken[1]) {
     return matchToken[1];
   }
 
-  if (str.includes('invite=') || str.includes('token=')) {
+  if (str.includes('invite=') || str.includes('token=') || str.includes('partner_invite=')) {
     try {
       const url = new URL(str.startsWith('http') ? str : `https://dummy.local/${str}`);
-      const token = url.searchParams.get('token') || url.searchParams.get('invite');
+      const token = url.searchParams.get('token') || url.searchParams.get('partner_invite') || url.searchParams.get('invite') || url.searchParams.get('pairing');
       if (token) return token;
     } catch (e) {}
   }
@@ -755,8 +756,14 @@ export const CUSTOM_PORTAL_BASE_URL = 'https://liao0318.github.io/fund.migoscar/
 
 /**
  * 取得當前應用程式的標準分享基底網址
+ * 優先採用用戶指定的 GitHub Pages 網址（https://liao0318.github.io/fund.migoscar/），
+ * 避免使用 Google AI Studio / Cloud Run 臨時開發網址，以確保伴侶與外部使用者能永久且穩定連線。
  */
 export function getAppShareBaseUrl(): string {
+  // 若設定了自訂入口網址（如 GitHub Pages），優先固定使用該網址
+  if (CUSTOM_PORTAL_BASE_URL) {
+    return CUSTOM_PORTAL_BASE_URL.endsWith('/') ? CUSTOM_PORTAL_BASE_URL : `${CUSTOM_PORTAL_BASE_URL}/`;
+  }
   if (typeof window !== 'undefined' && window.location.origin) {
     const origin = window.location.origin;
     const pathname = window.location.pathname || '';
@@ -764,46 +771,43 @@ export function getAppShareBaseUrl(): string {
     const cleanPath = pathname.replace(/\/index\.html$/i, '/');
     return `${origin}${cleanPath.endsWith('/') ? cleanPath : `${cleanPath}/`}`;
   }
-  if (CUSTOM_PORTAL_BASE_URL) {
-    return CUSTOM_PORTAL_BASE_URL.endsWith('/') ? CUSTOM_PORTAL_BASE_URL : `${CUSTOM_PORTAL_BASE_URL}/`;
-  }
   return 'https://liao0318.github.io/fund.migoscar/';
 }
 
 /**
- * 產生分享給伴侶的甜蜜邀請文案與專屬連結（具備 15 分鐘時效性說明）
+ * 產生分享給伴侶的專屬 Magic Pairing 網址（支援 Query 與 Hash 雙重相容，LINE 與瀏覽器無障礙開啟）
+ */
+export function getMagicPairingUrl(invite: PartnerInviteData, baseUrl?: string): string {
+  const base = baseUrl || getAppShareBaseUrl();
+  const cleanBase = base.endsWith('/') ? base : `${base}/`;
+  const token = encodeInvitePayload(invite);
+  const queryParts: string[] = [];
+  if (invite.inviteCode) queryParts.push(`partner_invite=${encodeURIComponent(invite.inviteCode)}`);
+  if (token) queryParts.push(`token=${encodeURIComponent(token)}`);
+  if (invite.adminEmail) queryParts.push(`admin=${encodeURIComponent(invite.adminEmail)}`);
+  const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+  return `${cleanBase}${queryString}#join=${encodeURIComponent(invite.inviteCode)}`;
+}
+
+/**
+ * 產生分享給伴侶的甜蜜邀請文案與專屬連結
  */
 export function generatePartnerInviteShare(invite: PartnerInviteData, baseUrl?: string): {
   shareText: string;
   shareUrl: string;
 } {
-  const base = baseUrl || getAppShareBaseUrl();
-  const cleanBase = base.endsWith('/') ? base : `${base}/`;
-  const token = encodeInvitePayload(invite);
-  const shareUrl = token 
-    ? `${cleanBase}#join=${invite.inviteCode}&token=${token}`
-    : `${cleanBase}#join=${invite.inviteCode}`;
-
-  let expireStr = '15 分鐘';
-  if (invite.expiresAt) {
-    try {
-      const expDate = new Date(invite.expiresAt);
-      const timeFormatted = expDate.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
-      expireStr = `15 分鐘（請於 ${timeFormatted} 前完成綁定）`;
-    } catch (e) {}
-  }
+  const shareUrl = getMagicPairingUrl(invite, baseUrl);
 
   const shareText = `💌【伴伴記❤️】情侶共同帳本邀請函
 
 嗨！${invite.adminName || '你的另一半'} 邀請你加入《伴伴記》情侶專屬生活帳本！
 
-🔑 你的專屬伴侶邀請碼：【 ${invite.inviteCode} 】
-⏱️ 有效時限：${expireStr}
-📲 點擊專屬連結立即加入綁定：
+🔑 專屬伴侶邀請碼：【 ${invite.inviteCode} 】
+📲 點擊專屬連結立即加入配對：
 ${shareUrl}
 
-✨ 綁定說明：
-點擊上方連結即可自動配對並同步生活公積金、代墊分帳與採購清單！`;
+✨ 配對超簡單：
+點擊上方連結或打開相機掃描 QR Code，即可一秒自動完成雙方帳本連線，共同管理公積金、分帳與願望採購清單！`;
 
   return {
     shareText,
@@ -818,6 +822,208 @@ export function createShareableInviteCard(invite: PartnerInviteData, baseUrl?: s
   return generatePartnerInviteShare(invite, baseUrl).shareText;
 }
 
+const DIRECT_SENT_STORAGE_KEY = 'banban_sent_direct_invite';
+
+/**
+ * 發送直接 Email 伴侶邀請（零出錯方案：指定伴侶 Gmail，伴侶登入即自動跳出接受確認）
+ */
+export async function sendDirectPartnerEmailInvite(
+  adminEmail: string,
+  adminName: string,
+  partnerEmail: string,
+  gasWebUrl: string,
+  deploySheetUrl: string = '',
+  adminAvatar: string = ''
+): Promise<{ success: boolean; invite?: PartnerInviteData; message?: string }> {
+  const cleanAdmin = (adminEmail || '').trim().toLowerCase();
+  const cleanPartner = (partnerEmail || '').trim().toLowerCase();
+
+  if (!cleanAdmin || !cleanPartner) {
+    return { success: false, message: '請提供完整的管理者與伴侶 Google Email' };
+  }
+
+  if (cleanAdmin === cleanPartner) {
+    return { success: false, message: '伴侶 Email 不可與自己的 Email 相同' };
+  }
+
+  // 驗證 Email 格式
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanPartner)) {
+    return { success: false, message: '伴侶 Email 格式不正確，請輸入有效的 Google Gmail' };
+  }
+
+  const existingActive = getActiveInviteCode();
+  const inviteCode = existingActive?.inviteCode || generateRandomInviteCode();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + DEFAULT_INVITE_VALID_MINUTES * 60 * 1000).toISOString();
+
+  const directInvite: PartnerInviteData = {
+    inviteCode,
+    adminEmail: cleanAdmin,
+    adminName: adminName || '主管理員',
+    adminAvatar: adminAvatar || '',
+    partnerEmail: cleanPartner,
+    status: 'pending',
+    gasWebUrl,
+    deploySheetUrl,
+    createdAt: now.toISOString(),
+    expiresAt,
+    validMinutes: DEFAULT_INVITE_VALID_MINUTES
+  };
+
+  // 1. 本地快取
+  try {
+    localStorage.setItem(DIRECT_SENT_STORAGE_KEY, JSON.stringify(directInvite));
+    saveActiveInviteCode(directInvite);
+  } catch (e) {}
+
+  // 2. 伺服器 API 持久化
+  if (hasBackendServer()) {
+    try {
+      const res = await fetch('/api/partner-direct-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(directInvite)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.success && data.pendingInvite) {
+          saveActiveInviteCode(data.pendingInvite);
+        }
+      }
+    } catch (e) {
+      console.warn('sendDirectPartnerEmailInvite API error:', e);
+    }
+  }
+
+  // 3. 雲端 Firestore 同步
+  if (isFirestoreAvailable() && db) {
+    try {
+      const pendingRef = doc(db, 'pending_partner_invites', cleanPartner);
+      await setDoc(pendingRef, directInvite, { merge: true });
+
+      const inviteRef = doc(db, 'partner_invites', inviteCode.toUpperCase());
+      await setDoc(inviteRef, directInvite, { merge: true });
+    } catch (e) {
+      console.warn('sendDirectPartnerEmailInvite Firestore sync error:', e);
+    }
+  }
+
+  return { success: true, invite: directInvite };
+}
+
+/**
+ * 查詢特定用戶是否有收到伴侶直接邀請，或管理者發出的未結邀請
+ */
+export async function checkPendingDirectInvite(
+  email: string
+): Promise<{ incomingInvite: PartnerInviteData | null; sentInvite: PartnerInviteData | null }> {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) return { incomingInvite: null, sentInvite: null };
+
+  let incomingInvite: PartnerInviteData | null = null;
+  let sentInvite: PartnerInviteData | null = null;
+
+  // 1. 本地快取發出的邀請
+  try {
+    const localSent = localStorage.getItem(DIRECT_SENT_STORAGE_KEY);
+    if (localSent) {
+      const parsed = JSON.parse(localSent) as PartnerInviteData;
+      if (parsed && parsed.adminEmail?.toLowerCase() === cleanEmail && !isInviteExpired(parsed)) {
+        sentInvite = parsed;
+      }
+    }
+  } catch (e) {}
+
+  // 2. 優先向伺服器查詢
+  if (hasBackendServer()) {
+    try {
+      const res = await asyncWithTimeout(fetch(`/api/pending-invite?email=${encodeURIComponent(cleanEmail)}`), 2500, null as any);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data && data.success) {
+          if (data.incomingInvite && !isInviteExpired(data.incomingInvite)) {
+            incomingInvite = data.incomingInvite as PartnerInviteData;
+          }
+          if (data.sentInvite && !isInviteExpired(data.sentInvite)) {
+            sentInvite = data.sentInvite as PartnerInviteData;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. Firestore 備援查詢
+  if (isFirestoreAvailable() && db) {
+    try {
+      if (!incomingInvite) {
+        const docRef = doc(db, 'pending_partner_invites', cleanEmail);
+        const snap = await asyncWithTimeout(getDoc(docRef), 2500, null as any);
+        if (snap && snap.exists && snap.exists()) {
+          const inv = snap.data() as PartnerInviteData;
+          if (inv && inv.adminEmail && !isInviteExpired(inv)) {
+            incomingInvite = inv;
+          }
+        }
+      }
+
+      if (!sentInvite) {
+        const invCol = collection(db, 'pending_partner_invites');
+        const q = query(invCol, where('adminEmail', '==', cleanEmail), limit(1));
+        const qSnap = await asyncWithTimeout(getDocs(q), 2500, null as any);
+        if (qSnap && !qSnap.empty) {
+          const inv = qSnap.docs[0].data() as PartnerInviteData;
+          if (inv && !isInviteExpired(inv)) {
+            sentInvite = inv;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  return { incomingInvite, sentInvite };
+}
+
+/**
+ * 取消管理者所發出的直接 Email 邀請
+ */
+export async function cancelDirectPartnerEmailInvite(
+  adminEmail: string,
+  partnerEmail?: string
+): Promise<boolean> {
+  const cleanAdmin = (adminEmail || '').trim().toLowerCase();
+  const cleanPartner = (partnerEmail || '').trim().toLowerCase();
+
+  try {
+    localStorage.removeItem(DIRECT_SENT_STORAGE_KEY);
+  } catch (e) {}
+
+  if (hasBackendServer()) {
+    try {
+      await fetch('/api/cancel-direct-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminEmail: cleanAdmin, partnerEmail: cleanPartner })
+      });
+    } catch (e) {}
+  }
+
+  if (isFirestoreAvailable() && db) {
+    try {
+      if (cleanPartner) {
+        await deleteDoc(doc(db, 'pending_partner_invites', cleanPartner));
+      }
+      if (cleanAdmin) {
+        const invCol = collection(db, 'pending_partner_invites');
+        const q = query(invCol, where('adminEmail', '==', cleanAdmin));
+        const qSnap = await getDocs(q);
+        qSnap.forEach(d => deleteDoc(d.ref));
+      }
+    } catch (e) {}
+  }
+
+  return true;
+}
+
 const PENDING_INVITE_STORAGE_KEY = 'banban_pending_invite';
 
 /**
@@ -828,13 +1034,11 @@ export function parseInviteFromCurrentUrl(): { raw: string; invite: PartnerInvit
 
   try {
     const fullHref = window.location.href;
-    const search = window.location.search;
-    const hash = window.location.hash;
 
     let targetTokenOrCode = '';
 
     // 1. 檢查 URL 參數與 Hash
-    const matchToken = fullHref.match(/(?:#|\?|&)(?:token|invite)=([A-Za-z0-9_-]+)/i);
+    const matchToken = fullHref.match(/(?:#|\?|&)(?:token|partner_invite|invite|pairing)=([A-Za-z0-9_-]+)/i);
     if (matchToken && matchToken[1]) {
       targetTokenOrCode = matchToken[1];
     } else {
@@ -866,6 +1070,43 @@ export function parseInviteFromCurrentUrl(): { raw: string; invite: PartnerInvit
   }
 
   return null;
+}
+
+/**
+ * 非同步智慧解析網址中的邀請資訊（支援即時向雲端與伺服器查詢）
+ */
+export async function parseAndResolveInviteFromCurrentUrl(): Promise<{ raw: string; invite: PartnerInviteData | null } | null> {
+  const syncResult = parseInviteFromCurrentUrl();
+  if (syncResult && syncResult.invite && syncResult.invite.adminEmail && syncResult.invite.gasWebUrl) {
+    return syncResult;
+  }
+
+  const raw = syncResult?.raw || '';
+  if (!raw && typeof window !== 'undefined') {
+    const fullHref = window.location.href;
+    const match = fullHref.match(/(?:#|\?|&)(?:token|partner_invite|invite|pairing|join|code)=([A-Za-z0-9_-]+)/i);
+    if (match && match[1]) {
+      const onlineResolved = await fetchInviteCodeOnline(match[1]);
+      if (onlineResolved) {
+        const res = { raw: match[1], invite: onlineResolved };
+        try {
+          localStorage.setItem(PENDING_INVITE_STORAGE_KEY, JSON.stringify(res));
+        } catch (e) {}
+        return res;
+      }
+    }
+  } else if (raw) {
+    const onlineResolved = await fetchInviteCodeOnline(raw);
+    if (onlineResolved) {
+      const res = { raw, invite: onlineResolved };
+      try {
+        localStorage.setItem(PENDING_INVITE_STORAGE_KEY, JSON.stringify(res));
+      } catch (e) {}
+      return res;
+    }
+  }
+
+  return syncResult;
 }
 
 /**

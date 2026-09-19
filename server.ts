@@ -13,6 +13,7 @@ if (!fs.existsSync(DATA_DIR)) {
 const USER_CONFIGS_FILE = path.join(DATA_DIR, 'user_configs.json');
 const PARTNER_INVITES_FILE = path.join(DATA_DIR, 'partner_invites.json');
 const COUPLE_BINDINGS_FILE = path.join(DATA_DIR, 'couple_bindings.json');
+const PENDING_DIRECT_INVITES_FILE = path.join(DATA_DIR, 'pending_direct_invites.json');
 const SYSTEM_DATABASE_FILE = path.join(DATA_DIR, 'system_database.json');
 const USER_LEDGER_DATA_FILE = path.join(DATA_DIR, 'user_ledger_data.json');
 
@@ -484,6 +485,147 @@ async function startServer() {
     }
   });
 
+  // 2.5 Direct Partner Email Invite & Pending Check API (免邀請碼、直接 Email 邀請)
+  app.get('/api/pending-invite', (req, res) => {
+    try {
+      const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'email required' });
+      }
+
+      const pendingDirect = readJsonFile<Record<string, any>>(PENDING_DIRECT_INVITES_FILE, {});
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
+
+      // 檢查此用戶作為伴侶是否收到未處理邀請
+      let incomingInvite = pendingDirect[email] || null;
+
+      // 若未直接命中，檢查 pendingDirect 列表中是否有指定給該 email
+      if (!incomingInvite) {
+        incomingInvite = Object.values(pendingDirect).find((inv: any) => 
+          inv && inv.partnerEmail && inv.partnerEmail.toLowerCase() === email
+        ) || null;
+      }
+
+      // 檢查此用戶作為管理者是否有發出中的未結邀請
+      const sentInvite = Object.values(pendingDirect).find((inv: any) => 
+        inv && inv.adminEmail && inv.adminEmail.toLowerCase() === email
+      ) || null;
+
+      if (incomingInvite) {
+        // 豐富化資料庫設定
+        let gas = isValidGasUrl(incomingInvite.gasWebUrl) ? incomingInvite.gasWebUrl : '';
+        let sheet = incomingInvite.deploySheetUrl || '';
+        if (!gas && incomingInvite.adminEmail) {
+          const cfg = userConfigs[incomingInvite.adminEmail.toLowerCase()];
+          if (cfg && isValidGasUrl(cfg.gasWebUrl)) {
+            gas = cfg.gasWebUrl;
+            sheet = cfg.deploySheetUrl || sheet;
+          }
+        }
+        if (!gas && isValidGasUrl(sysDb?.gasWebUrl) && sysDb.configuredBy && incomingInvite.adminEmail && sysDb.configuredBy.toLowerCase() === incomingInvite.adminEmail.toLowerCase()) {
+          gas = sysDb.gasWebUrl;
+          sheet = sysDb.deploySheetUrl || sheet;
+        }
+
+        incomingInvite.gasWebUrl = gas;
+        incomingInvite.deploySheetUrl = sheet;
+      }
+
+      return res.json({
+        success: true,
+        incomingInvite,
+        sentInvite
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/partner-direct-invite', (req, res) => {
+    try {
+      const { adminEmail, adminName, adminAvatar, partnerEmail, gasWebUrl, deploySheetUrl, inviteCode } = req.body || {};
+      const cleanAdmin = typeof adminEmail === 'string' ? adminEmail.trim().toLowerCase() : '';
+      const cleanPartner = typeof partnerEmail === 'string' ? partnerEmail.trim().toLowerCase() : '';
+
+      if (!cleanAdmin || !cleanPartner) {
+        return res.status(400).json({ success: false, message: '請提供管理者與伴侶的 Email' });
+      }
+
+      if (cleanAdmin === cleanPartner) {
+        return res.status(400).json({ success: false, message: '伴侶 Email 不可與自身管理者 Email 相同' });
+      }
+
+      const pendingDirect = readJsonFile<Record<string, any>>(PENDING_DIRECT_INVITES_FILE, {});
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
+
+      let gas = isValidGasUrl(gasWebUrl) ? gasWebUrl : '';
+      let sheet = deploySheetUrl || '';
+      if (!gas && userConfigs[cleanAdmin] && isValidGasUrl(userConfigs[cleanAdmin].gasWebUrl)) {
+        gas = userConfigs[cleanAdmin].gasWebUrl;
+        sheet = userConfigs[cleanAdmin].deploySheetUrl || sheet;
+      }
+      if (!gas && isValidGasUrl(sysDb?.gasWebUrl)) {
+        gas = sysDb.gasWebUrl;
+        sheet = sysDb.deploySheetUrl || sheet;
+      }
+
+      const code = inviteCode || `BB-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+
+      const directInvite = {
+        inviteCode: code,
+        adminEmail: cleanAdmin,
+        adminName: adminName || userConfigs[cleanAdmin]?.name || '主管理員',
+        adminAvatar: adminAvatar || userConfigs[cleanAdmin]?.avatar || '',
+        partnerEmail: cleanPartner,
+        gasWebUrl: gas,
+        deploySheetUrl: sheet,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30天有效
+        validMinutes: 30 * 24 * 60,
+        status: 'pending'
+      };
+
+      pendingDirect[cleanPartner] = directInvite;
+      writeJsonFile(PENDING_DIRECT_INVITES_FILE, pendingDirect);
+
+      // 同時寫入 partner_invites.json 確保傳統代碼查詢與 QR Code 連結查詢皆暢通無阻
+      const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
+      invites[code] = directInvite;
+      invites[code.replace(/^BB-/, '')] = directInvite;
+      writeJsonFile(PARTNER_INVITES_FILE, invites);
+
+      return res.json({ success: true, pendingInvite: directInvite });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/cancel-direct-invite', (req, res) => {
+    try {
+      const { adminEmail, partnerEmail } = req.body || {};
+      const cleanAdmin = typeof adminEmail === 'string' ? adminEmail.trim().toLowerCase() : '';
+      const cleanPartner = typeof partnerEmail === 'string' ? partnerEmail.trim().toLowerCase() : '';
+
+      const pendingDirect = readJsonFile<Record<string, any>>(PENDING_DIRECT_INVITES_FILE, {});
+      if (cleanPartner && pendingDirect[cleanPartner]) {
+        delete pendingDirect[cleanPartner];
+      }
+      if (cleanAdmin) {
+        for (const [key, val] of Object.entries(pendingDirect)) {
+          if (val && val.adminEmail && val.adminEmail.toLowerCase() === cleanAdmin) {
+            delete pendingDirect[key];
+          }
+        }
+      }
+      writeJsonFile(PENDING_DIRECT_INVITES_FILE, pendingDirect);
+      return res.json({ success: true, message: '已成功取消伴侶邀請' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // 3. Couple Bindings API
   app.get('/api/couple-binding', (req, res) => {
     try {
@@ -654,6 +796,25 @@ async function startServer() {
           updatedAt: new Date().toISOString()
         });
       }
+
+      // 自動清理相應的 pending direct invites
+      try {
+        const pendingDirect = readJsonFile<Record<string, any>>(PENDING_DIRECT_INVITES_FILE, {});
+        let modified = false;
+        if (partnerEmail && pendingDirect[partnerEmail]) {
+          delete pendingDirect[partnerEmail];
+          modified = true;
+        }
+        for (const [key, val] of Object.entries(pendingDirect)) {
+          if (val && (val.partnerEmail?.toLowerCase() === partnerEmail || (val.adminEmail?.toLowerCase() === adminEmail && val.partnerEmail?.toLowerCase() === partnerEmail))) {
+            delete pendingDirect[key];
+            modified = true;
+          }
+        }
+        if (modified) {
+          writeJsonFile(PENDING_DIRECT_INVITES_FILE, pendingDirect);
+        }
+      } catch (e) {}
 
       return res.json({ success: true, binding: cleanBinding });
     } catch (err: any) {

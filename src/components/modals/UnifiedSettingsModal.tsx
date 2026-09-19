@@ -57,6 +57,7 @@ interface UnifiedSettingsModalProps {
   toggleNotifySetting?: (key: keyof AppNotifySettings) => void;
   onTestNotification?: () => void;
   onOpenVersionInfo?: () => void;
+  onOpenPartnerPairing?: () => void;
 }
 
 type SettingsSubView = null | 'nickname' | 'gas' | 'backup' | 'pwa' | 'advanced' | 'notify';
@@ -91,7 +92,8 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   setAllNotifySettings,
   toggleNotifySetting,
   onTestNotification,
-  onOpenVersionInfo
+  onOpenVersionInfo,
+  onOpenPartnerPairing
 }) => {
   const [subView, setSubView] = useState<SettingsSubView>(null);
   const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
@@ -362,6 +364,43 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                       個人與伴侶偏好
                     </div>
                     <div className="bg-white rounded-2xl border border-[#E8E4D9] divide-y divide-[#F0EDE6] overflow-hidden shadow-xs">
+                      {/* 0. 伴侶配對與共同管理中心 */}
+                      {onOpenPartnerPairing && (
+                        <button
+                          id="settings-open-partner-pairing-btn"
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onOpenPartnerPairing();
+                          }}
+                          className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#FAF8F3] transition-colors text-left cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center font-bold text-xs">
+                              ❤️
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-[#3E3A36] flex items-center gap-1.5">
+                                <span>伴侶配對與共同協作</span>
+                                {partnerBindingInfo?.partnerEmail && (
+                                  <span className="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.2 rounded-full font-bold">
+                                    甜蜜連線中
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-[#8C8475]">
+                                {partnerBindingInfo?.partnerEmail
+                                  ? `與 ${partnerBindingInfo.partnerName || partnerBindingInfo.partnerEmail} 共同管理`
+                                  : '指定信箱直接邀請、QR Code 掃描與專屬連結'}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-[#8C8475]">
+                            <ChevronRight className="w-4 h-4 text-[#B5AFA6] group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                        </button>
+                      )}
+
                       {/* 1. 稱呼與顯示模式 */}
                       <button
                         type="button"

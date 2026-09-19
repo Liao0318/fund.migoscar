@@ -70,6 +70,8 @@ import { PwaInstallModal } from './components/modals/PwaInstallModal';
 import { UnifiedSettingsModal } from './components/modals/UnifiedSettingsModal';
 import { DeveloperSettingsModal } from './components/modals/DeveloperSettingsModal';
 import { VersionInfoModal } from './components/modals/VersionInfoModal';
+import { PartnerPairingModal } from './components/modals/PartnerPairingModal';
+import { IncomingPartnerInviteModal } from './components/modals/IncomingPartnerInviteModal';
 import { FloatingChatButton } from './components/chat/FloatingChatButton';
 import { ChatAssistantDrawer } from './components/chat/ChatAssistantDrawer';
 import { 
@@ -102,7 +104,10 @@ import {
   createShareableInviteCard,
   resolveInviteCodeOrToken,
   createFreshInvite,
-  isInviteExpired
+  isInviteExpired,
+  parseAndResolveInviteFromCurrentUrl,
+  checkPendingDirectInvite,
+  cancelDirectPartnerEmailInvite
 } from './utils/partnerInvite';
 import { 
   saveUserCloudConfig, 
@@ -909,6 +914,14 @@ export default function App() {
     return getPartnerBindingInfo();
   });
 
+  // 💖 伴侶配對中心 (Partner Pairing Center) 與即時收到的配對邀請彈窗
+  const [isPartnerPairingOpen, setIsPartnerPairingOpen] = useState(false);
+  const [incomingInvite, setIncomingInvite] = useState<PartnerInviteData | null>(null);
+  const [isIncomingInviteOpen, setIsIncomingInviteOpen] = useState(false);
+  const [activePartnerInviteData, setActivePartnerInviteData] = useState<PartnerInviteData | null>(() => {
+    return getActiveInviteCode();
+  });
+
   const { userA, userB, currentUserPersona, partnerPersona } = useMemo(() => {
     return resolveUserPersonas(currentUser, partnerBindingInfo);
   }, [currentUser, partnerBindingInfo]);
@@ -1024,10 +1037,11 @@ export default function App() {
       currentUser?.name || '主管理員',
       cleanGas,
       cleanSheet,
-      15
+      30 * 24 * 60
     );
     setCurrentInviteCode(fresh.inviteCode);
     saveActiveInviteCode(fresh);
+    setActivePartnerInviteData(fresh);
     if (currentUser?.email) {
       saveUserCloudConfig(currentUser.email, {
         inviteCode: fresh.inviteCode,
@@ -1035,7 +1049,7 @@ export default function App() {
         deploySheetUrl: cleanSheet
       }).catch(() => {});
     }
-    showToast(`✨ 已產生全新 15 分鐘時效邀請碼：${fresh.inviteCode}`, 'success');
+    showToast(`✨ 已產生全新伴侶配對邀請碼：${fresh.inviteCode}`, 'success');
   };
 
   const handleCopyInviteShare = () => {
@@ -1043,17 +1057,18 @@ export default function App() {
     const cleanSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
     let activeInvite = getActiveInviteCode();
     
-    // 若邀請碼不存在或已過期，立即自動刷新為最新 15 分鐘有效邀請碼
+    // 若邀請碼不存在或已過期，立即自動刷新為最新邀請碼
     if (!activeInvite || isInviteExpired(activeInvite)) {
       activeInvite = createFreshInvite(
         currentUser?.email || '',
         currentUser?.name || '主管理員',
         cleanGas,
         cleanSheet,
-        15
+        30 * 24 * 60
       );
       setCurrentInviteCode(activeInvite.inviteCode);
       saveActiveInviteCode(activeInvite);
+      setActivePartnerInviteData(activeInvite);
     } else {
       activeInvite = {
         ...activeInvite,
@@ -1063,6 +1078,7 @@ export default function App() {
         deploySheetUrl: cleanSheet || activeInvite.deploySheetUrl
       };
       saveActiveInviteCode(activeInvite);
+      setActivePartnerInviteData(activeInvite);
     }
 
     if (currentUser?.email && cleanGas) {
@@ -1071,7 +1087,71 @@ export default function App() {
     const cardText = createShareableInviteCard(activeInvite);
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(cardText);
-      showToast('💌 已複製伴侶邀請函與專屬時效連結（有效時限 15 分鐘）！', 'success');
+      showToast('💌 已複製伴侶配對邀請函與專屬連結！可直接傳給伴侶！', 'success');
+    }
+  };
+
+  // 💌 監聽網址邀請參數（Magic Link / QR Code 掃描進入）以及雲端直接邀請
+  useEffect(() => {
+    let isCancelled = false;
+
+    const checkIncomingInvite = async () => {
+      // 1. 檢查網址參數 (Query 或 Hash，如 ?partner_invite=... 或 #join=...)
+      try {
+        const urlParsed = await parseAndResolveInviteFromCurrentUrl();
+        if (urlParsed && urlParsed.invite && !isCancelled) {
+          const inv = urlParsed.invite;
+          const cleanCur = (currentUser?.email || '').trim().toLowerCase();
+          const cleanAdmin = (inv.adminEmail || '').trim().toLowerCase();
+          
+          // 若不是自己發起的邀請，且尚未完成該伴侶綁定
+          if (cleanCur && cleanAdmin && cleanCur === cleanAdmin) {
+            // 自己點擊自己發起的邀請，已在 handleBindPartnerInvite 支援跨裝置同步
+          } else if (!partnerBindingInfo || partnerBindingInfo.partnerEmail?.toLowerCase() !== cleanCur) {
+            setIncomingInvite(inv);
+            setIsIncomingInviteOpen(true);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Error checking URL invite:', e);
+      }
+
+      // 2. 若用戶已登入，且尚未綁定伴侶，向伺服器/雲端查詢是否有寄給此信箱的直接邀請
+      if (currentUser?.email && !partnerBindingInfo?.partnerEmail) {
+        try {
+          const { incomingInvite: directIncoming } = await checkPendingDirectInvite(currentUser.email);
+          if (directIncoming && !isCancelled) {
+            setIncomingInvite(directIncoming);
+            setIsIncomingInviteOpen(true);
+          }
+        } catch (e) {
+          console.warn('Error checking direct invite:', e);
+        }
+      }
+    };
+
+    checkIncomingInvite();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUser?.email, partnerBindingInfo?.partnerEmail]);
+
+  // 接受收到的伴侶邀請
+  const handleAcceptIncomingInvite = async (invite: PartnerInviteData) => {
+    try {
+      const codeOrToken = invite.inviteCode || invite.adminEmail;
+      const res = await handleBindPartnerInvite(codeOrToken);
+      if (res.success) {
+        setIsIncomingInviteOpen(false);
+        setIncomingInvite(null);
+        showToast(`💖 已成功與 ${invite.adminName || '伴侶'} 完成帳本配對！`, 'success');
+      } else {
+        showToast(res.message || '配對失敗，請稍後重試', 'error');
+      }
+    } catch (err: any) {
+      showToast('接受配對失敗：' + (err.message || '請重試'), 'error');
     }
   };
 
@@ -5479,6 +5559,8 @@ export default function App() {
         gasWebUrl={gasWebUrl}
         onOpenDevSettings={() => setIsDevSettingsModalOpen(true)}
         onOpenVersionInfo={() => setIsVersionInfoModalOpen(true)}
+        onOpenPartnerPairing={() => setIsPartnerPairingOpen(true)}
+        partnerBindingInfo={partnerBindingInfo}
       />
 
 
@@ -7298,6 +7380,7 @@ export default function App() {
         toggleNotifySetting={toggleAppNotifySetting}
         onTestNotification={handleTestInAppNotify}
         onOpenVersionInfo={() => setIsVersionInfoModalOpen(true)}
+        onOpenPartnerPairing={() => setIsPartnerPairingOpen(true)}
       />
 
       {/* 🏷️ 系統版本與運行環境資訊 Modal */}
@@ -7560,6 +7643,38 @@ export default function App() {
           onExitDevMode={handleExitDevMode}
           onSyncToProduction={handleSyncToProduction}
           isProductionReady={isProductionReady}
+        />
+
+        {/* 💖 伴侶配對與共同協作中心 Modal (支援 Email 直接邀請 / QR Code 掃描 / 專屬連結 / 6 碼代碼) */}
+        <PartnerPairingModal
+          isOpen={isPartnerPairingOpen}
+          onClose={() => setIsPartnerPairingOpen(false)}
+          currentUser={currentUser}
+          partnerBindingInfo={partnerBindingInfo}
+          gasWebUrl={gasWebUrl}
+          deploySheetUrl={deploySheetUrl}
+          activeInvite={activePartnerInviteData || getActiveInviteCode()}
+          onRefreshActiveInvite={handleGenerateNewInviteCode}
+          onBindPartner={handleBindPartnerInvite}
+          onUnbindPartner={handleUnbindPartner}
+          showToast={(msg, type) => showToast(msg, type === 'warning' ? 'info' : type)}
+        />
+
+        {/* 💌 收到伴侶邀請時的主動提醒與一鍵接受 Modal */}
+        <IncomingPartnerInviteModal
+          isOpen={isIncomingInviteOpen}
+          invite={incomingInvite}
+          onAccept={handleAcceptIncomingInvite}
+          onDismiss={async () => {
+            if (incomingInvite?.partnerEmail) {
+              try {
+                await cancelDirectPartnerEmailInvite(incomingInvite.partnerEmail);
+              } catch (e) {}
+            }
+            setIsIncomingInviteOpen(false);
+            setIncomingInvite(null);
+            showToast('已略過此伴侶邀請', 'info');
+          }}
         />
 
 

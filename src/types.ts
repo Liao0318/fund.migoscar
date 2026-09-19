@@ -207,11 +207,14 @@ export interface PartnerInviteData {
   adminNickname?: string;
   adminAvatar?: string;
   adminRole?: '廖' | '周' | 'admin' | string;
+  partnerEmail?: string; // 指定直接邀請之伴侶 Email
+  partnerName?: string;
+  status?: 'pending' | 'accepted' | 'revoked';
   gasWebUrl?: string;
   deploySheetUrl?: string;
   createdAt: string;
-  expiresAt?: string; // ISO 8601 時效截止時間戳 (預設 15 分鐘)
-  validMinutes?: number; // 有效分鐘數 (例如 15)
+  expiresAt?: string; // ISO 8601 時效截止時間戳 (預設 30 天)
+  validMinutes?: number; // 有效分鐘數
 }
 
 export type NicknameLengthPreference = '1-char' | '2-char';
