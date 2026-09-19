@@ -1414,14 +1414,13 @@ export default function App() {
           if (existingBinding.gasWebUrl) {
             setGasWebUrl(existingBinding.gasWebUrl);
             try { 
-              localStorage.setItem('muji_gas_web_url', existingBinding.gasWebUrl);
               localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, existingBinding.gasWebUrl);
+              localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, existingBinding.gasWebUrl);
             } catch (e) {}
           }
           if (existingBinding.deploySheetUrl) {
             setDeploySheetUrl(existingBinding.deploySheetUrl);
             try { 
-              localStorage.setItem('muji_sheet_url', existingBinding.deploySheetUrl);
               localStorage.setItem(`muji_sheet_url_${cleanEmail}`, existingBinding.deploySheetUrl);
             } catch (e) {}
           }
@@ -1665,12 +1664,10 @@ export default function App() {
           setGasWebUrl(activeGas);
           setDeploySheetUrl(activeSheet);
           try {
-            localStorage.setItem('muji_gas_web_url', activeGas);
-            localStorage.setItem('muji_sheet_url', activeSheet);
-            localStorage.setItem('banban_permanent_gas_url', activeGas);
             if (cleanEmail) {
               localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, activeGas);
               localStorage.setItem(`muji_sheet_url_${cleanEmail}`, activeSheet);
+              localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, activeGas);
             }
           } catch (e) {}
 
@@ -1813,18 +1810,18 @@ export default function App() {
       if (activeGas) {
         setGasWebUrl(activeGas);
         try { 
-          localStorage.setItem('muji_gas_web_url', activeGas);
-          localStorage.setItem(`muji_gas_web_url_${currentEmail}`, activeGas);
-          localStorage.setItem('banban_permanent_gas_url', activeGas);
-          localStorage.setItem(`banban_permanent_gas_url_${currentEmail}`, activeGas);
-          localStorage.setItem('banban_device_master_gas', activeGas);
+          if (currentEmail) {
+            localStorage.setItem(`muji_gas_web_url_${currentEmail}`, activeGas);
+            localStorage.setItem(`banban_permanent_gas_url_${currentEmail}`, activeGas);
+          }
         } catch (e) {}
       }
       if (activeSheet) {
         setDeploySheetUrl(activeSheet);
         try { 
-          localStorage.setItem('muji_sheet_url', activeSheet);
-          localStorage.setItem(`muji_sheet_url_${currentEmail}`, activeSheet);
+          if (currentEmail) {
+            localStorage.setItem(`muji_sheet_url_${currentEmail}`, activeSheet);
+          }
         } catch (e) {}
       }
 
@@ -1884,9 +1881,6 @@ export default function App() {
     if (activeGas) {
       setGasWebUrl(activeGas);
       try { 
-        localStorage.setItem('muji_gas_web_url', activeGas);
-        localStorage.setItem('banban_permanent_gas_url', activeGas);
-        localStorage.setItem('banban_device_master_gas', activeGas);
         if (currentEmail) {
           localStorage.setItem(`muji_gas_web_url_${currentEmail}`, activeGas);
           localStorage.setItem(`banban_permanent_gas_url_${currentEmail}`, activeGas);
@@ -1896,8 +1890,6 @@ export default function App() {
     if (activeSheet) {
       setDeploySheetUrl(activeSheet);
       try { 
-        localStorage.setItem('muji_deploy_sheet_url', activeSheet);
-        localStorage.setItem('muji_sheet_url', activeSheet);
         if (currentEmail) {
           localStorage.setItem(`muji_sheet_url_${currentEmail}`, activeSheet);
         }
@@ -2482,14 +2474,17 @@ export default function App() {
                   }
                 } catch (e) {}
               }
-              if (!foundGas && hasBackendServer()) {
+              if (!foundGas && hasBackendServer() && cleanEmail) {
                 try {
-                  const res = await fetch('/api/system-database');
+                  const res = await fetch(`/api/system-database?email=${encodeURIComponent(cleanEmail)}`);
                   if (res.ok) {
                     const data = await res.json();
                     if (data?.success && data?.database?.gasWebUrl) {
-                      foundGas = data.database.gasWebUrl;
-                      foundSheet = data.database.deploySheetUrl || '';
+                      const configuredBy = (data.database.configuredBy || '').trim().toLowerCase();
+                      if (configuredBy && configuredBy === cleanEmail) {
+                        foundGas = data.database.gasWebUrl;
+                        foundSheet = data.database.deploySheetUrl || '';
+                      }
                     }
                   }
                 } catch (e) {}

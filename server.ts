@@ -122,10 +122,15 @@ async function startServer() {
   });
 
   // 1.5 System Database API (Strictly isolated, no cross-user fallback)
-  app.get('/api/system-database', (_req, res) => {
+  app.get('/api/system-database', (req, res) => {
     try {
+      const email = typeof req.query.email === 'string' ? req.query.email.trim().toLowerCase() : '';
       const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
       if (sysDb && isValidGasUrl(sysDb.gasWebUrl)) {
+        // 若有提供 email 查詢，必須確保是該帳號配置的資料庫，避免未配對帳號洩漏
+        if (email && sysDb.configuredBy && sysDb.configuredBy.toLowerCase() !== email) {
+          return res.json({ success: false, database: null, message: 'Database belongs to another account' });
+        }
         return res.json({ success: true, database: sysDb });
       }
       return res.json({ success: false, database: null });

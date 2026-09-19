@@ -142,121 +142,11 @@ export function scanAndRecoverGasUrl(email?: string): PersistentDbResult {
       }
     } catch (e) {}
 
-    // 指定特定使用者時，嚴格避免誤讀其他帳號之設定
+    // ⚠️ 嚴格帳號隔離：當指定特定使用者時，若該帳號無設定，絕對不回退或讀取任何本機其他帳號或全域未隔離的資料庫網址！
     return { gasWebUrl: '', deploySheetUrl: '', source: 'none' };
   }
 
-  // 2. 本機全域專屬金鑰 (僅在完全未指定 email 的單機無帳號模式下)
-  try {
-    const g1 = localStorage.getItem('muji_gas_web_url')?.trim();
-    if (g1 && isValidProductionGasUrl(g1)) {
-      const s1 = localStorage.getItem('muji_sheet_url')?.trim() || '';
-      return {
-        gasWebUrl: g1,
-        deploySheetUrl: isValidProductionSheetUrl(s1) ? s1 : '',
-        source: 'device_storage'
-      };
-    } else if (g1 && !isValidProductionGasUrl(g1)) {
-      localStorage.removeItem('muji_gas_web_url');
-    }
-
-    const g2 = localStorage.getItem('banban_permanent_gas_url')?.trim();
-    if (g2 && isValidProductionGasUrl(g2)) {
-      const s2 = localStorage.getItem('banban_permanent_sheet_url')?.trim() || '';
-      return {
-        gasWebUrl: g2,
-        deploySheetUrl: isValidProductionSheetUrl(s2) ? s2 : '',
-        source: 'device_permanent'
-      };
-    } else if (g2 && !isValidProductionGasUrl(g2)) {
-      localStorage.removeItem('banban_permanent_gas_url');
-    }
-
-    const g3 = localStorage.getItem('banban_device_master_gas')?.trim();
-    if (g3 && isValidProductionGasUrl(g3)) {
-      const s3 = localStorage.getItem('banban_device_master_sheet')?.trim() || '';
-      return {
-        gasWebUrl: g3,
-        deploySheetUrl: isValidProductionSheetUrl(s3) ? s3 : '',
-        source: 'device_master'
-      };
-    } else if (g3 && !isValidProductionGasUrl(g3)) {
-      localStorage.removeItem('banban_device_master_gas');
-    }
-  } catch (e) {}
-
-  // 3. 伴侶與邀請碼備援紀錄
-  try {
-    const invRaw = localStorage.getItem('banban_active_invite');
-    if (invRaw) {
-      const parsed = JSON.parse(invRaw);
-      if (parsed.gasWebUrl && isValidProductionGasUrl(parsed.gasWebUrl)) {
-        return {
-          gasWebUrl: parsed.gasWebUrl.trim(),
-          deploySheetUrl: isValidProductionSheetUrl(parsed.deploySheetUrl) ? parsed.deploySheetUrl.trim() : '',
-          source: 'active_invite'
-        };
-      }
-    }
-  } catch (e) {}
-
-  try {
-    const bindRaw = localStorage.getItem('banban_partner_binding');
-    if (bindRaw) {
-      const parsed = JSON.parse(bindRaw);
-      if (parsed.gasWebUrl && isValidProductionGasUrl(parsed.gasWebUrl)) {
-        return {
-          gasWebUrl: parsed.gasWebUrl.trim(),
-          deploySheetUrl: isValidProductionSheetUrl(parsed.deploySheetUrl) ? parsed.deploySheetUrl.trim() : '',
-          source: 'partner_binding'
-        };
-      }
-    }
-  } catch (e) {}
-
-  // 4. 深度掃描全域 LocalStorage 鍵值，萃取包含 script.google.com/macros/s 的 Web App 網址
-  try {
-    const gasRegex = /https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_\-\/]+/;
-    const sheetRegex = /https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9_\-]+/;
-    let foundGas = '';
-    let foundSheet = '';
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-      const val = localStorage.getItem(key);
-      if (!val) continue;
-
-      if (!foundGas) {
-        const m = val.match(gasRegex);
-        if (m && m[0]) {
-          let candidate = m[0];
-          if (!candidate.endsWith('/exec') && val.includes(candidate + '/exec')) {
-            candidate = candidate + '/exec';
-          }
-          if (isValidProductionGasUrl(candidate)) {
-            foundGas = candidate;
-          }
-        }
-      }
-      if (!foundSheet) {
-        const m = val.match(sheetRegex);
-        if (m && m[0] && isValidProductionSheetUrl(m[0])) {
-          foundSheet = m[0];
-        }
-      }
-      if (foundGas && foundSheet) break;
-    }
-
-    if (foundGas) {
-      return {
-        gasWebUrl: foundGas,
-        deploySheetUrl: foundSheet,
-        source: 'deep_scan'
-      };
-    }
-  } catch (e) {}
-
+  // 2. 僅在完全未指定 email 的單機無帳號訪客模式下，才回退至單機金鑰
   return { gasWebUrl: '', deploySheetUrl: '', source: 'none' };
 }
 
@@ -301,21 +191,15 @@ export async function saveUserCloudConfig(email: string, config: Partial<UserClo
     updatedAt: new Date().toISOString()
   };
 
-  // 1. 本地多重永久備份 (依 Gmail 獨立隔離 + 裝置永久鍵)
+  // 1. 本地儲存：嚴格依 Gmail 獨立隔離儲存，禁止污染全域共享金鑰
   try {
     localStorage.setItem(`${LOCAL_USER_CONFIG_PREFIX}${cleanEmail}`, JSON.stringify(payload));
     if (safeGas) {
-      localStorage.setItem('muji_gas_web_url', safeGas);
-      localStorage.setItem('banban_permanent_gas_url', safeGas);
-      localStorage.setItem('banban_device_master_gas', safeGas);
       localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, safeGas);
       localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, safeGas);
       localStorage.setItem(`banban_user_has_logged_in_${cleanEmail}`, 'true');
     }
     if (safeSheet) {
-      localStorage.setItem('muji_sheet_url', safeSheet);
-      localStorage.setItem('banban_permanent_sheet_url', safeSheet);
-      localStorage.setItem('banban_device_master_sheet', safeSheet);
       localStorage.setItem(`muji_sheet_url_${cleanEmail}`, safeSheet);
       localStorage.setItem(`banban_permanent_sheet_url_${cleanEmail}`, safeSheet);
     }

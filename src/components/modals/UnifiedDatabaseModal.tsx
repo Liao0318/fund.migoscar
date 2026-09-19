@@ -437,10 +437,6 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
 
     try {
-      localStorage.setItem('muji_gas_web_url', cleanGas);
-      localStorage.setItem('muji_sheet_url', cleanSheet);
-      localStorage.setItem('banban_permanent_gas_url', cleanGas);
-      localStorage.setItem('banban_device_master_gas', cleanGas);
       if (cleanEmail) {
         localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cleanGas);
         localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, cleanGas);
@@ -504,10 +500,6 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
     setDeploySheetUrl(cleanSheet);
 
     try {
-      localStorage.setItem('muji_gas_web_url', cleanGas);
-      localStorage.setItem('muji_sheet_url', cleanSheet);
-      localStorage.setItem('banban_permanent_gas_url', cleanGas);
-      localStorage.setItem('banban_device_master_gas', cleanGas);
       if (cleanEmail) {
         localStorage.setItem(`muji_gas_web_url_${cleanEmail}`, cleanGas);
         localStorage.setItem(`banban_permanent_gas_url_${cleanEmail}`, cleanGas);
