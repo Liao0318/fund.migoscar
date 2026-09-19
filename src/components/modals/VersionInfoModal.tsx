@@ -3,14 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, 
   X, 
-  CheckCircle2, 
   Layers, 
-  Clock, 
   Globe, 
-  ShieldCheck, 
-  Database,
-  ExternalLink,
-  ChevronRight
+  Database
 } from 'lucide-react';
 import { APP_VERSION, APP_BUILD_DATE, APP_NAME, APP_FULL_NAME, APP_RELEASE_NOTES, getRuntimeEnvironmentInfo } from '../../version';
 

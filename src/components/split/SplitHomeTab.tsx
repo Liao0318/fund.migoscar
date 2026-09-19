@@ -5,22 +5,13 @@ import {
   CheckCircle2, 
   Clock, 
   RefreshCw, 
-  TrendingUp, 
-  Sparkles, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  Wallet,
-  ChevronRight,
-  ShieldCheck,
-  Heart,
-  MessageCircle,
-  Database,
-  Key,
+  ChevronRight, 
+  MessageCircle, 
   User
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { SplitRecordItem, SplitSummary, SmartCommandResult, AuthUser, CoupleBindingInfo } from '../../types';
-import { resolveUserPersonas, formatPayerDisplayName, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserA } from '../../utils/userPersona';
 import { InitialEmptyEntryFrame } from '../common/InitialEmptyEntryFrame';
 
 interface SplitHomeTabProps {

@@ -7,7 +7,6 @@ import {
   Check, 
   Sparkles, 
   Calendar, 
-  Tag, 
   User, 
   Users,
   MapPin,
@@ -30,19 +29,13 @@ import {
   Palette,
   UserPlus,
   X,
-  UserMinus,
   Settings2,
-  HelpCircle,
-  Clock,
   RefreshCw,
   Database,
   FileSpreadsheet,
   Search,
-  SlidersHorizontal,
   Download,
-  ExternalLink,
   Receipt,
-  Mail,
   Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';

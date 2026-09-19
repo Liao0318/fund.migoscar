@@ -7,9 +7,7 @@ import {
   getAuth, 
   signInWithPopup, 
   GoogleAuthProvider, 
-  signOut as fbSignOut,
-  User as FirebaseUser,
-  onAuthStateChanged
+  signOut as fbSignOut
 } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';

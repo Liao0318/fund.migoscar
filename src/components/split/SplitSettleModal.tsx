@@ -1,11 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   CheckCircle2, 
-  X, 
-  Sparkles, 
-  AlertCircle, 
-  Receipt,
-  Heart
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { SplitSummary, AuthUser, CoupleBindingInfo } from '../../types';

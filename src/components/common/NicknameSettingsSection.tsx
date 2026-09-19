@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, CheckCircle2, AlertCircle, Sparkles, Tag } from 'lucide-react';
+import { Check, CheckCircle2, Sparkles, Tag } from 'lucide-react';
 import { AuthUser, NicknameLengthPreference } from '../../types';
 
 interface NicknameSettingsSectionProps {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertTriangle, Info, X } from 'lucide-react';
+import { Info, X } from 'lucide-react';
 
 export interface ToastData {
   message: string;

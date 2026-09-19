@@ -3,8 +3,8 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.9.1';
-export const APP_BUILD_DATE = '2026.09.17';
+export const APP_VERSION = 'v2.9.2';
+export const APP_BUILD_DATE = '2026.09.19';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
 
@@ -16,6 +16,16 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.9.2',
+    date: '2026.09.19',
+    title: '冗餘程式碼全面審查、死碼清理與架構穩定度精簡',
+    highlights: [
+      '殘留未調用狀態與孤兒函式清理：徹底移除 App.tsx 早期版本遺留的未調用狀態（isDeployModalOpen、isDatabaseOnboardingOpen、activeDeployCodeTab、copiedCodeType、copied、showNotificationsOpen、舊版 notifySettings）與孤兒函式（handleResetData、handleSyncClick、copyDeployCode、saveNotifySettings），避免無效記憶體佔用。',
+      '跨模組冗餘引入（Unused Imports）深度整頓：清理全專案 16 個核心元件及對話框中多達 60+ 處未使用的 Lucide 圖標、過期型別與無效輔助函式，有效縮減程式碼體積並提升編譯與載入效能。',
+      '零破壞性保證：本機 LocalStorage 隔離邏輯、Google 試算表連線、即時離線同步佇列（syncQueue）及 Google Drive 同步核心功能 100% 完整保留並通過 TypeScript 嚴格編譯校驗。'
+    ]
+  },
   {
     version: 'v2.9.1',
     date: '2026.09.17',

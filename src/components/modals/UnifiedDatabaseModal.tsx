@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Database, 
-  Key, 
   Crown, 
   Heart, 
   Sparkles, 
@@ -20,19 +19,17 @@ import {
   X, 
   Save, 
   Sliders, 
-  ClipboardPaste,
-  HelpCircle,
-  Link as LinkIcon,
-  PlayCircle,
-  Unlink,
-  LogOut,
-  RotateCcw,
-  Download,
-  FileSpreadsheet,
+  ClipboardPaste, 
+  PlayCircle, 
+  Unlink, 
+  LogOut, 
+  RotateCcw, 
+  Download, 
+  FileSpreadsheet, 
   Clock
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData, CoupleBindingInfo } from '../../types';
-import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline, encodeInvitePayload, createShareableInviteCard, getAppShareBaseUrl, getActiveInviteCode, getInviteRemainingSeconds, formatRemainingTime } from '../../utils/partnerInvite';
+import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline, createShareableInviteCard, getActiveInviteCode, getInviteRemainingSeconds, formatRemainingTime } from '../../utils/partnerInvite';
 import { INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from '../../data/gasTemplates';
 import { downloadDatabaseExcelTemplate, GOOGLE_SHEETS_NEW_URL } from '../../utils/excelTemplate';
 import { scanAndRecoverGasUrl, getUserCloudConfig, saveUserCloudConfig, isValidProductionGasUrl, isValidProductionSheetUrl } from '../../utils/userConfigService';

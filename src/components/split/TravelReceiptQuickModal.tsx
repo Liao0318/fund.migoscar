@@ -7,12 +7,10 @@ import {
   Check, 
   User, 
   MapPin, 
-  CreditCard, 
-  ArrowRightLeft,
-  Calendar,
-  Layers
+  ArrowRightLeft, 
+  Calendar
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { TravelExpenseItem, TravelTrip, AuthUser } from '../../types';
 
 interface TravelReceiptQuickModalProps {

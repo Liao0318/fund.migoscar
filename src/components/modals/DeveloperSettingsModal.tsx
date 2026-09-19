@@ -9,16 +9,11 @@ import {
   Rocket, 
   ShieldCheck, 
   Database, 
-  Users, 
-  CloudCheck, 
-  FileCode, 
-  Sparkles,
-  Sliders,
-  LogOut,
-  Info,
-  CheckCircle2,
-  AlertTriangle,
-  Eye,
+  Sparkles, 
+  LogOut, 
+  Info, 
+  CheckCircle2, 
+  Eye, 
   EyeOff
 } from 'lucide-react';
 import { AuthUser } from '../../types';

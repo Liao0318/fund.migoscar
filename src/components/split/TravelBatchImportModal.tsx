@@ -3,24 +3,17 @@ import {
   FileSpreadsheet, 
   X, 
   Check, 
-  Plus, 
   Trash2, 
-  AlertCircle, 
   Sparkles, 
   ArrowRight, 
   Users, 
-  User, 
-  ShoppingBag, 
-  Layers, 
-  HelpCircle,
-  Copy,
-  Download,
-  Upload,
-  FileText,
-  CreditCard,
+  HelpCircle, 
+  Copy, 
+  Download, 
+  Upload, 
   Loader2
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import * as XLSX from 'xlsx';
 import { TravelExpenseItem, TravelTrip, AuthUser } from '../../types';
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Download, Smartphone, Share2, Check, Sparkles, X, PlusSquare, ArrowUpRight } from 'lucide-react';
+import { Download, Smartphone, Share2, Check, Sparkles, X, PlusSquare } from 'lucide-react';
 import { BrandLogo } from '../common/BrandLogo.tsx';
 
 interface PwaInstallModalProps {

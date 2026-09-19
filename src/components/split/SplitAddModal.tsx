@@ -2,14 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { 
   Plus, 
   X, 
-  Sparkles, 
-  Tag, 
-  User, 
-  ArrowRightLeft,
-  Receipt
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SplitRecordItem, AuthUser, CoupleBindingInfo } from '../../types';
+import { AuthUser, CoupleBindingInfo } from '../../types';
 import { resolveUserPersonas, isRecordOfUserA } from '../../utils/userPersona';
 
 interface SplitAddModalProps {

@@ -24,13 +24,6 @@ export interface SplitSummary {
   settledCount: number;
 }
 
-export interface TravelMember {
-  id: string;
-  name: string;
-  avatar?: string;
-  isDefaultCouple?: boolean;
-}
-
 export interface TravelTrip {
   id: string;
   title: string;

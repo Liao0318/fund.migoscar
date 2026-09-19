@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, List, Plus, ShoppingBag, Plane, Wallet, Settings } from 'lucide-react';
+import { Home, List, Plus, ShoppingBag, Plane, Wallet } from 'lucide-react';
 
 interface FloatingDockProps {
   activeTab: 'home' | 'history' | 'settlement' | 'notebook' | string;

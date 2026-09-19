@@ -10,7 +10,6 @@ import {
   Bell, 
   Sliders, 
   Heart, 
-  Send, 
   Trash2, 
   CheckCheck,
   UserCheck,

@@ -21,24 +21,18 @@ import {
   CheckCircle2,
   RefreshCw,
   ChevronDown,
-  Volume2,
   BarChart3,
   Tag,
-  MapPin,
   Check,
   Undo2,
   Heart,
-  BellRing,
-  ShoppingBag,
-  UserCheck,
   SlidersHorizontal,
-  ChevronRight,
   User
 } from 'lucide-react';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { AppNotification, AppNotifySettings, SmartCommandResult, SmartCommandCardData, AuthUser, CoupleBindingInfo } from '../../types';
 import { formatAmPmTime, isIncomingFromPartner } from '../../utils/formatters';
-import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
+import { resolveUserPersonas, isRecordOfUserB } from '../../utils/userPersona';
 
 export interface ChatMessage {
   id: string;

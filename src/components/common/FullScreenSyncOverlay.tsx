@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { RefreshCw, CheckCircle2, Database, ShieldCheck, ArrowRight } from 'lucide-react';
+import { RefreshCw, CheckCircle2, ShieldCheck, ArrowRight } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { APP_VERSION } from '../../version';
 

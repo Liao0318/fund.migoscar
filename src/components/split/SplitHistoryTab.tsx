@@ -2,18 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { 
   Search, 
   Trash2, 
-  Filter, 
-  CheckCircle2, 
-  Clock, 
-  Calendar, 
-  Tag, 
-  MessageSquare,
-  Sparkles,
-  ArrowRightLeft,
-  X,
-  Download,
-  FileSpreadsheet,
-  Database,
+  X, 
+  Download, 
+  Database, 
   Key
 } from 'lucide-react';
 import { SplitRecordItem, AuthUser, CoupleBindingInfo } from '../../types';

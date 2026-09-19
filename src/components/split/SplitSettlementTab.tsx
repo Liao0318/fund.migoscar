@@ -2,22 +2,16 @@ import React, { useState, useMemo } from 'react';
 import { 
   Scale, 
   CheckCircle2, 
-  ArrowRightLeft, 
-  Sparkles, 
   Receipt, 
-  Clock, 
-  Calendar, 
   Check, 
-  AlertCircle,
-  HelpCircle,
-  FileCheck,
-  ChevronDown,
-  ChevronUp,
-  Database,
-  Key,
+  FileCheck, 
+  ChevronDown, 
+  ChevronUp, 
+  Database, 
+  Key, 
   User
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { SplitRecordItem, SplitSummary, AuthUser, CoupleBindingInfo } from '../../types';
 import { resolveUserPersonas, isRecordOfUserA } from '../../utils/userPersona';
 

@@ -8,35 +8,18 @@ import {
   Database, 
   Smartphone, 
   LogOut, 
-  Crown, 
-  Heart, 
   RefreshCw, 
   ExternalLink, 
-  Share2, 
-  Copy, 
   CheckCircle2, 
-  AlertCircle,
-  ChevronRight,
-  ShieldCheck,
-  LogIn,
-  Unlink,
-  KeyRound,
-  ClipboardPaste,
-  Loader2,
-  ChevronLeft,
-  Check,
-  Sparkles,
-  Layers,
-  ArrowRight,
-  Laptop,
-  Bell,
-  SlidersHorizontal,
-  Sliders,
-  Clock
+  ChevronRight, 
+  ShieldCheck, 
+  LogIn, 
+  ChevronLeft, 
+  Bell
 } from 'lucide-react';
 import { AuthUser, CoupleBindingInfo, NicknameLengthPreference, AppNotifySettings } from '../../types';
 import { APP_VERSION, APP_BUILD_DATE, APP_NAME } from '../../version';
-import { getActiveInviteCode, getInviteRemainingSeconds, formatRemainingTime } from '../../utils/partnerInvite';
+import { getActiveInviteCode, getInviteRemainingSeconds } from '../../utils/partnerInvite';
 
 interface UnifiedSettingsModalProps {
   isOpen: boolean;

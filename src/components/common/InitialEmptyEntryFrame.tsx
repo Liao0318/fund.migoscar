@@ -8,9 +8,7 @@ import {
   Key, 
   ArrowRight, 
   ShieldCheck, 
-  FileCode, 
-  Users, 
-  HelpCircle,
+  HelpCircle, 
   PlayCircle
 } from 'lucide-react';
 import { AuthUser, CoupleBindingInfo } from '../../types';

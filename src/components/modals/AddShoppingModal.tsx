@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Pencil, ShoppingBag, X, Store, MapPin, Plus, User } from 'lucide-react';
+import { Pencil, ShoppingBag, X, Store, MapPin, Plus } from 'lucide-react';
 import { ShoppingItem, AuthUser, CoupleBindingInfo } from '../../types';
 import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';
 

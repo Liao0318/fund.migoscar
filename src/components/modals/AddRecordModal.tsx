@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Plus, Save, Store, MapPin, Sparkles, User } from 'lucide-react';
+import { X, Plus, Save, Store, MapPin } from 'lucide-react';
 import { ShoppingItem, AuthUser, CoupleBindingInfo } from '../../types';
 import { CURRENCIES, DEFAULT_RATES_MAP } from '../../utils/formatters';
 import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB } from '../../utils/userPersona';

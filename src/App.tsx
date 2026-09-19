@@ -10,59 +10,37 @@ import {
   RefreshCw, 
   FileCode, 
   Check, 
-  User, 
   Wallet, 
   TrendingDown, 
   TrendingUp, 
-  Copy, 
   FileText, 
-  Sparkles,
-  Info,
-  ExternalLink,
-  Settings,
-  List,
-  Home,
-  X,
-  Bell,
-  Target,
-  Search,
-  ShoppingBag,
-  MapPin,
-  ChevronRight,
-  ChevronDown,
-  ChevronUp,
-  CreditCard,
-  ReceiptText,
-  Store,
-  Clock,
-  CheckSquare,
-  Square,
-  Tag,
-  MessageSquare,
-  Share2,
-  Save,
-  Edit3,
-  Pencil,
-  Globe,
-  Coins,
-  ArrowRightLeft,
-  Calculator,
-  Sliders,
-  BellRing,
-  CheckCircle2,
-  AlertCircle,
-  Plane,
-  Download,
-  Database,
-  Key,
+  List, 
+  X, 
+  Target, 
+  Search, 
+  ShoppingBag, 
+  MapPin, 
+  ChevronRight, 
+  ChevronDown, 
+  ChevronUp, 
+  CreditCard, 
+  Store, 
+  Clock, 
+  Tag, 
+  Pencil, 
+  ArrowRightLeft, 
+  Calculator, 
+  Download, 
+  Database, 
+  Key, 
   Lightbulb
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { exportFundRecordsToCSV } from './utils/exportCsv';
 import { formatAmPmTime, isTodayNotification, isIncomingFromPartner, getShoppingItemDisplayTime } from './utils/formatters';
 import { sendNativeNotification } from './utils/nativeNotify';
-import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB, isNonPersonTerm, NON_PERSON_ITEM_TERMS } from './utils/userPersona';
-import { CODE_GS_TEMPLATE, INDEX_HTML_TEMPLATE, SPLIT_INDEX_HTML_TEMPLATE } from './data/gasTemplates';
+import { resolveUserPersonas, isRecordOfUserA, isRecordOfUserB, isNonPersonTerm } from './utils/userPersona';
+import { CODE_GS_TEMPLATE } from './data/gasTemplates';
 import { SplitHomeTab } from './components/split/SplitHomeTab';
 import { SplitHistoryTab } from './components/split/SplitHistoryTab';
 import { SplitTravelTab } from './components/split/SplitTravelTab';
@@ -124,9 +102,7 @@ import {
   createShareableInviteCard,
   resolveInviteCodeOrToken,
   createFreshInvite,
-  isInviteExpired,
-  getInviteRemainingSeconds,
-  formatRemainingTime
+  isInviteExpired
 } from './utils/partnerInvite';
 import { 
   saveUserCloudConfig, 
@@ -3010,8 +2986,6 @@ export default function App() {
     }
   };
 
-  const [isDeployModalOpen, setIsDeployModalOpen] = useState(false);
-  const [isDatabaseOnboardingOpen, setIsDatabaseOnboardingOpen] = useState(false);
   const [deploySheetUrl, setDeploySheetUrl] = useState(() => {
     try {
       let savedEmail = '';
@@ -3027,8 +3001,6 @@ export default function App() {
       return '';
     }
   });
-  const [activeDeployCodeTab, setActiveDeployCodeTab] = useState<'codeGs' | 'indexHtml' | 'splitHtml'>('codeGs');
-  const [copiedCodeType, setCopiedCodeType] = useState<'codeGs' | 'indexHtml' | 'splitHtml' | null>(null);
 
   const saveDeployConfig = (overrideGas?: string, overrideSheet?: string) => {
     if (isGuestMode || !currentUser) {
@@ -3598,26 +3570,6 @@ export default function App() {
     return code;
   };
 
-  const copyDeployCode = (type: 'codeGs' | 'indexHtml' | 'splitHtml') => {
-    let textToCopy = INDEX_HTML_TEMPLATE;
-    let labelName = 'Index.html';
-    if (type === 'codeGs') {
-      textToCopy = getCustomizedCodeGs();
-      labelName = 'Code.gs';
-    } else if (type === 'splitHtml') {
-      textToCopy = SPLIT_INDEX_HTML_TEMPLATE;
-      labelName = 'split/index.html';
-    }
-
-    navigator.clipboard.writeText(textToCopy).then(() => {
-      setCopiedCodeType(type);
-      showToast(`已成功複製 ${labelName} 部署代碼！`, 'success');
-      setTimeout(() => setCopiedCodeType(null), 2500);
-    }).catch(() => {
-      showToast('複製失敗，請手動選取代碼複製。', 'info');
-    });
-  };
-
   // 取得最新各國即時匯率 API (優先內部 API 代理 -> 國際匯率 API -> 離線基準/快取)
   const fetchLiveExchangeRates = async (showToastNotice = false, isBackground = false) => {
     if (!isBackground) setIsRateLoading(true);
@@ -3836,18 +3788,10 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<ToastData | null>(null);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
-  const [copied, setCopied] = useState<string | null>(null);
 
   // ------------------- 通知系統狀態 -------------------
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [showNotificationsOpen, setShowNotificationsOpen] = useState(false);
-  const [notifyEnabled, setNotifyEnabled] = useState(true);
-  const [notifySettings, setNotifySettings] = useState({
-    notifyOnAdd: true,
-    notifyOnDelete: true,
-    notifyOnSettle: true
-  });
+  const [notifyEnabled] = useState(true);
   const [isAppLoaded, setIsAppLoaded] = useState(false);
 
   // ------------------- PWA 離線安裝狀態 -------------------
@@ -4548,10 +4492,6 @@ export default function App() {
     onConfirm: () => void;
   } | null>(null);
 
-  const handleSyncClick = () => {
-    openUnifiedDatabaseModal('settings');
-  };
-
   // 初始化與本機 LocalStorage 綁定
   useEffect(() => {
     // 1. 載入對帳流水帳紀錄
@@ -4705,17 +4645,6 @@ export default function App() {
     setNotifications(initialLoadedNotifs);
     localStorage.setItem('muji_notifications', JSON.stringify(initialLoadedNotifs));
     localStorage.setItem('muji_notification_day', currentTodayStr);
-
-    // 4. 載入通知偏好設定
-    const savedSettings = localStorage.getItem('muji_notification_settings');
-    if (savedSettings) {
-      try {
-        setNotifySettings(JSON.parse(savedSettings));
-      } catch (e) {
-        // Use default values
-      }
-    }
-
     }, []);
 
   // 🕒 跨日自動清理機制：精準在每日午夜 00:00:00 與視窗喚醒時自動清空昨日所有通知與紅點
@@ -4959,12 +4888,6 @@ export default function App() {
     showToast('已清空今日通知', 'info');
   };
 
-  const saveNotifySettings = (newSettings: typeof notifySettings) => {
-    setNotifySettings(newSettings);
-    localStorage.setItem('muji_notification_settings', JSON.stringify(newSettings));
-    showToast('通知設定已儲存', 'success');
-  };
-
   // 儲存已核銷月份到本機
   const saveReconciledToLocal = (newReconciled: string[]) => {
     setReconciledMonths(newReconciled);
@@ -5202,16 +5125,6 @@ export default function App() {
         }
       }
     });
-  };
-
-  // 重新同步/重置為預設假資料
-  const handleResetData = () => {
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      saveRecordsToLocal(INITIAL_RECORDS);
-      showToast('已同步試算表完畢，已還原乾淨預設值！', 'success');
-    }, 1000);
   };
 
   // 1. 最新月份代墊與收入計算 (供底部浮動合計面板、首頁即時顯示使用)
@@ -6773,7 +6686,7 @@ export default function App() {
                   <div className="pt-6 pb-2 flex justify-center">
                     <button
                       type="button"
-                      onClick={() => setIsDeployModalOpen(true)}
+                      onClick={() => openUnifiedDatabaseModal('code')}
                       className="text-[10px] text-[#A59F94]/40 hover:text-[#5C564E] transition-all flex items-center gap-1 cursor-pointer opacity-40 hover:opacity-100 py-1 px-2.5 rounded-lg border border-transparent hover:border-[#E8E4D9] hover:bg-white/60"
                       title="系統部署與進階設定"
                     >

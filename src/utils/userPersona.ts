@@ -1,4 +1,4 @@
-import { AuthUser, CoupleBindingInfo, RecordItem, ShoppingItem } from '../types';
+import { AuthUser, CoupleBindingInfo } from '../types';
 
 export interface UserPersona {
   id: string;

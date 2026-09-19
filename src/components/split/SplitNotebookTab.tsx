@@ -1,19 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  ShoppingBag, 
   Plus, 
   Check, 
   Trash2, 
-  ArrowRight, 
-  Sparkles, 
-  Calendar, 
-  Tag, 
-  User, 
-  Layers, 
-  Store,
-  Clock,
-  ArrowUpRight,
-  Database,
+  Store, 
+  Clock, 
+  ArrowUpRight, 
+  Database, 
   Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
