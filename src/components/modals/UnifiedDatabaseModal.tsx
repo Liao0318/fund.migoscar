@@ -1826,16 +1826,30 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                           </div>
                         </div>
 
-                        {onUnbindPartner && (
+                        <div className="flex flex-col sm:flex-row gap-2 pt-1">
                           <button
                             type="button"
-                            onClick={onUnbindPartner}
-                            className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs border border-rose-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-98"
+                            onClick={() => {
+                              handleSyncFromCloud(false);
+                            }}
+                            disabled={isCloudSearching}
+                            className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-98 disabled:opacity-50"
                           >
-                            <Unlink className="w-3.5 h-3.5" />
-                            <span>更換邀請碼或解除伴侶綁定</span>
+                            <RefreshCw className={`w-3.5 h-3.5 ${isCloudSearching ? 'animate-spin' : ''}`} />
+                            <span>{isCloudSearching ? '正在同步中...' : '重新從伴侶同步最新帳本'}</span>
                           </button>
-                        )}
+
+                          {onUnbindPartner && (
+                            <button
+                              type="button"
+                              onClick={onUnbindPartner}
+                              className="py-2.5 px-3 rounded-xl bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs border border-rose-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-98"
+                            >
+                              <Unlink className="w-3.5 h-3.5" />
+                              <span>更換邀請碼或解除伴侶綁定</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

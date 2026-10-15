@@ -357,25 +357,26 @@ async function startServer() {
           const cfgClean = cfgCode.replace(/^BB-?/, '');
           if (cfgCode && (candidates.includes(cfgCode) || candidates.includes(cfgClean))) {
             const updatedAtTime = cfg.updatedAt ? new Date(cfg.updatedAt).getTime() : 0;
-            const isExpired = updatedAtTime > 0 && (Date.now() - updatedAtTime > 15 * 60 * 1000);
+            // 寬鬆時效保護：預設 30 天，杜絕伴侶在短時間內無法加入的問題
+            const isExpired = updatedAtTime > 0 && (Date.now() - updatedAtTime > 30 * 24 * 60 * 60 * 1000);
             if (isExpired) {
               return res.json({ 
                 success: false, 
                 expired: true, 
-                message: `此邀請碼 ${rawCode} 已超過 15 分鐘有效時限，請向伴侶索取最新邀請碼！`, 
+                message: `此邀請碼 ${rawCode} 已逾期，請向伴侶索取最新邀請碼！`, 
                 invite: null 
               });
             }
-            const candidateGas = isValidGasUrl(cfg.gasWebUrl) ? cfg.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) ? sysDb.gasWebUrl : '');
+            const candidateGas = isValidGasUrl(cfg.gasWebUrl) ? cfg.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) && sysDb.configuredBy && sysDb.configuredBy.toLowerCase() === cfgEmail.toLowerCase() ? sysDb.gasWebUrl : '');
             const synthesizedInvite = {
               inviteCode: cfgCode.startsWith('BB-') ? cfgCode : `BB-${cfgClean}`,
               adminEmail: cfg.email || cfgEmail,
               adminName: cfg.name || '主管理員',
               gasWebUrl: candidateGas,
-              deploySheetUrl: cfg.deploySheetUrl || (sysDb && sysDb.deploySheetUrl) || '',
+              deploySheetUrl: cfg.deploySheetUrl || (candidateGas && sysDb?.deploySheetUrl) || '',
               createdAt: cfg.updatedAt || new Date().toISOString(),
-              expiresAt: new Date((updatedAtTime || Date.now()) + 15 * 60 * 1000).toISOString(),
-              validMinutes: 15
+              expiresAt: new Date((updatedAtTime || Date.now()) + 30 * 24 * 60 * 60 * 1000).toISOString(),
+              validMinutes: 30 * 24 * 60
             };
             invites[withPrefix] = synthesizedInvite;
             invites[cleanNoPrefix] = synthesizedInvite;
@@ -732,6 +733,7 @@ async function startServer() {
 
       const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
       const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
+      const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
 
       // 🛡️ 同帳號自我操作（非情侶綁定，僅為多裝置資料庫同步）
       if (adminEmail && partnerEmail && adminEmail === partnerEmail) {
@@ -748,14 +750,22 @@ async function startServer() {
         return res.json({ success: true, isSelfSync: true, message: '跨裝置資料庫設定已同步' });
       }
 
+      const adminCfg = userConfigs[adminEmail] || {};
+      const partnerCfg = userConfigs[partnerEmail] || {};
+      const adminGas = isValidGasUrl(adminCfg.gasWebUrl) ? adminCfg.gasWebUrl : (isValidGasUrl(sysDb?.gasWebUrl) && sysDb.configuredBy && sysDb.configuredBy.toLowerCase() === adminEmail ? sysDb.gasWebUrl : '');
+      const adminSheet = adminCfg.deploySheetUrl || (adminGas && sysDb?.deploySheetUrl) || '';
+
+      const targetGas = isValidGasUrl(binding.gasWebUrl) ? binding.gasWebUrl : adminGas;
+      const targetSheet = binding.deploySheetUrl || adminSheet;
+
       const cleanBinding = {
         adminEmail,
-        adminName: binding.adminName || userConfigs[adminEmail]?.name || '主管理員',
+        adminName: binding.adminName || adminCfg.name || '主管理員',
         partnerEmail,
-        partnerName: binding.partnerName || userConfigs[partnerEmail]?.name || '伴侶',
+        partnerName: binding.partnerName || partnerCfg.name || '伴侶',
         inviteCode: binding.inviteCode || '',
-        gasWebUrl: isValidGasUrl(binding.gasWebUrl) ? binding.gasWebUrl : (userConfigs[adminEmail]?.gasWebUrl || ''),
-        deploySheetUrl: binding.deploySheetUrl || userConfigs[adminEmail]?.deploySheetUrl || '',
+        gasWebUrl: targetGas,
+        deploySheetUrl: targetSheet,
         boundAt: binding.boundAt || new Date().toISOString()
       };
 

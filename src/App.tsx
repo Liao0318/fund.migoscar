@@ -1030,8 +1030,20 @@ export default function App() {
   }, [userA, userB]);
 
   const handleGenerateNewInviteCode = () => {
-    const cleanGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
-    const cleanSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
+    const curEmail = (currentUser?.email || '').trim().toLowerCase();
+    const cleanGas = (
+      gasWebUrl || 
+      (curEmail ? localStorage.getItem(`muji_gas_web_url_${curEmail}`) : null) || 
+      (curEmail ? localStorage.getItem(`banban_permanent_gas_url_${curEmail}`) : null) || 
+      localStorage.getItem('muji_gas_web_url') || 
+      ''
+    ).trim();
+    const cleanSheet = (
+      deploySheetUrl || 
+      (curEmail ? localStorage.getItem(`muji_sheet_url_${curEmail}`) : null) || 
+      localStorage.getItem('muji_sheet_url') || 
+      ''
+    ).trim();
     const fresh = createFreshInvite(
       currentUser?.email || '',
       currentUser?.name || '主管理員',
@@ -1053,8 +1065,20 @@ export default function App() {
   };
 
   const handleCopyInviteShare = () => {
-    const cleanGas = (gasWebUrl || localStorage.getItem('muji_gas_web_url') || localStorage.getItem('banban_permanent_gas_url') || '').trim();
-    const cleanSheet = (deploySheetUrl || localStorage.getItem('muji_sheet_url') || '').trim();
+    const curEmail = (currentUser?.email || '').trim().toLowerCase();
+    const cleanGas = (
+      gasWebUrl || 
+      (curEmail ? localStorage.getItem(`muji_gas_web_url_${curEmail}`) : null) || 
+      (curEmail ? localStorage.getItem(`banban_permanent_gas_url_${curEmail}`) : null) || 
+      localStorage.getItem('muji_gas_web_url') || 
+      ''
+    ).trim();
+    const cleanSheet = (
+      deploySheetUrl || 
+      (curEmail ? localStorage.getItem(`muji_sheet_url_${curEmail}`) : null) || 
+      localStorage.getItem('muji_sheet_url') || 
+      ''
+    ).trim();
     let activeInvite = getActiveInviteCode();
     
     // 若邀請碼不存在或已過期，立即自動刷新為最新邀請碼
@@ -1878,6 +1902,20 @@ export default function App() {
       } catch (e) {}
     }
 
+    // 🛡️ 雙重保險備援 3：若仍未取得 activeGas，向後端 couple-binding 端點再次嘗試獲取已配對的資料庫
+    if (!activeGas && resolved.adminEmail && hasBackendServer()) {
+      try {
+        const bindRes = await fetch(`/api/couple-binding?email=${encodeURIComponent(resolved.adminEmail)}`);
+        if (bindRes.ok) {
+          const bData = await bindRes.json();
+          if (bData?.success && bData?.binding?.gasWebUrl) {
+            activeGas = bData.binding.gasWebUrl;
+            activeSheet = bData.binding.deploySheetUrl || activeSheet;
+          }
+        }
+      } catch (e) {}
+    }
+
     if (activeGas) {
       setGasWebUrl(activeGas);
       try { 
@@ -1940,12 +1978,14 @@ export default function App() {
     saveDeployConfig(activeGas, activeSheet);
 
     if (activeGas) {
-      setTimeout(() => {
-        fetchDashboardData(true, false, activeGas);
-        fetchShoppingData(false, activeGas);
-        fetchSplitData(true, activeGas);
-        fetchTravelData(true, activeGas);
-      }, 50);
+      setSyncProgressStep(3);
+      setSyncStatusText(`正在同步伴侶帳本明細 (${resolved.adminName || '管理員'})...`);
+      await Promise.allSettled([
+        fetchDashboardData(true, false, activeGas),
+        fetchShoppingData(false, activeGas),
+        fetchSplitData(true, activeGas),
+        fetchTravelData(true, activeGas)
+      ]);
     }
 
     showToast(`💖 已成功綁定伴侶帳本 (${resolved.adminName || '管理員'})！`, 'success');
