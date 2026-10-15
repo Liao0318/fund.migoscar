@@ -116,6 +116,7 @@ import {
   getUserNotifySettings,
   clearAllSessionLedgerCache,
   hardResetUserLocalState,
+  deleteUserAccountCompletely,
   scanAndRecoverGasUrl,
   isValidProductionGasUrl,
   isValidProductionSheetUrl
@@ -2276,6 +2277,50 @@ export default function App() {
 
     showToast('✨ 已重設資料庫連線！帳本已初始化為全新狀態', 'info');
     openUnifiedDatabaseModal('wizard');
+  };
+
+  /**
+   * 💣 徹底刪除帳號（初始化）：抹除後端、雲端與本機全部紀錄，變回全新用戶並返回登入門戶
+   */
+  const handleDeleteAccount = async () => {
+    const cleanEmail = (currentUser?.email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      handleReturnToLoginPortal();
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `⚠️ 確定要徹底刪除帳號【${cleanEmail}】並初始化嗎？\n\n` +
+      `執行後將會：\n` +
+      `1. 清空此 Gmail 在伺服器與雲端資料庫的所有設定\n` +
+      `2. 解除並抹除伴侶配對紀錄\n` +
+      `3. 抹除本機儲存的所有該帳號金鑰與快取\n` +
+      `4. 帳號將變回完全未註冊的「全新用戶」狀態！\n\n` +
+      `此動作無法復原，您確定要繼續執行嗎？`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setIsInitialSyncing(true);
+      setSyncStatusText('正在徹底刪除帳號並初始化...');
+      await deleteUserAccountCompletely(cleanEmail);
+      signOutGoogle().catch(() => {});
+      setCurrentUser(null);
+      setPartnerBindingInfo(null);
+      setGasWebUrl('');
+      setDeploySheetUrl('');
+      setRecords([]);
+      setSplitItems([]);
+      setShoppingItems([]);
+      setIsUnifiedSettingsModalOpen(false);
+      setIsUnifiedDatabaseOpen(false);
+      showToast('🎉 帳號已徹底刪除並初始化，現在您是以全新用戶身分！', 'success');
+    } catch (e: any) {
+      showToast('刪除帳號時發生錯誤：' + (e?.message || '請稍後重試'), 'error');
+    } finally {
+      setIsInitialSyncing(false);
+    }
   };
 
   const handleSwitchAccount = () => {
@@ -7416,6 +7461,7 @@ export default function App() {
         onTestNotification={handleTestInAppNotify}
         onOpenVersionInfo={() => setIsVersionInfoModalOpen(true)}
         onOpenPartnerPairing={() => setIsPartnerPairingOpen(true)}
+        onDeleteAccount={handleDeleteAccount}
       />
 
       {/* 🏷️ 系統版本與運行環境資訊 Modal */}
@@ -7662,6 +7708,7 @@ export default function App() {
           partnerBindingInfo={partnerBindingInfo}
           onUnbindPartner={handleUnbindPartner}
           onResetAccountDatabase={handleResetAccountDatabase}
+          onDeleteAccount={handleDeleteAccount}
           isSandboxMode={isSandboxMode}
           onToggleSandboxMode={handleToggleSandboxMode}
           initialTab={unifiedDatabaseTab}

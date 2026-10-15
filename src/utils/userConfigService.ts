@@ -1,5 +1,5 @@
 import { db, isFirestoreAvailable, getGoogleAccessToken } from './googleOAuthService';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { AppNotifySettings } from '../types';
 import { saveConfigToGoogleDrive, loadConfigFromGoogleDrive } from './googleDriveSyncService';
 import { hasBackendServer } from './environment';
@@ -560,5 +560,43 @@ export function hardResetUserLocalState(email?: string): void {
       } catch (e) {}
     });
   } catch (e) {}
+}
+
+/**
+ * 徹底刪除帳號（初始化）：
+ * 1. 抹除後端伺服器與全域資料庫紀錄
+ * 2. 抹除本地儲存的所有該帳號金鑰
+ * 3. 抹除 Firestore 雲端設定
+ * 4. 斷開伴侶關聯
+ */
+export async function deleteUserAccountCompletely(email: string): Promise<boolean> {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) return false;
+
+  // 1. 本地狀態徹底抹除
+  hardResetUserLocalState(cleanEmail);
+
+  // 2. 伺服器端資料庫抹除
+  if (hasBackendServer()) {
+    try {
+      await fetch('/api/delete-user-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail })
+      });
+    } catch (e) {}
+  }
+
+  // 3. Firestore 雲端抹除
+  if (isFirestoreAvailable() && db) {
+    try {
+      const p1 = deleteDoc(doc(db, 'user_configs', cleanEmail)).catch(() => {});
+      const p2 = deleteDoc(doc(db, 'couple_bindings', cleanEmail)).catch(() => {});
+      const p3 = deleteDoc(doc(db, 'pending_partner_invites', cleanEmail)).catch(() => {});
+      await Promise.allSettled([p1, p2, p3]);
+    } catch (e) {}
+  }
+
+  return true;
 }
 

@@ -58,6 +58,7 @@ interface UnifiedSettingsModalProps {
   onTestNotification?: () => void;
   onOpenVersionInfo?: () => void;
   onOpenPartnerPairing?: () => void;
+  onDeleteAccount?: () => void;
 }
 
 type SettingsSubView = null | 'nickname' | 'gas' | 'backup' | 'pwa' | 'advanced' | 'notify';
@@ -93,7 +94,8 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
   toggleNotifySetting,
   onTestNotification,
   onOpenVersionInfo,
-  onOpenPartnerPairing
+  onOpenPartnerPairing,
+  onDeleteAccount
 }) => {
   const [subView, setSubView] = useState<SettingsSubView>(null);
   const [isSyncingAvatar, setIsSyncingAvatar] = useState(false);
@@ -899,11 +901,29 @@ export const UnifiedSettingsModal: React.FC<UnifiedSettingsModalProps> = ({
                             onClose();
                             onLogout();
                           }}
-                          className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                          className="w-full py-2.5 bg-[#FAF8F3] hover:bg-stone-100 text-[#5C564E] border border-[#DDD6C8] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                         >
-                          <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                          <LogOut className="w-3.5 h-3.5 text-stone-600" />
                           <span>登出目前帳戶</span>
                         </button>
+                      )}
+
+                      {currentUser && onDeleteAccount && (
+                        <div className="pt-2 border-t border-rose-100 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onDeleteAccount();
+                            }}
+                            className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-98"
+                          >
+                            <span>⚠️ 刪除帳號（初始化為全新用戶）</span>
+                          </button>
+                          <p className="text-[10px] text-rose-600/80 text-center mt-1">
+                            將抹除此 Gmail 在本系統的所有雲端設定與資料庫綁定，回歸未註冊全新狀態
+                          </p>
+                        </div>
                       )}
                     </div>
                   </div>

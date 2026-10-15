@@ -872,6 +872,91 @@ async function startServer() {
     }
   });
 
+  // 3.8 徹底刪除帳號與初始化為全新用戶 API
+  app.post('/api/delete-user-account', (req, res) => {
+    try {
+      const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+      if (!email) {
+        return res.status(400).json({ success: false, message: 'Email required' });
+      }
+
+      // 1. 清除 user_configs
+      const userConfigs = readJsonFile<Record<string, any>>(USER_CONFIGS_FILE, {});
+      if (userConfigs[email]) {
+        delete userConfigs[email];
+        writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+      }
+
+      // 2. 清除 couple_bindings，並通知/解除關係人
+      const bindings = readJsonFile<Record<string, any>>(COUPLE_BINDINGS_FILE, {});
+      const currentBinding = bindings[email];
+      if (currentBinding) {
+        const adm = (currentBinding.adminEmail || '').toLowerCase();
+        const prt = (currentBinding.partnerEmail || '').toLowerCase();
+        if (adm) delete bindings[adm];
+        if (prt) delete bindings[prt];
+        writeJsonFile(COUPLE_BINDINGS_FILE, bindings);
+
+        const otherEmail = adm === email ? prt : adm;
+        if (otherEmail && userConfigs[otherEmail]) {
+          userConfigs[otherEmail].userRole = 'admin';
+          delete userConfigs[otherEmail].partnerEmail;
+          delete userConfigs[otherEmail].partnerName;
+          delete userConfigs[otherEmail].adminEmail;
+          delete userConfigs[otherEmail].adminName;
+          writeJsonFile(USER_CONFIGS_FILE, userConfigs);
+        }
+      }
+
+      // 3. 清除 partner_invites 相關邀請碼
+      const invites = readJsonFile<Record<string, any>>(PARTNER_INVITES_FILE, {});
+      let inviteChanged = false;
+      for (const [codeKey, inv] of Object.entries(invites)) {
+        if (inv && (inv.adminEmail?.toLowerCase() === email || inv.partnerEmail?.toLowerCase() === email)) {
+          delete invites[codeKey];
+          inviteChanged = true;
+        }
+      }
+      if (inviteChanged) {
+        writeJsonFile(PARTNER_INVITES_FILE, invites);
+      }
+
+      // 4. 清除 pending_direct_invites
+      const pendingDirect = readJsonFile<Record<string, any>>(PENDING_DIRECT_INVITES_FILE, {});
+      let directChanged = false;
+      if (pendingDirect[email]) {
+        delete pendingDirect[email];
+        directChanged = true;
+      }
+      for (const [k, v] of Object.entries(pendingDirect)) {
+        if (v && (v.adminEmail?.toLowerCase() === email || v.partnerEmail?.toLowerCase() === email)) {
+          delete pendingDirect[k];
+          directChanged = true;
+        }
+      }
+      if (directChanged) {
+        writeJsonFile(PENDING_DIRECT_INVITES_FILE, pendingDirect);
+      }
+
+      // 5. 清除 user_ledger_data
+      const ledgers = readJsonFile<Record<string, any>>(USER_LEDGER_DATA_FILE, {});
+      if (ledgers[email]) {
+        delete ledgers[email];
+        writeJsonFile(USER_LEDGER_DATA_FILE, ledgers);
+      }
+
+      // 6. 若 system_database 屬於此用戶，重置為 null
+      const sysDb = readJsonFile<any>(SYSTEM_DATABASE_FILE, null);
+      if (sysDb && sysDb.configuredBy && sysDb.configuredBy.toLowerCase() === email) {
+        writeJsonFile(SYSTEM_DATABASE_FILE, null);
+      }
+
+      return res.json({ success: true, message: '帳號與所有雲端狀態已徹底抹除並初始化' });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // 4. Exchange Rates API
   app.get('/api/exchange-rates', async (_req, res) => {
     try {

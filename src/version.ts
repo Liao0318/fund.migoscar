@@ -3,8 +3,8 @@
  * 集中管理版本號、建置時間、環境識別與更新日誌
  */
 
-export const APP_VERSION = 'v2.9.2';
-export const APP_BUILD_DATE = '2026.09.19';
+export const APP_VERSION = 'v2.9.3';
+export const APP_BUILD_DATE = '2026.09.20';
 export const APP_NAME = '伴伴記';
 export const APP_FULL_NAME = '伴伴記 • BanBan Accounting';
 
@@ -16,6 +16,17 @@ export interface AppReleaseNote {
 }
 
 export const APP_RELEASE_NOTES: AppReleaseNote[] = [
+  {
+    version: 'v2.9.3',
+    date: '2026.09.20',
+    title: '徹底刪除帳號初始化功能與全通用 Gmail 伴侶無縫配對升級',
+    highlights: [
+      '徹底刪除帳號（初始化為全新用戶）：於設定與資料庫管理中新增一鍵刪除帳號功能，深度抹除後端、雲端 Firestore 與本機設備的所有金鑰、設定檔、邀請碼與歷史快取，讓帳號回歸為未註冊之全新狀態。',
+      '全通用 Google 帳號伴侶配對：移除任何特定伴侶信箱假設，支援任何 Google Gmail 帳號透過 6 碼邀請碼或專屬連結加入配對，自動動態綁定並分配管理者資料庫。',
+      '邀請碼防空殼注入與即時連線拉取：生成邀請碼時強制固化管理者的 Google Apps Script API 網址，伴侶點擊確認綁定後等待資料實際自 Google 試算表同步落地後才完成，杜絕空殼與空白畫面。',
+      '伴侶模式手動重新同步：在資料庫設定之伴侶專區新增「重新從伴侶同步最新帳本」綠色按鈕，隨時一鍵重新自管理者資料庫拉取最新帳目數據。'
+    ]
+  },
   {
     version: 'v2.9.2',
     date: '2026.09.19',

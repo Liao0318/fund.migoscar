@@ -26,7 +26,8 @@ import {
   RotateCcw, 
   Download, 
   FileSpreadsheet, 
-  Clock
+  Clock,
+  Trash2
 } from 'lucide-react';
 import { AuthUser, PartnerInviteData, CoupleBindingInfo } from '../../types';
 import { resolveInviteCodeOrToken, fetchInviteCodeOnline, extractInviteCode, fetchPartnerBindingInfoOnline, createShareableInviteCard, getActiveInviteCode, getInviteRemainingSeconds, formatRemainingTime } from '../../utils/partnerInvite';
@@ -53,6 +54,7 @@ interface UnifiedDatabaseModalProps {
   partnerBindingInfo?: CoupleBindingInfo | null;
   onUnbindPartner?: () => void;
   onResetAccountDatabase?: () => void;
+  onDeleteAccount?: () => void;
   isSandboxMode?: boolean;
   onToggleSandboxMode?: (enabled: boolean) => void;
   initialTab?: 'wizard' | 'settings' | 'code' | 'partner';
@@ -79,6 +81,7 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
   partnerBindingInfo,
   onUnbindPartner,
   onResetAccountDatabase,
+  onDeleteAccount,
   isSandboxMode = false,
   onToggleSandboxMode,
   initialTab = 'wizard',
@@ -1576,20 +1579,36 @@ export const UnifiedDatabaseModal: React.FC<UnifiedDatabaseModalProps> = ({
                       <span>開啟引導小精靈逐步設定</span>
                     </button>
 
-                    {onResetAccountDatabase && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm('⚠️ 確定要重設此 Google 帳號的資料庫連線嗎？\n\n重設後將清空本帳號的試算表與 API 設定，初始化為乾淨系統，並重新開啟引導小精靈。')) {
-                            onResetAccountDatabase();
-                          }
-                        }}
-                        className="text-xs text-rose-700 hover:text-rose-900 font-bold hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>重設此帳號資料庫（初始化）</span>
-                      </button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {onResetAccountDatabase && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('⚠️ 確定要重設此 Google 帳號的資料庫連線嗎？\n\n重設後將清空本帳號的試算表與 API 設定，初始化為乾淨系統，並重新開啟引導小精靈。')) {
+                              onResetAccountDatabase();
+                            }
+                          }}
+                          className="text-xs text-amber-800 hover:text-amber-900 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>重設連線</span>
+                        </button>
+                      )}
+
+                      {onDeleteAccount && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onDeleteAccount();
+                          }}
+                          className="text-xs text-rose-700 hover:text-rose-900 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>刪除帳號 (徹底初始化)</span>
+                        </button>
+                      )}
+                    </div>
 
                     <button
                       type="button"
